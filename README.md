@@ -480,6 +480,11 @@ Image:
 | `gemini-3-pro-image` | OK (occasional 429 quota) |
 | `gemini-2.5-flash-image` | OK |
 
+> **Location requirement:** All verified models above require
+> `GOOGLE_VERTEX_LOCATION=global` (or `location: "global"` in each
+> `vertexPools` entry). Regional locations like `us-central1` return
+> `404 NOT_FOUND` for most Gemini 3.x and image-generation models.
+
 Aliases (require pool mode + modelCatalog):
 
 | Alias | Resolves To |

@@ -104,7 +104,10 @@ describe('app model aliasing', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({ model: 'gemini-3.1-pro-preview' }));
+    expect(generateContent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gemini-3.1-pro-preview' }),
+      expect.objectContaining({ routeFamily: 'gemini' }),
+    );
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
@@ -137,7 +140,10 @@ describe('app model aliasing', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({ model: 'gemini-3.1-flash-image-preview' }));
+    expect(generateContent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gemini-3.1-flash-image-preview' }),
+      expect.objectContaining({ routeFamily: 'images' }),
+    );
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
@@ -170,7 +176,10 @@ describe('app model aliasing', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({ model: 'gemini-3.1-flash-image-preview' }));
+    expect(generateContent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gemini-3.1-flash-image-preview' }),
+      expect.objectContaining({ routeFamily: 'images' }),
+    );
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 

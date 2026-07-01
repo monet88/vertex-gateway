@@ -1,4 +1,4 @@
-import type { ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { GatewayErrorCode } from './error-response.js';
 import { GatewayError, toGatewayError } from './error-response.js';
 import { nextStreamStep } from '../lib/stream-guards.js';
@@ -85,19 +85,61 @@ export const writeSseError = async (
   return status;
 };
 
-export const sendSseStream = async (
+export type SseFrameResult = 'continue' | 'stop';
+
+/**
+ * Frame-writing surface handed to a stream consumer. Every write flips the
+ * driver's internal `wroteFrame` state so the first-frame error contract stays
+ * correct without the consumer tracking it.
+ */
+export interface SseStreamWriter {
+  writeJson(payload: Record<string, unknown>, event?: string): Promise<'written' | 'closed'>;
+  writeError(error: unknown): Promise<void>;
+  writeDone(): void;
+  end(): void;
+}
+
+export interface SseStreamConsumer {
+  /**
+   * Called once per upstream chunk in arrival order. `index` is 0 for the first
+   * chunk so consumers can emit a stream preamble exactly once. Return `stop` to
+   * end the stream early (after the consumer has written its own final frame).
+   */
+  onChunk(chunk: Record<string, unknown>, index: number, writer: SseStreamWriter): Promise<SseFrameResult>;
+  /** Called once the upstream ends normally (not on client disconnect or early stop). */
+  onComplete?(writer: SseStreamWriter): Promise<void> | void;
+}
+
+export interface SseStreamDriveOptions {
+  idleTimeoutMs?: number;
+  maxDurationMs?: number;
+  req?: IncomingMessage;
+}
+
+/**
+ * Owns the full SSE streaming lifecycle: response header priming, per-chunk
+ * guard stepping, client-disconnect detection, upstream iterator cleanup, and
+ * the first-frame error contract (surface pre-header failures to the caller so
+ * a JSON error can be sent; write post-header failures as an SSE error frame).
+ * Consumers only translate chunks into frames.
+ */
+export const driveSseStream = async (
   res: ServerResponse,
   chunks: AsyncIterable<Record<string, unknown>>,
-  options: { includeDone?: boolean; idleTimeoutMs?: number; maxDurationMs?: number } = {},
+  consumer: SseStreamConsumer,
+  options: SseStreamDriveOptions = {},
 ): Promise<void> => {
-  const includeDone = options.includeDone ?? false;
+  if (res.destroyed || res.writableEnded) {
+    return;
+  }
   const idleTimeoutMs = options.idleTimeoutMs ?? 30_000;
   const maxDurationMs = options.maxDurationMs ?? 240_000;
+  const startedAt = Date.now();
+  const iterator = chunks[Symbol.asyncIterator]();
   let closed = false;
   let iteratorClosed = false;
   let wroteFrame = false;
-  const startedAt = Date.now();
-  const iterator = chunks[Symbol.asyncIterator]();
+  let index = 0;
 
   const closeIterator = async () => {
     if (iteratorClosed) return;
@@ -116,6 +158,31 @@ export const sendSseStream = async (
     void closeIterator();
   };
 
+  const writer: SseStreamWriter = {
+    writeJson: async (payload, event) => {
+      wroteFrame = true;
+      return writeSseJson(res, payload, event);
+    },
+    writeError: async (error) => {
+      wroteFrame = true;
+      await writeSseError(res, error);
+    },
+    writeDone: () => {
+      writeSseDone(res);
+    },
+    end: () => {
+      if (res.destroyed || res.writableEnded) return;
+      if (!wroteFrame) initializeSse(res);
+      try {
+        res.end();
+      } catch {
+        // Socket closed after the state check.
+      }
+    },
+  };
+
+  options.req?.once('close', onClose);
+  options.req?.once('error', onClose);
   res.once('close', onClose);
   res.once('error', onClose);
 
@@ -129,34 +196,54 @@ export const sendSseStream = async (
           throw error;
         }
         if (!closed) {
-          await writeSseError(res, error);
+          await writer.writeError(error);
         }
         return;
       }
-      if (step.done) {
-        break;
-      }
+      if (step.done) break;
       if (closed) return;
-      wroteFrame = true;
-      if (await writeSseJson(res, step.value) === 'closed') return;
+      if (await consumer.onChunk(step.value, index++, writer) === 'stop') return;
     }
     if (!closed) {
-      if (includeDone) {
-        writeSseDone(res);
-      } else if (!res.destroyed && !res.writableEnded) {
-        try {
-          if (!wroteFrame) {
-            initializeSse(res);
-          }
-          res.end();
-        } catch {
-          // Socket closed after the state check.
-        }
+      await consumer.onComplete?.(writer);
+      if (!closed && !res.writableEnded) {
+        writer.end();
       }
     }
   } finally {
+    options.req?.off('close', onClose);
+    options.req?.off('error', onClose);
     res.off('close', onClose);
     res.off('error', onClose);
     await closeIterator();
   }
+};
+
+export const sendSseStream = async (
+  res: ServerResponse,
+  chunks: AsyncIterable<Record<string, unknown>>,
+  options: { includeDone?: boolean; idleTimeoutMs?: number; maxDurationMs?: number; req?: IncomingMessage } = {},
+): Promise<void> => {
+  const includeDone = options.includeDone ?? false;
+  await driveSseStream(
+    res,
+    chunks,
+    {
+      onChunk: async (chunk, _index, writer) => (
+        await writer.writeJson(chunk) === 'closed' ? 'stop' : 'continue'
+      ),
+      onComplete: (writer) => {
+        if (includeDone) {
+          writer.writeDone();
+        } else {
+          writer.end();
+        }
+      },
+    },
+    {
+      req: options.req,
+      idleTimeoutMs: options.idleTimeoutMs,
+      maxDurationMs: options.maxDurationMs,
+    },
+  );
 };

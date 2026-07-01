@@ -1,6 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { GatewayError } from '../http/error-response.js';
 import { readMultipartBody } from '../lib/read-multipart.js';
+import { parseImageDataUrl } from '../lib/image-data-url.js';
 import type { ImageWorkloads } from '../workloads/image-workloads.js';
 import type { ImageDto } from '../workloads/image-normalizer.js';
 
@@ -20,42 +21,12 @@ const assertModel = (value: unknown): string => {
   return model;
 };
 
-const parseDataUrl = (value: string): { mimeType: string; data: string } => {
-  if (value.substring(0, 5).toLowerCase() !== 'data:') {
-    throw new GatewayError(400, 'VALIDATION_FAILED', 'Image inputs must be data URLs with base64-encoded image bytes.');
-  }
-
-  const suffixIdx = value.toLowerCase().indexOf(';base64,', 5);
-  if (suffixIdx === -1) {
-    throw new GatewayError(400, 'VALIDATION_FAILED', 'Image inputs must be data URLs with base64-encoded image bytes.');
-  }
-
-  const mimeType = value.substring(5, suffixIdx).toLowerCase();
-  const data = value.substring(suffixIdx + 8).replace(/\s+/g, '');
-
-  if (!/^image\/(?:png|jpeg|jpg|webp)$/.test(mimeType)) {
-    throw new GatewayError(400, 'VALIDATION_FAILED', 'Image inputs must be data URLs with base64-encoded image bytes.');
-  }
-
-  for (let i = 0; i < data.length; i++) {
-    const code = data.charCodeAt(i);
-    if (
-      !(code >= 65 && code <= 90) &&
-      !(code >= 97 && code <= 122) &&
-      !(code >= 48 && code <= 57) &&
-      code !== 43 &&
-      code !== 47 &&
-      code !== 61
-    ) {
-      throw new GatewayError(400, 'VALIDATION_FAILED', 'Image inputs must be data URLs with base64-encoded image bytes.');
-    }
-  }
-
-  return {
-    mimeType,
-    data,
-  };
-};
+const parseDataUrl = (value: string): { mimeType: string; data: string } =>
+  parseImageDataUrl(
+    value,
+    'Image inputs must be data URLs with base64-encoded image bytes.',
+    { allowedMimePattern: /^image\/(?:png|jpeg|jpg|webp)$/, lowercaseMimeType: true },
+  );
 
 const parseSizeToAspectRatio = (size: unknown): string | undefined => {
   if (size === undefined || size === null || size === '') return undefined;

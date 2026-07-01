@@ -62,8 +62,7 @@ describe('openai-compatible routes', () => {
       config: {
         systemInstruction: { parts: [{ text: 'You are concise.' }] },
       },
-      __gatewayRouteFamily: 'openai-chat',
-    }));
+    }), expect.objectContaining({ routeFamily: 'openai-chat' }));
   });
 
   it('returns one OpenAI choice for each requested Gemini candidate', async () => {
@@ -116,8 +115,7 @@ describe('openai-compatible routes', () => {
       model: 'gemini-3.5-flash',
       contents: [{ role: 'user', parts: [{ text: 'Give two options' }] }],
       config: { candidateCount: 2 },
-      __gatewayRouteFamily: 'openai-chat',
-    }));
+    }), expect.objectContaining({ routeFamily: 'openai-chat' }));
   });
 
   it('maps OpenAI generation options into Gemini config', async () => {
@@ -152,8 +150,7 @@ describe('openai-compatible routes', () => {
         maxOutputTokens: 64,
         stopSequences: ['END'],
       },
-      __gatewayRouteFamily: 'openai-chat',
-    }));
+    }), expect.objectContaining({ routeFamily: 'openai-chat' }));
   });
 
   it('maps OpenAI tools into Gemini config tools', async () => {
@@ -197,8 +194,7 @@ describe('openai-compatible routes', () => {
           }],
         }],
       },
-      __gatewayRouteFamily: 'openai-chat',
-    }));
+    }), expect.objectContaining({ routeFamily: 'openai-chat' }));
   });
 
   it('accepts image_url data URLs with embedded base64 whitespace', async () => {
@@ -280,8 +276,9 @@ describe('openai-compatible routes', () => {
     expect(generateContentStream).toHaveBeenCalledWith(expect.objectContaining({
       model: 'gemini-3.5-flash',
       contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
-      __gatewayRouteFamily: 'openai-chat',
-      __gatewayStreamGuard: {
+    }), expect.objectContaining({
+      routeFamily: 'openai-chat',
+      streamGuard: {
         idleTimeoutMs: 250,
         maxDurationMs: 10000,
       },

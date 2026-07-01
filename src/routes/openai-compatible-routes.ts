@@ -2,11 +2,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import type { ClassifiedRoute } from '../http/request-classifier.js';
 import { GatewayError } from '../http/error-response.js';
-import { writeSseDone, writeSseError, writeSseJson } from '../http/sse-response.js';
+import { driveSseStream } from '../http/sse-response.js';
 import type { GenAiClient } from '../lib/google-genai-client.js';
-import { parseImageDataUrl } from '../lib/image-data-url.js';
-import { withGenAiRequestMetadata } from '../lib/genai-request-metadata.js';
-import { nextStreamStep } from '../lib/stream-guards.js';
+import { openAiContentToGeminiParts } from './openai-content.js';
 
 interface OpenAIChatMessage {
   role: string;
@@ -59,42 +57,26 @@ const parseJsonString = (value: string): Record<string, unknown> => {
   }
 };
 
-const toGeminiPartList = (content: unknown, allowImages: boolean): Array<Record<string, unknown>> => {
-  if (typeof content === 'string') {
-    return content ? [{ text: content }] : [];
-  }
-
-  if (!Array.isArray(content)) {
-    return [];
-  }
-
-  const parts: Array<Record<string, unknown>> = [];
-  for (const item of content) {
-    if (!item || typeof item !== 'object') continue;
-    const typedItem = item as Record<string, unknown>;
-    if (typedItem.type === 'text' && typeof typedItem.text === 'string') {
-      parts.push({ text: typedItem.text });
-      continue;
-    }
-    if (
-      allowImages &&
-      typedItem.type === 'image_url' &&
-      typedItem.image_url &&
-      typeof typedItem.image_url === 'object' &&
-      typeof (typedItem.image_url as { url?: unknown }).url === 'string'
-    ) {
-      const url = ((typedItem.image_url as { url: string }).url || '').trim();
-      const dataUrl = parseImageDataUrl(url, 'OpenAI-compatible image_url currently requires a data URL.');
-      parts.push({
-        inlineData: {
-          mimeType: dataUrl.mimeType,
-          data: dataUrl.data,
-        },
-      });
-    }
-  }
-  return parts;
-};
+const toGeminiPartList = (content: unknown, allowImages: boolean): Array<Record<string, unknown>> =>
+  openAiContentToGeminiParts(content, allowImages, {
+    textOf: (item) => (item.type === 'text' && typeof item.text === 'string' ? item.text : null),
+    imageUrlOf: (item) => {
+      if (
+        item.type === 'image_url'
+        && item.image_url
+        && typeof item.image_url === 'object'
+        && typeof (item.image_url as { url?: unknown }).url === 'string'
+      ) {
+        return (item.image_url as { url: string }).url || '';
+      }
+      return null;
+    },
+    invalidImageMessage: 'OpenAI-compatible image_url currently requires a data URL.',
+    allowedImageMimePattern: /^image\/(?:png|jpeg|jpg|webp)$/,
+    onUnsupported: () => {
+      // Chat Completions silently ignores unsupported content items.
+    },
+  });
 
 const buildGeminiRequest = (
   body: OpenAIChatCompletionRequest,
@@ -327,11 +309,11 @@ export const runOpenAiCompatibleRoute = async (
     throw new GatewayError(404, 'NOT_FOUND', 'OpenAI-compatible route is not implemented.');
   }
 
-  const request = withGenAiRequestMetadata(
-    buildGeminiRequest(body as OpenAIChatCompletionRequest),
-    { routeFamily: 'openai-chat', requestId },
-  );
-  const response = await ai.models.generateContent(request);
+  const request = buildGeminiRequest(body as OpenAIChatCompletionRequest);
+  const response = await ai.models.generateContent(request, {
+    routeFamily: 'openai-chat',
+    ...(requestId ? { requestId } : {}),
+  });
   return convertGeminiResponseToOpenAI(response, String(request.model));
 };
 
@@ -353,76 +335,29 @@ export const runOpenAiCompatibleStreamRoute = async (
 
   const requestBody = body as OpenAIChatCompletionRequest;
   assertOpenAiStreamRequestSupported(requestBody);
-  const request = withGenAiRequestMetadata(
-    buildGeminiRequest(requestBody, 'stream'),
-    {
-      routeFamily: 'openai-chat',
-      requestId,
-      streamGuard: {
-        idleTimeoutMs: streamConfig.idleTimeoutMs,
-        maxDurationMs: streamConfig.maxDurationMs,
-      },
+  const request = buildGeminiRequest(requestBody, 'stream');
+  const stream = await ai.models.generateContentStream(request, {
+    routeFamily: 'openai-chat',
+    ...(requestId ? { requestId } : {}),
+    streamGuard: {
+      idleTimeoutMs: streamConfig.idleTimeoutMs,
+      maxDurationMs: streamConfig.maxDurationMs,
     },
-  );
-  const stream = await ai.models.generateContentStream(request);
-  const iterator = stream[Symbol.asyncIterator]();
+  });
   const completionId = `chatcmpl_${randomUUID().replace(/-/g, '')}`;
   const created = Math.floor(Date.now() / 1000);
-  const startedAt = Date.now();
-  let closed = false;
-  let iteratorClosed = false;
   let sentRole = false;
-  let wroteFrame = false;
 
-  const closeIterator = async () => {
-    if (iteratorClosed) return;
-    iteratorClosed = true;
-    if (typeof iterator.return === 'function') {
-      try {
-        await iterator.return();
-      } catch {
-        // Ignore cleanup failures after disconnect.
-      }
-    }
-  };
-
-  const onClose = () => {
-    closed = true;
-    void closeIterator();
-  };
-
-  req.once('close', onClose);
-  req.once('error', onClose);
-  res.once('close', onClose);
-  res.once('error', onClose);
-
-  try {
-    while (!closed) {
-      let step: IteratorResult<Record<string, unknown>>;
-      try {
-        step = await nextStreamStep(iterator, { ...streamConfig, startedAt });
-      } catch (error) {
-        if (!closed && !wroteFrame && !res.headersSent) {
-          throw error;
-        }
-        if (!closed) {
-          await writeSseError(res, error);
-        }
-        return;
-      }
-
-      if (step.done || closed) break;
-
-      const normalized = normalizeStreamChunk(step.value);
+  await driveSseStream(res, stream, {
+    onChunk: async (chunk, _index, writer) => {
+      const normalized = normalizeStreamChunk(chunk);
       if (normalized.hasToolCalls) {
-        if (!closed) {
-          await writeSseError(res, new GatewayError(
-            400,
-            'VALIDATION_FAILED',
-            'OpenAI-compatible streaming tool calls are not implemented yet.',
-          ));
-        }
-        return;
+        await writer.writeError(new GatewayError(
+          400,
+          'VALIDATION_FAILED',
+          'OpenAI-compatible streaming tool calls are not implemented yet.',
+        ));
+        return 'stop';
       }
 
       const delta: Record<string, unknown> = {};
@@ -434,11 +369,10 @@ export const runOpenAiCompatibleStreamRoute = async (
         delta.content = normalized.text;
       }
       if (Object.keys(delta).length === 0 && normalized.finishReason === null) {
-        continue;
+        return 'continue';
       }
 
-      wroteFrame = true;
-      const status = await writeSseJson(res, {
+      const status = await writer.writeJson({
         id: completionId,
         object: 'chat.completion.chunk',
         created,
@@ -449,17 +383,10 @@ export const runOpenAiCompatibleStreamRoute = async (
           finish_reason: normalized.finishReason,
         }],
       });
-      if (status === 'closed') return;
-    }
-
-    if (!closed) {
-      writeSseDone(res);
-    }
-  } finally {
-    req.off('close', onClose);
-    req.off('error', onClose);
-    res.off('close', onClose);
-    res.off('error', onClose);
-    await closeIterator();
-  }
+      return status === 'closed' ? 'stop' : 'continue';
+    },
+    onComplete: (writer) => {
+      writer.writeDone();
+    },
+  }, { req, idleTimeoutMs: streamConfig.idleTimeoutMs, maxDurationMs: streamConfig.maxDurationMs });
 };

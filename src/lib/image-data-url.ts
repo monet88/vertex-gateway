@@ -1,8 +1,16 @@
 import { GatewayError } from '../http/error-response.js';
 
+export interface ParseImageDataUrlOptions {
+  /** Restrict the accepted mime type; when omitted any non-empty mime is allowed. */
+  allowedMimePattern?: RegExp;
+  /** Lower-case the parsed mime type before validating and returning it. */
+  lowercaseMimeType?: boolean;
+}
+
 export const parseImageDataUrl = (
   value: string,
   invalidMessage: string,
+  options: ParseImageDataUrlOptions = {},
 ): { mimeType: string; data: string } => {
   if (value.substring(0, 5).toLowerCase() !== 'data:') {
     throw new GatewayError(400, 'VALIDATION_FAILED', invalidMessage);
@@ -13,10 +21,14 @@ export const parseImageDataUrl = (
     throw new GatewayError(400, 'VALIDATION_FAILED', invalidMessage);
   }
 
-  const mimeType = value.substring(5, suffixIdx);
+  const rawMimeType = value.substring(5, suffixIdx);
+  const mimeType = options.lowercaseMimeType ? rawMimeType.toLowerCase() : rawMimeType;
   const data = value.substring(suffixIdx + 8).replace(/\s+/g, '');
 
-  if (!mimeType) {
+  const mimeIsValid = options.allowedMimePattern
+    ? options.allowedMimePattern.test(mimeType)
+    : mimeType.length > 0;
+  if (!mimeIsValid) {
     throw new GatewayError(400, 'VALIDATION_FAILED', invalidMessage);
   }
 

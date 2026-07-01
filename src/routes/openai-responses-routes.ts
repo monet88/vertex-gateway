@@ -2,11 +2,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import type { ClassifiedRoute } from '../http/request-classifier.js';
 import { GatewayError } from '../http/error-response.js';
-import { writeSseDone, writeSseError, writeSseJson } from '../http/sse-response.js';
+import { driveSseStream, type SseStreamWriter } from '../http/sse-response.js';
 import type { GenAiClient } from '../lib/google-genai-client.js';
-import { parseImageDataUrl } from '../lib/image-data-url.js';
-import { withGenAiRequestMetadata } from '../lib/genai-request-metadata.js';
-import { nextStreamStep } from '../lib/stream-guards.js';
+import { openAiContentToGeminiParts } from './openai-content.js';
 
 interface ResponsesFunctionTool {
   type?: string;
@@ -55,37 +53,28 @@ const toImageUrl = (value: string | { url?: string }): string => {
   return typeof value?.url === 'string' ? value.url : '';
 };
 
-const toGeminiPartList = (content: unknown, allowImages: boolean): Array<Record<string, unknown>> => {
-  if (typeof content === 'string') {
-    return content ? [{ text: content }] : [];
-  }
-  if (!Array.isArray(content)) {
-    return [];
-  }
-
-  const parts: Array<Record<string, unknown>> = [];
-  for (const item of content) {
-    if (!item || typeof item !== 'object') continue;
-    const typedItem = item as ResponsesContentItem;
-    if ((typedItem.type === 'input_text' || typedItem.type === 'output_text' || typedItem.type === 'text') && typeof typedItem.text === 'string') {
-      parts.push({ text: typedItem.text });
-      continue;
-    }
-    if (allowImages && (typedItem.type === 'input_image' || typedItem.type === 'image_url')) {
-      const url = toImageUrl(typedItem.image_url ?? '').trim();
-      const dataUrl = parseImageDataUrl(url, 'OpenAI Responses input images currently require data URLs.');
-      parts.push({
-        inlineData: {
-          mimeType: dataUrl.mimeType,
-          data: dataUrl.data,
-        },
-      });
-      continue;
-    }
-    throw new GatewayError(400, 'VALIDATION_FAILED', `Unsupported Responses content item type: ${typedItem.type ?? 'unknown'}.`);
-  }
-  return parts;
-};
+const toGeminiPartList = (content: unknown, allowImages: boolean): Array<Record<string, unknown>> =>
+  openAiContentToGeminiParts(content, allowImages, {
+    textOf: (item) => {
+      const typedItem = item as ResponsesContentItem;
+      return (typedItem.type === 'input_text' || typedItem.type === 'output_text' || typedItem.type === 'text')
+        && typeof typedItem.text === 'string'
+        ? typedItem.text
+        : null;
+    },
+    imageUrlOf: (item) => {
+      const typedItem = item as ResponsesContentItem;
+      return typedItem.type === 'input_image' || typedItem.type === 'image_url'
+        ? toImageUrl(typedItem.image_url ?? '')
+        : null;
+    },
+    invalidImageMessage: 'OpenAI Responses input images currently require data URLs.',
+    allowedImageMimePattern: /^image\/(?:png|jpeg|jpg|webp)$/,
+    onUnsupported: (item) => {
+      const typedItem = item as ResponsesContentItem;
+      throw new GatewayError(400, 'VALIDATION_FAILED', `Unsupported Responses content item type: ${typedItem.type ?? 'unknown'}.`);
+    },
+  });
 
 const ensureSupportedSubset = (body: OpenAIResponsesRequest, mode: 'sync' | 'stream'): void => {
   if (!body.model?.trim()) {
@@ -317,11 +306,11 @@ export const runOpenAiResponsesRoute = async (
     throw new GatewayError(404, 'NOT_FOUND', 'OpenAI Responses route is not implemented.');
   }
 
-  const request = withGenAiRequestMetadata(
-    buildGeminiRequest(body as OpenAIResponsesRequest),
-    { routeFamily: 'openai-responses', requestId },
-  );
-  const response = await ai.models.generateContent(request);
+  const request = buildGeminiRequest(body as OpenAIResponsesRequest);
+  const response = await ai.models.generateContent(request, {
+    routeFamily: 'openai-responses',
+    ...(requestId ? { requestId } : {}),
+  });
   const responseId = `resp_${randomUUID().replace(/-/g, '')}`;
   const messageId = `msg_${randomUUID().replace(/-/g, '')}`;
   const parsed = collectResponseParts(response);
@@ -351,131 +340,86 @@ export const runOpenAiResponsesStreamRoute = async (
     throw new GatewayError(501, 'NOT_IMPLEMENTED', 'Streaming is not implemented by the configured GenAI client.');
   }
 
-  const request = withGenAiRequestMetadata(
-    buildGeminiRequest(body as OpenAIResponsesRequest, 'stream'),
-    {
-      routeFamily: 'openai-responses',
-      requestId,
-      streamGuard: {
-        idleTimeoutMs: streamConfig.idleTimeoutMs,
-        maxDurationMs: streamConfig.maxDurationMs,
-      },
+  const request = buildGeminiRequest(body as OpenAIResponsesRequest, 'stream');
+  const stream = await ai.models.generateContentStream(request, {
+    routeFamily: 'openai-responses',
+    ...(requestId ? { requestId } : {}),
+    streamGuard: {
+      idleTimeoutMs: streamConfig.idleTimeoutMs,
+      maxDurationMs: streamConfig.maxDurationMs,
     },
-  );
-  const stream = await ai.models.generateContentStream(request);
-  const iterator = stream[Symbol.asyncIterator]();
+  });
   const responseId = `resp_${randomUUID().replace(/-/g, '')}`;
   const messageId = `msg_${randomUUID().replace(/-/g, '')}`;
   const createdAt = Math.floor(Date.now() / 1000);
-  const startedAt = Date.now();
   let sequenceNumber = 0;
-  let closed = false;
-  let iteratorClosed = false;
-  let wroteFrame = false;
+  let sentPreamble = false;
   let fullText = '';
   let latestModel = String(request.model);
   let latestUsageMetadata: Record<string, unknown> = {};
 
-  const closeIterator = async () => {
-    if (iteratorClosed) return;
-    iteratorClosed = true;
-    if (typeof iterator.return === 'function') {
-      try {
-        await iterator.return();
-      } catch {
-        // Ignore cleanup failures after disconnect.
-      }
-    }
-  };
-
-  const onClose = () => {
-    closed = true;
-    void closeIterator();
-  };
-
-  req.once('close', onClose);
-  req.once('error', onClose);
-  res.once('close', onClose);
-  res.once('error', onClose);
-
-  const writeEvent = async (payload: Record<string, unknown>) => {
-    wroteFrame = true;
+  const writeEvent = (
+    writer: SseStreamWriter,
+    payload: Record<string, unknown>,
+  ): Promise<'written' | 'closed'> => {
     const eventName = typeof payload.type === 'string' ? payload.type : undefined;
-    const status = await writeSseJson(res, {
-      ...payload,
-      sequence_number: sequenceNumber++,
-    }, eventName);
-    return status;
+    return writer.writeJson({ ...payload, sequence_number: sequenceNumber++ }, eventName);
   };
 
-  try {
-    let firstStep: IteratorResult<Record<string, unknown>>;
-    try {
-      firstStep = await nextStreamStep(iterator, { ...streamConfig, startedAt });
-    } catch (error) {
-      if (!closed && !wroteFrame && !res.headersSent) throw error;
-      if (!closed) await writeSseError(res, error);
-      return;
-    }
-    if (firstStep.done || closed) {
-      if (!closed) {
-        writeSseDone(res);
+  await driveSseStream(res, stream, {
+    onChunk: async (chunk, index, writer) => {
+      if (index === 0) {
+        sentPreamble = true;
+        if (await writeEvent(writer, {
+          type: 'response.created',
+          response: {
+            id: responseId,
+            object: 'response',
+            created_at: createdAt,
+            status: 'in_progress',
+            model: latestModel,
+            output: [],
+          },
+        }) === 'closed') return 'stop';
+
+        if (await writeEvent(writer, {
+          type: 'response.output_item.added',
+          output_index: 0,
+          item: {
+            id: messageId,
+            type: 'message',
+            status: 'in_progress',
+            role: 'assistant',
+            content: [],
+          },
+        }) === 'closed') return 'stop';
+
+        if (await writeEvent(writer, {
+          type: 'response.content_part.added',
+          item_id: messageId,
+          output_index: 0,
+          content_index: 0,
+          part: {
+            type: 'output_text',
+            text: '',
+          },
+        }) === 'closed') return 'stop';
       }
-      return;
-    }
 
-    if (await writeEvent({
-      type: 'response.created',
-      response: {
-        id: responseId,
-        object: 'response',
-        created_at: createdAt,
-        status: 'in_progress',
-        model: latestModel,
-        output: [],
-      },
-    }) === 'closed') return;
-
-    if (await writeEvent({
-      type: 'response.output_item.added',
-      output_index: 0,
-      item: {
-        id: messageId,
-        type: 'message',
-        status: 'in_progress',
-        role: 'assistant',
-        content: [],
-      },
-    }) === 'closed') return;
-
-    if (await writeEvent({
-      type: 'response.content_part.added',
-      item_id: messageId,
-      output_index: 0,
-      content_index: 0,
-      part: {
-        type: 'output_text',
-        text: '',
-      },
-    }) === 'closed') return;
-
-    const processStep = async (stepValue: Record<string, unknown>): Promise<'continue' | 'stop'> => {
-      const parsed = collectResponseParts(stepValue);
+      const parsed = collectResponseParts(chunk);
       latestModel = parsed.model ?? latestModel;
       latestUsageMetadata = parsed.usageMetadata;
       if (parsed.functionCalls.length > 0) {
-        if (!closed) {
-          await writeSseError(res, new GatewayError(
-            400,
-            'VALIDATION_FAILED',
-            'OpenAI Responses streaming tool calls are not implemented yet.',
-          ));
-        }
+        await writer.writeError(new GatewayError(
+          400,
+          'VALIDATION_FAILED',
+          'OpenAI Responses streaming tool calls are not implemented yet.',
+        ));
         return 'stop';
       }
       if (!parsed.text) return 'continue';
       fullText += parsed.text;
-      if (await writeEvent({
+      if (await writeEvent(writer, {
         type: 'response.output_text.delta',
         item_id: messageId,
         output_index: 0,
@@ -483,63 +427,47 @@ export const runOpenAiResponsesStreamRoute = async (
         delta: parsed.text,
       }) === 'closed') return 'stop';
       return 'continue';
-    };
-
-    if (await processStep(firstStep.value) === 'stop') return;
-
-    while (!closed) {
-      let step: IteratorResult<Record<string, unknown>>;
-      try {
-        step = await nextStreamStep(iterator, { ...streamConfig, startedAt });
-      } catch (error) {
-        if (!closed && !wroteFrame && !res.headersSent) throw error;
-        if (!closed) await writeSseError(res, error);
+    },
+    onComplete: async (writer) => {
+      if (!sentPreamble) {
+        writer.writeDone();
         return;
       }
 
-      if (step.done || closed) break;
-      if (await processStep(step.value) === 'stop') return;
-    }
+      const assistantMessage = buildAssistantMessage(messageId, fullText);
 
-    const assistantMessage = buildAssistantMessage(messageId, fullText);
-
-    if (await writeEvent({
-      type: 'response.output_text.done',
-      item_id: messageId,
-      output_index: 0,
-      content_index: 0,
-      text: fullText,
-    }) === 'closed') return;
-
-    if (await writeEvent({
-      type: 'response.content_part.done',
-      item_id: messageId,
-      output_index: 0,
-      content_index: 0,
-      part: {
-        type: 'output_text',
+      if (await writeEvent(writer, {
+        type: 'response.output_text.done',
+        item_id: messageId,
+        output_index: 0,
+        content_index: 0,
         text: fullText,
-        annotations: [],
-      },
-    }) === 'closed') return;
+      }) === 'closed') return;
 
-    if (await writeEvent({
-      type: 'response.output_item.done',
-      output_index: 0,
-      item: assistantMessage,
-    }) === 'closed') return;
+      if (await writeEvent(writer, {
+        type: 'response.content_part.done',
+        item_id: messageId,
+        output_index: 0,
+        content_index: 0,
+        part: {
+          type: 'output_text',
+          text: fullText,
+          annotations: [],
+        },
+      }) === 'closed') return;
 
-    if (await writeEvent({
-      type: 'response.completed',
-      response: buildResponseObject(responseId, messageId, latestModel, fullText, latestUsageMetadata),
-    }) === 'closed') return;
+      if (await writeEvent(writer, {
+        type: 'response.output_item.done',
+        output_index: 0,
+        item: assistantMessage,
+      }) === 'closed') return;
 
-    if (!closed) writeSseDone(res);
-  } finally {
-    req.off('close', onClose);
-    req.off('error', onClose);
-    res.off('close', onClose);
-    res.off('error', onClose);
-    await closeIterator();
-  }
+      if (await writeEvent(writer, {
+        type: 'response.completed',
+        response: buildResponseObject(responseId, messageId, latestModel, fullText, latestUsageMetadata),
+      }) === 'closed') return;
+
+      writer.writeDone();
+    },
+  }, { req, idleTimeoutMs: streamConfig.idleTimeoutMs, maxDurationMs: streamConfig.maxDurationMs });
 };
