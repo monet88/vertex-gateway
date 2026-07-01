@@ -2,7 +2,6 @@ import type { GatewayConfig } from '../config/env.js';
 import { GatewayError } from '../http/error-response.js';
 import { Semaphore } from '../lib/concurrency.js';
 import type { GenAiClient } from '../lib/google-genai-client.js';
-import { withGenAiRequestMetadata } from '../lib/genai-request-metadata.js';
 import { retryWithJitter } from '../lib/retry.js';
 import { withTimeout } from '../lib/timeout.js';
 import { extractText, normalizeInlineImages, type ImageDto } from './image-normalizer.js';
@@ -79,11 +78,11 @@ export class ImageWorkloads {
     const aspectRatio = typeof body.aspectRatio === 'string' && body.aspectRatio !== 'Default' ? body.aspectRatio : '1:1';
     const numberOfImages = parseNumberOfImages(body.numberOfImages, this.config.maxImages);
     const results = await Promise.all(Array.from({ length: numberOfImages }, async (_, index) => {
-      const response = await this.safeGenerate(() => this.ai.models.generateContent(withGenAiRequestMetadata({
+      const response = await this.safeGenerate(() => this.ai.models.generateContent({
         model,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio } },
-      }, { routeFamily: 'images', requestId })));
+      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}) }));
       return normalizeInlineImages(response, { model, requestedIndex: index });
     }));
     const images = results.flat();
@@ -98,14 +97,14 @@ export class ImageWorkloads {
     const imageConfig = buildImageConfig(body);
     const results = await Promise.all(Array.from({ length: numberOfImages }, async (_, index) => {
       // Gemini image editing expects the instruction text before the reference images.
-      const response = await this.safeGenerate(() => this.ai.models.generateContent(withGenAiRequestMetadata({
+      const response = await this.safeGenerate(() => this.ai.models.generateContent({
         model,
         contents: [{ role: 'user', parts: [{ text: prompt }, ...buildImageParts(images)] }],
         config: {
           responseModalities: ['IMAGE'],
           ...(Object.keys(imageConfig).length > 0 && { imageConfig }),
         },
-      }, { routeFamily: 'images', requestId })));
+      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}) }));
       return normalizeInlineImages(response, { model, requestedIndex: index });
     }));
     const outputImages = results.flat();
@@ -116,11 +115,11 @@ export class ImageWorkloads {
     const image = validateImages([body.image], this.config);
     const quality = typeof body.quality === 'string' ? body.quality : '2K';
     const model = typeof body.model === 'string' ? body.model : defaultImageModel;
-    const response = await this.safeGenerate(() => this.ai.models.generateContent(withGenAiRequestMetadata({
+    const response = await this.safeGenerate(() => this.ai.models.generateContent({
       model,
       contents: [{ role: 'user', parts: [...buildImageParts(image), { text: `Upscale this image to ${quality}. Preserve the original subject and composition.` }] }],
       config: { responseModalities: ['IMAGE'], imageConfig: { imageSize: quality } },
-    }, { routeFamily: 'images', requestId })));
+      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}) }));
     return { images: normalizeInlineImages(response, { model, quality }) };
   }
 
@@ -128,20 +127,20 @@ export class ImageWorkloads {
     const images = validateImages([body.image], this.config);
     const prompt = typeof body.prompt === 'string' ? body.prompt : 'Describe this image concisely.';
     const model = typeof body.model === 'string' ? body.model : 'gemini-2.5-flash';
-    const response = await this.safeGenerate(() => this.ai.models.generateContent(withGenAiRequestMetadata({
+    const response = await this.safeGenerate(() => this.ai.models.generateContent({
       model,
       contents: [{ role: 'user', parts: [...buildImageParts(images), { text: prompt }] }],
-    }, { routeFamily: 'images', requestId })));
+      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}) }));
     return { text: extractText(response) };
   }
 
   async validateSession(body: Record<string, unknown>, requestId?: string): Promise<{ ok: true; model?: string; text?: string }> {
     const model = typeof body.model === 'string' ? body.model : undefined;
     if (!model) return { ok: true };
-    const response = await this.safeGenerate(() => this.ai.models.generateContent(withGenAiRequestMetadata({
+    const response = await this.safeGenerate(() => this.ai.models.generateContent({
       model,
       contents: [{ role: 'user', parts: [{ text: typeof body.prompt === 'string' ? body.prompt : 'Reply with ok.' }] }],
-    }, { routeFamily: 'images', requestId })));
+      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}) }));
     return { ok: true, model, text: extractText(response) };
   }
 
