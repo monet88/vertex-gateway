@@ -4,9 +4,9 @@ import type {
   VertexPoolSelection,
 } from '../config/env.js';
 import type { GenAiClient, GenAiTargetClientFactory } from './google-genai-client.js';
-import {
-  extractGenAiRequestMetadata,
-  type GenAiRouteFamily,
+import type {
+  GenAiRequestMetadata,
+  GenAiRouteFamily,
 } from './genai-request-metadata.js';
 import { GatewayError } from '../http/error-response.js';
 import { nextStreamStep } from './stream-guards.js';
@@ -355,28 +355,34 @@ const wrapPinnedStream = (
 
 export class GenAiPoolClient implements GenAiClient {
   readonly models = {
-    generateContent: async (request: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    generateContent: async (
+      request: Record<string, unknown>,
+      metadata: GenAiRequestMetadata = {},
+    ): Promise<Record<string, unknown>> => {
       const snapshot = this.pinSnapshot();
       try {
-        const { metadata, request: cleanRequest } = extractGenAiRequestMetadata(request);
+        const routeFamily = metadata.routeFamily ?? 'unknown';
         return await this.withFailover(
           snapshot,
-          metadata.routeFamily,
+          routeFamily,
           metadata.requestId,
-          this.extractRequestedModel(cleanRequest),
-          (target) => target.client.models.generateContent(cleanRequest),
+          this.extractRequestedModel(request),
+          (target) => target.client.models.generateContent(request, metadata),
         );
       } finally {
         snapshot.refCount -= 1;
       }
     },
-    generateContentStream: async (request: Record<string, unknown>): Promise<AsyncIterable<Record<string, unknown>>> => {
+    generateContentStream: async (
+      request: Record<string, unknown>,
+      metadata: GenAiRequestMetadata = {},
+    ): Promise<AsyncIterable<Record<string, unknown>>> => {
       const snapshot = this.pinSnapshot();
-      const { metadata, request: cleanRequest } = extractGenAiRequestMetadata(request);
+      const routeFamily = metadata.routeFamily ?? 'unknown';
       try {
         const attempted = new Set<string>();
         let lastError: unknown;
-        const requestedModel = this.extractRequestedModel(cleanRequest);
+        const requestedModel = this.extractRequestedModel(request);
 
         while (attempted.size < snapshot.targets.length) {
           const target = this.selectAvailableTarget(snapshot, attempted, requestedModel, metadata.requestId);
@@ -385,7 +391,7 @@ export class GenAiPoolClient implements GenAiClient {
             event: 'genai_pool.target_selected',
             ...(metadata.requestId ? { requestId: metadata.requestId } : {}),
             targetId: target.id,
-            routeFamily: metadata.routeFamily,
+            routeFamily,
             streaming: true,
           }));
 
@@ -394,7 +400,7 @@ export class GenAiPoolClient implements GenAiClient {
             if (!target.client.models.generateContentStream) {
               throw new Error('Configured GenAI target does not support generateContentStream.');
             }
-            const stream = await target.client.models.generateContentStream(cleanRequest);
+            const stream = await target.client.models.generateContentStream(request, metadata);
             iterator = stream[Symbol.asyncIterator]();
             const firstStep = await nextStreamStep(iterator, {
               idleTimeoutMs: metadata.streamGuard?.idleTimeoutMs ?? 30_000,
@@ -402,7 +408,7 @@ export class GenAiPoolClient implements GenAiClient {
               startedAt: Date.now(),
             });
             if (firstStep.done) {
-              markSuccess(target, metadata.routeFamily);
+              markSuccess(target, routeFamily);
               snapshot.refCount -= 1;
               return {
                 async *[Symbol.asyncIterator]() {
@@ -413,12 +419,12 @@ export class GenAiPoolClient implements GenAiClient {
             return wrapPinnedStream(
               iterator,
               firstStep,
-              () => markSuccess(target, metadata.routeFamily),
+              () => markSuccess(target, routeFamily),
               (error) => {
                 const classification = classifyUpstreamError(error);
                 markFailure(
                   target,
-                  metadata.routeFamily,
+                  routeFamily,
                   classification.code,
                   this.cooldownMs,
                   classification.shouldCooldown,
@@ -437,7 +443,7 @@ export class GenAiPoolClient implements GenAiClient {
               }
             }
             const classification = classifyUpstreamError(error);
-            markFailure(target, metadata.routeFamily, classification.code, this.cooldownMs, classification.shouldCooldown);
+            markFailure(target, routeFamily, classification.code, this.cooldownMs, classification.shouldCooldown);
             lastError = withClassifiedGatewayError(error);
             if (!classification.shouldFailover || attempted.size >= snapshot.targets.length) {
               throw lastError;

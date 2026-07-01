@@ -1,11 +1,18 @@
 import { GoogleGenAI } from '@google/genai';
 import type { GatewayConfig, ResolvedVertexTargetConfig } from '../config/env.js';
 import { loadServiceAccountCredential } from '../auth/google-auth.js';
+import type { GenAiRequestMetadata } from './genai-request-metadata.js';
 
 export interface GenAiClient {
   models: {
-    generateContent: (request: Record<string, unknown>) => Promise<Record<string, unknown>>;
-    generateContentStream?: (request: Record<string, unknown>) => Promise<AsyncIterable<Record<string, unknown>>>;
+    generateContent: (
+      request: Record<string, unknown>,
+      metadata?: GenAiRequestMetadata,
+    ) => Promise<Record<string, unknown>>;
+    generateContentStream?: (
+      request: Record<string, unknown>,
+      metadata?: GenAiRequestMetadata,
+    ) => Promise<AsyncIterable<Record<string, unknown>>>;
   };
 }
 

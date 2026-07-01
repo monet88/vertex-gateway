@@ -57,10 +57,14 @@ export class GenAiRuntime implements GenAiRuntimeLike {
 
   async probeTarget(target: ResolvedVertexTargetConfig): Promise<Record<string, unknown>> {
     const client = this.factory(this.currentConfig, target);
-    return client.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: [{ text: 'Reply with exactly: ok' }] }],
-    });
+    // Pass explicit metadata (second arg) for interface consistency; probe does not need route/request metadata.
+    return client.models.generateContent(
+      {
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts: [{ text: 'Reply with exactly: ok' }] }],
+      },
+      {},
+    );
   }
 }
 

@@ -614,7 +614,8 @@ describe('GenAI runtime pool', () => {
 
     const response = await runtime.client.models.generateContent({
       model: 'gemini-2.5-flash',
-      __gatewayRouteFamily: 'openai-chat',
+    }, {
+      routeFamily: 'openai-chat',
     });
 
     expect(response).toEqual({ targetId: 'project-b' });
@@ -684,7 +685,8 @@ describe('GenAI runtime pool', () => {
 
     await runtime.client.models.generateContent({
       model: 'gemini-2.5-flash',
-      __gatewayRouteFamily: 'openai-chat',
+    }, {
+      routeFamily: 'openai-chat',
     });
 
     expect(calls).toEqual(['project-a']);
@@ -819,7 +821,8 @@ describe('GenAI runtime pool', () => {
 
     await expect(runtime.client.models.generateContent({
       model: 'gemini-2.5-flash',
-      __gatewayRouteFamily: 'gemini',
+    }, {
+      routeFamily: 'gemini',
     })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
     expect(calls).toEqual(['project-a']);
   });
@@ -905,8 +908,9 @@ describe('GenAI runtime pool', () => {
 
     const stream = await runtime.client.models.generateContentStream?.({
       model: 'gemini-2.5-flash',
-      __gatewayRouteFamily: 'openai-responses',
-      __gatewayStreamGuard: {
+    }, {
+      routeFamily: 'openai-responses',
+      streamGuard: {
         idleTimeoutMs: 250,
         maxDurationMs: 10000,
       },
@@ -990,8 +994,9 @@ describe('GenAI runtime pool', () => {
 
     const stream = await runtime.client.models.generateContentStream?.({
       model: 'gemini-2.5-flash',
-      __gatewayRouteFamily: 'openai-chat',
-      __gatewayStreamGuard: {
+    }, {
+      routeFamily: 'openai-chat',
+      streamGuard: {
         idleTimeoutMs: 250,
         maxDurationMs: 10000,
       },
@@ -1069,7 +1074,8 @@ describe('GenAI runtime pool', () => {
 
     await runtime.client.models.generateContent({
       model: 'gemini-2.5-flash',
-      __gatewayRouteFamily: 'vertex',
+    }, {
+      routeFamily: 'vertex',
     });
 
     expect(warnSpy).toHaveBeenCalled();
