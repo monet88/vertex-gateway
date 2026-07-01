@@ -1,0 +1,29 @@
+# Gateway bind port inside container
+port: 8080
+
+# Browser/client keys accepted by Authorization: Bearer or x-api-key.
+# Set GATEWAY_API_KEYS in gateway/.env or your deployment secret store.
+
+# Allowed browser origins for CORS
+corsOrigins:
+  - http://localhost:3000
+  - http://127.0.0.1:3000
+
+# Vertex server-side auth and routing
+googleProject: project-b82b6a5a-13c8-42e4-a56
+googleCredentialsFile: /run/vertex-accounts/active.json
+googleLocation: global
+googleApiVersion: v1
+
+# Request and workload limits
+maxJsonBytes: 8388608
+maxImages: 4
+maxDecodedImageBytes: 6291456
+upstreamTimeoutMs: 45000
+upstreamConcurrency: 4
+
+# Route switches
+enableGeminiRoutes: true
+enableVertexRoutes: true
+enableVtxRoutes: true
+enableImageRoutes: true

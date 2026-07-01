@@ -1,0 +1,32 @@
+services:
+  vertex-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: chang-store-vertex-gateway:local
+    container_name: vertex-gateway
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      GATEWAY_CONFIG_FILE: /app/config.yaml
+      GATEWAY_POOL_CONFIG_FILE: /app/pool-config.local.json
+    ports:
+      - "${GATEWAY_HOST_PORT:-19089}:8080"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./pool-config.local.json:/app/pool-config.local.json:ro
+      - "${VERTEX_ACCOUNTS_DIR:-./accounts}:/run/vertex-accounts:ro"
+      - ./gateway-data/auths:/data/auths
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

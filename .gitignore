@@ -1,0 +1,11 @@
+node_modules/
+compiled/
+.env
+
+accounts/*
+!accounts/.gitkeep
+
+gateway-data/
+
+*.log
+.DS_Store

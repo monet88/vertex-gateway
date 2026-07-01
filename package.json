@@ -1,0 +1,25 @@
+{
+  "name": "@chang-store/vertex-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "compile": "node ./scripts/check-node-platform.mjs --package-root . && tsc -p tsconfig.json",
+    "start": "node compiled/server.js",
+    "test": "node ./scripts/check-node-platform.mjs --package-root . && vitest --run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^1.38.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.7",
+    "openai": "^6.41.0",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.3",
+    "vitest": "^4.0.17"
+  }
+}
