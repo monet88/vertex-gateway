@@ -54,11 +54,13 @@ describe('streaming compatibility routes', () => {
       expect(body).toContain('data: {"candidates":[{"content":{"parts":[{"text":"hel"}]}}]}');
       expect(body).toContain('data: {"candidates":[{"content":{"parts":[{"text":"lo"}]},"finishReason":"STOP"}]}');
       expect(body).not.toContain('data: [DONE]');
-      expect(generateContentStream).toHaveBeenCalledWith(expect.objectContaining({
-        model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
-        __gatewayRouteFamily: 'gemini',
-      }));
+      expect(generateContentStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gemini-2.5-flash',
+          contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
+        }),
+        expect.objectContaining({ routeFamily: 'gemini' }),
+      );
       expect(generateContent).not.toHaveBeenCalled();
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -85,11 +87,13 @@ describe('streaming compatibility routes', () => {
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('text/event-stream');
       expect(body).not.toContain('data: [DONE]');
-      expect(generateContentStream).toHaveBeenCalledWith(expect.objectContaining({
-        model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
-        __gatewayRouteFamily: 'vertex',
-      }));
+      expect(generateContentStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gemini-2.5-flash',
+          contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
+        }),
+        expect.objectContaining({ routeFamily: 'vertex' }),
+      );
       expect(generateContent).not.toHaveBeenCalled();
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
