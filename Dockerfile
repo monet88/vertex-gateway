@@ -5,6 +5,7 @@ RUN npm ci --omit=optional
 
 FROM deps AS compile
 COPY src ./src
+COPY scripts ./scripts
 RUN npm run compile
 
 FROM node:22-bookworm-slim
