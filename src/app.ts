@@ -5,7 +5,7 @@ import { extractGatewayKey, requireGatewayAuth } from './auth/gateway-auth.js';
 import { sendError, sendJson, GatewayError } from './http/error-response.js';
 import { createRequestContext } from './http/request-context.js';
 import { classifyRoute } from './http/request-classifier.js';
-import { sendSseStream } from './http/sse-response.js';
+import { isStreamingRequest, resolveRouteDispatch } from './http/route-dispatch.js';
 import { applyCors } from './lib/cors.js';
 import { readJsonBody } from './lib/read-json.js';
 import { StreamAdmission } from './lib/stream-admission.js';
@@ -16,13 +16,6 @@ import { maybeHandleAdminRoute } from './admin/admin-routes.js';
 import { getProviderModelCatalog, resolveProviderModel } from './admin/model-store.js';
 import { renderDocsUi, renderLlmsTxt } from './routes/docs-ui.js';
 import { healthResponse, readyResponse, rootResponse } from './routes/health-routes.js';
-import { runCustomImageRoute } from './routes/custom-image-routes.js';
-import { runOpenAiImageEditRoute, runOpenAiImageGenerationRoute } from './routes/openai-images-routes.js';
-import { runGeminiCompatibleRoute } from './routes/gemini-compatible-routes.js';
-import { runOpenAiCompatibleRoute, runOpenAiCompatibleStreamRoute } from './routes/openai-compatible-routes.js';
-import { runOpenAiResponsesRoute, runOpenAiResponsesStreamRoute } from './routes/openai-responses-routes.js';
-import { runVertexCompatibleRoute } from './routes/vertex-compatible-routes.js';
-import { runCompatibilityStreamRoute } from './strategies/compatibility-strategy.js';
 import { ImageWorkloads } from './workloads/image-workloads.js';
 
 export interface AppOptions {
@@ -174,12 +167,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
           resolvedBody.model = nextModel;
         }
       }
-      const isStreamingRequest = (
-        (resolvedRoute.family === 'gemini' && resolvedRoute.stream)
-        || (resolvedRoute.family === 'vertex' && resolvedRoute.stream)
-        || (resolvedRoute.family === 'openai' && resolvedRoute.operation === 'chatCompletions' && resolvedBody.stream === true)
-        || (resolvedRoute.family === 'openai' && resolvedRoute.operation === 'responses' && resolvedBody.stream === true)
-      );
+      const streaming = isStreamingRequest(resolvedRoute, resolvedBody);
       const streamAbortController = new AbortController();
       const abortQueuedStream = () => {
         if (!streamAbortController.signal.aborted) {
@@ -190,66 +178,29 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
       req.once('error', abortQueuedStream);
       res.once('close', abortQueuedStream);
       res.once('error', abortQueuedStream);
-      const releaseStream = isStreamingRequest && gatewayKey
+      const releaseStream = streaming && gatewayKey
         ? await streamAdmission.acquire(gatewayKey, streamAbortController.signal)
         : null;
 
       try {
-        if (resolvedRoute.family === 'gemini') {
-          if (!config.enableGeminiRoutes) throw new GatewayError(404, 'NOT_FOUND', 'Gemini-compatible routes are disabled.');
-          if (resolvedRoute.stream) {
-            await sendSseStream(res, await runCompatibilityStreamRoute(resolvedRoute, resolvedBody, ai, ctx.id), { includeDone: false, ...streamConfig });
-            return;
+        const dispatch = resolveRouteDispatch(resolvedRoute.family);
+        if (dispatch) {
+          if (!dispatch.isEnabled(config)) {
+            throw new GatewayError(404, 'NOT_FOUND', dispatch.disabledMessage);
           }
-          sendJson(res, 200, await runGeminiCompatibleRoute(resolvedRoute, resolvedBody, ai, ctx.id));
-          return;
-        }
-        if (resolvedRoute.family === 'openai') {
-          if (!config.enableOpenAiRoutes) throw new GatewayError(404, 'NOT_FOUND', 'OpenAI-compatible routes are disabled.');
-          if (resolvedRoute.operation === 'openaiImageGenerations') {
-            sendJson(res, 200, await runOpenAiImageGenerationRoute(resolvedBody, workloads, ctx.id));
-            return;
-          }
-          if (resolvedRoute.operation === 'openaiImageEdits') {
-            sendJson(res, 200, await runOpenAiImageEditRoute(
-              req,
-              expectsMultipartOpenAiEdit ? null : resolvedBody,
-              workloads,
-              config.maxJsonBytes,
-              ctx.id,
-              (value) => openAiModel(value) || geminiModel(value),
-            ));
-            return;
-          }
-          if (resolvedRoute.operation === 'chatCompletions' && resolvedBody.stream === true) {
-            await runOpenAiCompatibleStreamRoute(req, res, resolvedRoute, resolvedBody, ai, streamConfig, ctx.id);
-            return;
-          }
-          if (resolvedRoute.operation === 'responses' && resolvedBody.stream === true) {
-            await runOpenAiResponsesStreamRoute(req, res, resolvedRoute, resolvedBody, ai, streamConfig, ctx.id);
-            return;
-          }
-          if (resolvedRoute.operation === 'responses') {
-            sendJson(res, 200, await runOpenAiResponsesRoute(resolvedRoute, resolvedBody, ai, ctx.id));
-            return;
-          }
-          sendJson(res, 200, await runOpenAiCompatibleRoute(resolvedRoute, resolvedBody, ai, ctx.id));
-          return;
-        }
-        if (resolvedRoute.family === 'vertex' || resolvedRoute.family === 'vtx') {
-          if ((resolvedRoute.family === 'vertex' && !config.enableVertexRoutes) || (resolvedRoute.family === 'vtx' && !config.enableVtxRoutes)) {
-            throw new GatewayError(404, 'NOT_FOUND', 'Vertex-compatible routes are disabled.');
-          }
-          if (resolvedRoute.stream) {
-            await sendSseStream(res, await runCompatibilityStreamRoute(resolvedRoute, resolvedBody, ai, ctx.id), { includeDone: false, ...streamConfig });
-            return;
-          }
-          sendJson(res, 200, await runVertexCompatibleRoute(resolvedRoute, resolvedBody, ai, ctx.id));
-          return;
-        }
-        if (resolvedRoute.family === 'custom') {
-          if (!config.enableImageRoutes) throw new GatewayError(404, 'NOT_FOUND', 'Custom image routes are disabled.');
-          sendJson(res, 200, await runCustomImageRoute(resolvedRoute.operation, resolvedBody, workloads, ctx.id));
+          await dispatch.run({
+            req,
+            res,
+            route: resolvedRoute,
+            body: resolvedBody,
+            ai,
+            workloads,
+            streamConfig,
+            requestId: ctx.id,
+            maxJsonBytes: config.maxJsonBytes,
+            expectsMultipartOpenAiEdit,
+            resolveImageEditModel: (value) => openAiModel(value) || geminiModel(value),
+          });
           return;
         }
       } finally {

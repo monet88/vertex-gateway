@@ -21,11 +21,13 @@ describe('compatibility strategy', () => {
       { models: { generateContent } },
     );
 
-    expect(generateContent).toHaveBeenCalledWith({
-      model: 'url-model',
-      contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
-      __gatewayRouteFamily: 'gemini',
-    });
+    expect(generateContent).toHaveBeenCalledWith(
+      {
+        model: 'url-model',
+        contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
+      },
+      expect.objectContaining({ routeFamily: 'gemini' }),
+    );
   });
 
   it('uses the URL route model for predict requests with instances', async () => {
@@ -46,10 +48,12 @@ describe('compatibility strategy', () => {
       { models: { generateContent } },
     );
 
-    expect(generateContent).toHaveBeenCalledWith({
-      model: 'url-predict-model',
-      contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
-      __gatewayRouteFamily: 'vertex',
-    });
+    expect(generateContent).toHaveBeenCalledWith(
+      {
+        model: 'url-predict-model',
+        contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
+      },
+      expect.objectContaining({ routeFamily: 'vertex' }),
+    );
   });
 });

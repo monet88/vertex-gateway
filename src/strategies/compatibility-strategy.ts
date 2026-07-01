@@ -1,7 +1,7 @@
 import type { ClassifiedRoute } from '../http/request-classifier.js';
 import { GatewayError } from '../http/error-response.js';
 import type { GenAiClient } from '../lib/google-genai-client.js';
-import { withGenAiRequestMetadata } from '../lib/genai-request-metadata.js';
+import type { GenAiRequestMetadata } from '../lib/genai-request-metadata.js';
 
 const instanceToContent = (instance: unknown): Record<string, unknown> => {
   if (typeof instance === 'string') {
@@ -33,11 +33,15 @@ const instanceToContent = (instance: unknown): Record<string, unknown> => {
 const buildGenerateRequest = (
   route: ClassifiedRoute,
   body: Record<string, unknown>,
+): Record<string, unknown> => ({ ...body, model: route.model });
+
+const compatibilityMetadata = (
+  route: ClassifiedRoute,
   requestId?: string,
-): Record<string, unknown> => withGenAiRequestMetadata(
-  { ...body, model: route.model },
-  { routeFamily: route.family === 'gemini' ? 'gemini' : 'vertex', requestId },
-);
+): GenAiRequestMetadata => ({
+  routeFamily: route.family === 'gemini' ? 'gemini' : 'vertex',
+  ...(requestId ? { requestId } : {}),
+});
 
 const buildPredictRequest = (
   route: ClassifiedRoute,
@@ -63,12 +67,15 @@ export const runCompatibilityRoute = async (
 ): Promise<Record<string, unknown>> => {
   if (route.operation === 'models') return { models: [] };
   if (route.operation === 'predict') {
-    return ai.models.generateContent(withGenAiRequestMetadata(
+    return ai.models.generateContent(
       buildPredictRequest(route, body),
-      { routeFamily: 'vertex', requestId },
-    ));
+      { routeFamily: 'vertex', ...(requestId ? { requestId } : {}) },
+    );
   }
-  return ai.models.generateContent(buildGenerateRequest(route, body, requestId));
+  return ai.models.generateContent(
+    buildGenerateRequest(route, body),
+    compatibilityMetadata(route, requestId),
+  );
 };
 
 export const runCompatibilityStreamRoute = async (
@@ -80,5 +87,8 @@ export const runCompatibilityStreamRoute = async (
   if (!ai.models.generateContentStream) {
     throw new GatewayError(501, 'NOT_IMPLEMENTED', 'Streaming is not implemented by the configured GenAI client.');
   }
-  return ai.models.generateContentStream(buildGenerateRequest(route, body, requestId));
+  return ai.models.generateContentStream(
+    buildGenerateRequest(route, body),
+    compatibilityMetadata(route, requestId),
+  );
 };
