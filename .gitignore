@@ -4,8 +4,13 @@ compiled/
 
 accounts/*
 !accounts/.gitkeep
+*.local.json
 
 gateway-data/
 
 *.log
 .DS_Store
+.claude
+.agents
+.codex
+.codegraph
