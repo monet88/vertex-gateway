@@ -42,7 +42,7 @@ describe('openai image routes', () => {
     expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({
       model: 'gemini-2.5-flash-image',
       config: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '1:1' } },
-    }));
+    }), expect.objectContaining({ routeFamily: 'images' }));
   });
 
   it('returns OpenAI-style b64_json data for JSON image edits with multiple inputs and outputs', async () => {
@@ -74,7 +74,7 @@ describe('openai image routes', () => {
     expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({
       model: 'gemini-3.1-flash-image',
       config: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '3:2' } },
-    }));
+    }), expect.objectContaining({ routeFamily: 'images' }));
   });
 
   it('supports multipart edit uploads for OpenAI-style clients', async () => {
@@ -108,7 +108,7 @@ describe('openai image routes', () => {
     expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({
       model: 'gemini-3-pro-image',
       config: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '9:16' } },
-    }));
+    }), expect.objectContaining({ routeFamily: 'images' }));
   });
 
   it('applies configured image-model aliases for multipart edits before calling upstream', async () => {
@@ -148,7 +148,7 @@ describe('openai image routes', () => {
     expect(response.status).toBe(200);
     expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({
       model: 'gemini-3.1-flash-image-preview',
-    }));
+    }), expect.objectContaining({ routeFamily: 'images' }));
   });
 
   it('supports quoted multipart boundaries and filename-first content disposition headers', async () => {
