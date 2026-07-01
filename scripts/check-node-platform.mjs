@@ -4,7 +4,7 @@ import path from 'node:path';
 const args = process.argv.slice(2);
 
 let packageRoot = process.cwd();
-let tools = process.platform === 'win32' ? ['vitest.cmd', 'eslint.cmd', 'tsc.cmd'] : [];
+let tools = process.platform === 'win32' ? ['vitest.cmd', 'tsc.cmd'] : [];
 
 for (let index = 0; index < args.length; index += 1) {
   const arg = args[index];

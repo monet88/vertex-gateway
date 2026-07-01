@@ -42,7 +42,7 @@ const runCompatibilityFamily = (
   if (ctx.route.stream) {
     await sendSseStream(
       ctx.res,
-      await runCompatibilityStreamRoute(ctx.route, ctx.body, ctx.ai, ctx.requestId),
+      await runCompatibilityStreamRoute(ctx.route, ctx.body, ctx.ai, ctx.requestId, ctx.streamConfig),
       { includeDone: false, req: ctx.req, ...ctx.streamConfig },
     );
     return;
