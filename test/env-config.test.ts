@@ -546,9 +546,23 @@ describe('gateway config file', () => {
   it('rejects negative or non-integer upstream retries', () => {
     process.env.GATEWAY_API_KEYS = 'k1';
     process.env.GOOGLE_GENAI_API_KEY = 'express-key';
-    process.env.GATEWAY_UPSTREAM_RETRIES = '-1';
 
+    process.env.GATEWAY_UPSTREAM_RETRIES = '-1';
     expect(() => loadConfig()).toThrow(/GATEWAY_UPSTREAM_RETRIES/);
+
+    process.env.GATEWAY_UPSTREAM_RETRIES = '2.5';
+    expect(() => loadConfig()).toThrow(/GATEWAY_UPSTREAM_RETRIES/);
+  });
+
+  it('rejects negative or non-integer upstream retry delay', () => {
+    process.env.GATEWAY_API_KEYS = 'k1';
+    process.env.GOOGLE_GENAI_API_KEY = 'express-key';
+
+    process.env.GATEWAY_UPSTREAM_RETRY_DELAY_MS = '-5';
+    expect(() => loadConfig()).toThrow(/GATEWAY_UPSTREAM_RETRY_DELAY_MS/);
+
+    process.env.GATEWAY_UPSTREAM_RETRY_DELAY_MS = '12.5';
+    expect(() => loadConfig()).toThrow(/GATEWAY_UPSTREAM_RETRY_DELAY_MS/);
   });
 
   it('reads upstream retry policy from GATEWAY_POOL_CONFIG_FILE overlay', () => {
