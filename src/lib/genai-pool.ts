@@ -483,8 +483,9 @@ export class GenAiPoolClient implements GenAiClient {
               target.health.retries += retryCount;
               target.health.lastRetryAt = new Date().toISOString();
             }
-            if (iterator && typeof iterator.return === 'function') {
-              try { await iterator.return(); } catch { /* ignore cleanup */ }
+            const activeIterator = iterator as AsyncIterator<Record<string, unknown>> | null;
+            if (activeIterator && typeof activeIterator.return === 'function') {
+              try { await activeIterator.return(); } catch { /* ignore cleanup */ }
             }
             const classification = classifyUpstreamError(error);
             markFailure(target, routeFamily, classification.code, cooldownMs, classification.shouldCooldown);
