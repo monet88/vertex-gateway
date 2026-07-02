@@ -68,6 +68,24 @@ describe('getErrorStatus', () => {
     expect(getErrorStatus('plain string')).toBeUndefined();
   });
 
+  it('reads status from a string number status field', () => {
+    expect(getErrorStatus({ status: '429' })).toBe(429);
+    expect(getErrorStatus({ statusCode: '503' })).toBe(503);
+  });
+
+  it('safely handles throwing property getters without crashing', () => {
+    const explodingObj = {};
+    Object.defineProperty(explodingObj, 'status', {
+      get() {
+        throw new Error('Getter exploded!');
+      },
+      enumerable: true,
+      configurable: true,
+    });
+    expect(() => getErrorStatus(explodingObj)).not.toThrow();
+    expect(getErrorStatus(explodingObj)).toBeUndefined();
+  });
+
   it('ignores a string .code such as ECONNRESET', () => {
     expect(getErrorStatus({ code: 'ECONNRESET' })).toBeUndefined();
   });

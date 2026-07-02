@@ -2,6 +2,7 @@ import { ApiError } from '@google/genai';
 import {
   GatewayError,
   gatewayErrorFromStatus,
+  safeErrorMessage,
   toGatewayError,
   type GatewayErrorCode,
 } from '../http/error-response.js';
@@ -13,8 +14,11 @@ export interface UpstreamErrorClassification {
   shouldFailover: boolean;
 }
 
-const asFiniteInt = (value: unknown): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+const asFiniteInt = (value: unknown): number | undefined => {
+  const num = typeof value === 'number' ? value
+    : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(num) ? Math.trunc(num) : undefined;
+};
 
 /**
  * Accept a value as an HTTP status only when it falls inside the valid HTTP
@@ -45,22 +49,26 @@ export const getErrorStatus = (error: unknown): number | undefined => {
     const status = asFiniteInt(error.status);
     if (status !== undefined) return status;
   }
-  if (error && typeof error === 'object') {
-    const record = error as Record<string, unknown>;
-    const direct = asHttpStatus(record.status) ?? asHttpStatus(record.statusCode) ?? asHttpStatus(record.code);
-    if (direct !== undefined) return direct;
-    const response = record.response;
-    if (response && typeof response === 'object') {
-      const nested = asHttpStatus((response as Record<string, unknown>).status)
-        ?? asHttpStatus((response as Record<string, unknown>).statusCode);
-      if (nested !== undefined) return nested;
+  try {
+    if (error && typeof error === 'object') {
+      const record = error as Record<string, unknown>;
+      const direct = asHttpStatus(record.status) ?? asHttpStatus(record.statusCode) ?? asHttpStatus(record.code);
+      if (direct !== undefined) return direct;
+      const response = record.response;
+      if (response && typeof response === 'object') {
+        const nested = asHttpStatus((response as Record<string, unknown>).status)
+          ?? asHttpStatus((response as Record<string, unknown>).statusCode);
+        if (nested !== undefined) return nested;
+      }
+      const nestedError = record.error;
+      if (nestedError && typeof nestedError === 'object') {
+        const duck = asHttpStatus((nestedError as Record<string, unknown>).code)
+          ?? asHttpStatus((nestedError as Record<string, unknown>).status);
+        if (duck !== undefined) return duck;
+      }
     }
-    const nestedError = record.error;
-    if (nestedError && typeof nestedError === 'object') {
-      const duck = asHttpStatus((nestedError as Record<string, unknown>).code)
-        ?? asHttpStatus((nestedError as Record<string, unknown>).status);
-      if (duck !== undefined) return duck;
-    }
+  } catch {
+    // Property getter threw — fall through to undefined.
   }
   return undefined;
 };
@@ -90,7 +98,7 @@ const decisionFor = (gatewayError: GatewayError): UpstreamErrorClassification =>
 export const classifyUpstreamError = (error: unknown): UpstreamErrorClassification => {
   if (error instanceof GatewayError) return decisionFor(error);
   const status = getErrorStatus(error);
-  const message = error instanceof Error ? error.message : String(error);
+  const message = safeErrorMessage(error);
   const gatewayError = (status !== undefined && gatewayErrorFromStatus(status, message))
     || toGatewayError(error);
   return decisionFor(gatewayError);
@@ -99,6 +107,6 @@ export const classifyUpstreamError = (error: unknown): UpstreamErrorClassificati
 export const withClassifiedGatewayError = (error: unknown): GatewayError => {
   if (error instanceof GatewayError) return error;
   const status = getErrorStatus(error);
-  const message = error instanceof Error ? error.message : String(error);
+  const message = safeErrorMessage(error);
   return (status !== undefined && gatewayErrorFromStatus(status, message)) || toGatewayError(error);
 };
