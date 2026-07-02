@@ -17,3 +17,5 @@ pool-config.express-test.json
 .agents
 .codex
 .codegraph
+skills-lock.json
+docs/deploy/

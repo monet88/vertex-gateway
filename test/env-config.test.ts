@@ -520,3 +520,83 @@ describe('gateway config file', () => {
     expect(() => loadConfig()).toThrow(/must not overlap/);
   });
 });
+
+describe('VERTEX_POOLS env var', () => {
+  it('creates pool entries from comma-separated project:location:apiKey', () => {
+    process.env.GATEWAY_API_KEYS = 'test-key';
+    process.env.VERTEX_POOLS = 'proj-a:global:AIzaKeyA,proj-b:us-central1:AIzaKeyB';
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+    delete process.env.GATEWAY_POOL_CONFIG_FILE;
+    delete process.env.GATEWAY_CONFIG_FILE;
+
+    const config = loadConfig();
+    expect(config.runtimeMode).toBe('pool');
+    expect(config.vertexPools).toHaveLength(2);
+    expect(config.vertexPools[0]).toMatchObject({
+      id: 'env-proj-a',
+      project: 'proj-a',
+      location: 'global',
+      apiKey: 'AIzaKeyA',
+      enabled: true,
+      weight: 1,
+    });
+    expect(config.vertexPools[1]).toMatchObject({
+      id: 'env-proj-b',
+      project: 'proj-b',
+      location: 'us-central1',
+      apiKey: 'AIzaKeyB',
+    });
+  });
+
+  it('pool overlay takes priority over VERTEX_POOLS env', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const credentialPath = writeCredentialFile(dir, 'overlay.json', 'overlay-project');
+    const poolPath = path.join(dir, 'pool-overlay.json');
+    fs.writeFileSync(poolPath, JSON.stringify({
+      vertexPools: [{
+        id: 'overlay-target',
+        project: 'overlay-project',
+        location: 'global',
+        credentialsFile: credentialPath,
+        enabled: true,
+        weight: 1,
+      }],
+    }));
+
+    process.env.GATEWAY_API_KEYS = 'test-key';
+    process.env.VERTEX_POOLS = 'env-proj:global:AIzaEnvKey';
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+    delete process.env.GATEWAY_CONFIG_FILE;
+
+    const config = loadConfig();
+    expect(config.vertexPools).toHaveLength(1);
+    expect(config.vertexPools[0].id).toBe('overlay-target');
+  });
+
+  it('rejects entries with missing colon separators', () => {
+    process.env.GATEWAY_API_KEYS = 'test-key';
+    process.env.VERTEX_POOLS = 'bad-entry-no-colons';
+    delete process.env.GATEWAY_POOL_CONFIG_FILE;
+    delete process.env.GATEWAY_CONFIG_FILE;
+
+    expect(() => loadConfig()).toThrow(/expected format/);
+  });
+
+  it('rejects entries with empty fields', () => {
+    process.env.GATEWAY_API_KEYS = 'test-key';
+    process.env.VERTEX_POOLS = 'proj-a::AIzaKey';
+    delete process.env.GATEWAY_POOL_CONFIG_FILE;
+    delete process.env.GATEWAY_CONFIG_FILE;
+
+    expect(() => loadConfig()).toThrow(/project, location, and apiKey are all required/);
+  });
+});
