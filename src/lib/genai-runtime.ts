@@ -60,6 +60,9 @@ export class GenAiRuntime implements GenAiRuntimeLike {
     return this.getSnapshot();
   }
 
+  // probeTarget intentionally bypasses the pool's inner retry + failover logic.
+  // It is a lightweight single-attempt health check against one target; callers
+  // must not rely on it for retry behavior. See spec §6.
   async probeTarget(target: ResolvedVertexTargetConfig): Promise<Record<string, unknown>> {
     const client = this.factory(this.currentConfig, target);
     // Pass explicit metadata (second arg) for interface consistency; probe does not need route/request metadata.
