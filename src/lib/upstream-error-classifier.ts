@@ -15,6 +15,7 @@ export interface UpstreamErrorClassification {
 }
 
 const asFiniteInt = (value: unknown): number | undefined => {
+  if (typeof value === 'string' && !value.trim()) return undefined;
   const num = typeof value === 'number' ? value
     : typeof value === 'string' ? Number(value) : NaN;
   return Number.isFinite(num) ? Math.trunc(num) : undefined;

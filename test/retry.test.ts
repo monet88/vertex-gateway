@@ -99,4 +99,24 @@ describe('retryWithJitter', () => {
     expect(clearSpy).toHaveBeenCalled();
     clearSpy.mockRestore();
   });
+
+  it('rejects immediately without registering setTimeout when signal is aborted right before entering delay', async () => {
+    vi.useFakeTimers();
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    const controller = new AbortController();
+    let calls = 0;
+    const task = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) {
+        controller.abort();
+        throw new Error('503 unavailable');
+      }
+      return 'ok';
+    });
+    const promise = retryWithJitter(task, 3, () => true, 1000, controller.signal);
+    await expect(promise).rejects.toThrow('Aborted');
+    expect(calls).toBe(1);
+    setTimeoutSpy.mockRestore();
+  });
 });
+

@@ -33,6 +33,9 @@ export const retryWithJitter = async <T>(
       attempt += 1;
       if (delay > 0) {
         await new Promise<void>((resolve, reject) => {
+          if (signal?.aborted) {
+            return reject(new DOMException('Aborted', 'AbortError'));
+          }
           const onAbort = () => {
             clearTimeout(timer);
             reject(new DOMException('Aborted', 'AbortError'));
