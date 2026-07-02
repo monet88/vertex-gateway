@@ -49,6 +49,8 @@ export interface GatewayConfig {
   streamPerKeyLimit: number;
   streamQueueLimit: number;
   vertexPoolFailoverCooldownMs: number;
+  upstreamRetries: number;
+  upstreamRetryDelayMs: number;
   enableGeminiRoutes: boolean;
   enableOpenAiRoutes: boolean;
   enableVertexRoutes: boolean;
@@ -80,6 +82,8 @@ const DEFAULTS = {
   streamPerKeyLimit: 2,
   streamQueueLimit: 4,
   vertexPoolFailoverCooldownMs: 60_000,
+  upstreamRetries: 2,
+  upstreamRetryDelayMs: 250,
   vertexPoolSelection: "weighted-round-robin" as VertexPoolSelection,
   adminStoreMode: "static-config" as AdminStoreMode,
 };
@@ -110,6 +114,8 @@ type GatewayFileConfig = Partial<{
   streamPerKeyLimit: number;
   streamQueueLimit: number;
   vertexPoolFailoverCooldownMs: number;
+  upstreamRetries: number;
+  upstreamRetryDelayMs: number;
   enableGeminiRoutes: boolean;
   enableOpenAiRoutes: boolean;
   enableVertexRoutes: boolean;
@@ -120,6 +126,8 @@ type GatewayFileConfig = Partial<{
 type GatewayPoolOverlayConfig = Partial<{
   vertexPoolSelection: VertexPoolSelection;
   vertexPoolFailoverCooldownMs: number;
+  upstreamRetries: number;
+  upstreamRetryDelayMs: number;
   vertexPools: VertexPoolConfig[];
   modelCatalog: Record<string, ProviderModelCatalog>;
   enableAdminRoutes: boolean;
@@ -254,6 +262,18 @@ const assertPositiveNumber = (
   if (value === undefined) return;
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw new Error(`Invalid ${filePath}: ${key} must be a positive number.`);
+  }
+};
+
+const assertNonNegativeInteger = (
+  config: Record<string, unknown>,
+  key: string,
+  filePath: string,
+): void => {
+  const value = config[key];
+  if (value === undefined) return;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new Error(`Invalid ${filePath}: ${key} must be a non-negative integer.`);
   }
 };
 
@@ -396,6 +416,8 @@ const validateFileConfig = (
   ]) {
     assertPositiveNumber(config, key, filePath);
   }
+  assertNonNegativeInteger(config, "upstreamRetries", filePath);
+  assertNonNegativeInteger(config, "upstreamRetryDelayMs", filePath);
   for (const key of [
     "allowWildcardCors",
     "enableGeminiRoutes",
@@ -498,6 +520,12 @@ const validatePoolOverlayConfig = (
   normalized.adminFileStoreDir = config.adminFileStoreDir as
     | string
     | null
+    | undefined;
+  assertNonNegativeInteger(config, "upstreamRetries", filePath);
+  assertNonNegativeInteger(config, "upstreamRetryDelayMs", filePath);
+  normalized.upstreamRetries = config.upstreamRetries as number | undefined;
+  normalized.upstreamRetryDelayMs = config.upstreamRetryDelayMs as
+    | number
     | undefined;
   return normalized;
 };
@@ -615,6 +643,18 @@ const numberEnv = (name: string, fallback: number): number => {
   const value = Number(raw);
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`Invalid ${name}: expected a positive number.`);
+  }
+  return value;
+};
+
+// Retry counts/delays legitimately allow 0 (disable inner retry), so they cannot
+// reuse numberEnv, which rejects <= 0. See spec §1.
+const nonNegativeIntEnv = (name: string, fallback: number): number => {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`Invalid ${name}: expected a non-negative integer.`);
   }
   return value;
 };
@@ -746,6 +786,18 @@ export const loadConfig = (): GatewayConfig => {
       poolOverlay.vertexPoolFailoverCooldownMs ??
         fileConfig.vertexPoolFailoverCooldownMs ??
         DEFAULTS.vertexPoolFailoverCooldownMs,
+    ),
+    upstreamRetries: nonNegativeIntEnv(
+      "GATEWAY_UPSTREAM_RETRIES",
+      poolOverlay.upstreamRetries ??
+        fileConfig.upstreamRetries ??
+        DEFAULTS.upstreamRetries,
+    ),
+    upstreamRetryDelayMs: nonNegativeIntEnv(
+      "GATEWAY_UPSTREAM_RETRY_DELAY_MS",
+      poolOverlay.upstreamRetryDelayMs ??
+        fileConfig.upstreamRetryDelayMs ??
+        DEFAULTS.upstreamRetryDelayMs,
     ),
     enableGeminiRoutes: boolEnv(
       process.env.GATEWAY_ENABLE_GEMINI_ROUTES,

@@ -519,6 +519,70 @@ describe('gateway config file', () => {
 
     expect(() => loadConfig()).toThrow(/must not overlap/);
   });
+
+  it('defaults upstream retry policy when unset', () => {
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GATEWAY_UPSTREAM_RETRIES;
+    delete process.env.GATEWAY_UPSTREAM_RETRY_DELAY_MS;
+    process.env.GATEWAY_API_KEYS = 'k1';
+    process.env.GOOGLE_GENAI_API_KEY = 'express-key';
+
+    const config = loadConfig();
+    expect(config.upstreamRetries).toBe(2);
+    expect(config.upstreamRetryDelayMs).toBe(250);
+  });
+
+  it('accepts zero upstream retries to disable inner retry', () => {
+    process.env.GATEWAY_API_KEYS = 'k1';
+    process.env.GOOGLE_GENAI_API_KEY = 'express-key';
+    process.env.GATEWAY_UPSTREAM_RETRIES = '0';
+    process.env.GATEWAY_UPSTREAM_RETRY_DELAY_MS = '500';
+
+    const config = loadConfig();
+    expect(config.upstreamRetries).toBe(0);
+    expect(config.upstreamRetryDelayMs).toBe(500);
+  });
+
+  it('rejects negative or non-integer upstream retries', () => {
+    process.env.GATEWAY_API_KEYS = 'k1';
+    process.env.GOOGLE_GENAI_API_KEY = 'express-key';
+    process.env.GATEWAY_UPSTREAM_RETRIES = '-1';
+
+    expect(() => loadConfig()).toThrow(/GATEWAY_UPSTREAM_RETRIES/);
+  });
+
+  it('reads upstream retry policy from GATEWAY_POOL_CONFIG_FILE overlay', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-pool-'));
+    const poolPath = path.join(dir, 'pool.json');
+    fs.writeFileSync(poolPath, JSON.stringify({
+      upstreamRetries: 3,
+      upstreamRetryDelayMs: 400,
+      vertexPools: [{ id: 'p1', project: 'proj', location: 'global', apiKey: 'x', weight: 1 }],
+    }));
+    process.env.GATEWAY_API_KEYS = 'k1';
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+
+    const config = loadConfig();
+    expect(config.upstreamRetries).toBe(3);
+    expect(config.upstreamRetryDelayMs).toBe(400);
+  });
+
+  it('lets the env override the pool overlay retry policy', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-pool-'));
+    const poolPath = path.join(dir, 'pool.json');
+    fs.writeFileSync(poolPath, JSON.stringify({
+      upstreamRetries: 3,
+      upstreamRetryDelayMs: 400,
+      vertexPools: [{ id: 'p1', project: 'proj', location: 'global', apiKey: 'x', weight: 1 }],
+    }));
+    process.env.GATEWAY_API_KEYS = 'k1';
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+    process.env.GATEWAY_UPSTREAM_RETRIES = '5';
+
+    const config = loadConfig();
+    expect(config.upstreamRetries).toBe(5);
+    expect(config.upstreamRetryDelayMs).toBe(400);
+  });
 });
 
 describe('VERTEX_POOLS env var', () => {
