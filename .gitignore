@@ -8,6 +8,9 @@ accounts/*
 
 gateway-data/
 
+docker-compose.override.yml
+pool-config.express-test.json
+
 *.log
 .DS_Store
 .claude
