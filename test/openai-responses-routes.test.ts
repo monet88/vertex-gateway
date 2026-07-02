@@ -162,8 +162,8 @@ describe('openai responses routes', () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error.code).toBe('internal_error');
-    expect(body.error.type).toBe('server_error');
+    expect(body.error.code).toBe('invalid_value');
+    expect(body.error.type).toBe('invalid_request_error');
     expect(body.error.message).toMatch(/custom function tools/i);
     expect(body.success).toBeUndefined();
     expect(body.requestId).toBeUndefined();

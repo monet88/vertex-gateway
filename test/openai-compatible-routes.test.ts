@@ -509,8 +509,8 @@ describe('openai-compatible routes', () => {
 
     expect(response.status).toBe(400);
     expect(response.headers.get('content-type')).toContain('application/json');
-    expect(body.error.code).toBe('internal_error');
-    expect(body.error.type).toBe('server_error');
+    expect(body.error.code).toBe('invalid_value');
+    expect(body.error.type).toBe('invalid_request_error');
     expect(body.error.message).toMatch(/tool calls/i);
     expect(body.success).toBeUndefined();
     expect(body.requestId).toBeUndefined();
@@ -536,8 +536,8 @@ describe('openai-compatible routes', () => {
 
     expect(response.status).toBe(501);
     expect(response.headers.get('content-type')).toContain('application/json');
-    expect(body.error.code).toBe('internal_error');
-    expect(body.error.type).toBe('server_error');
+    expect(body.error.code).toBe('invalid_value');
+    expect(body.error.type).toBe('invalid_request_error');
     expect(body.error.message).toMatch(/streaming is not implemented/i);
     expect(body.success).toBeUndefined();
     expect(body.requestId).toBeUndefined();
@@ -564,8 +564,8 @@ describe('openai-compatible routes', () => {
 
     expect(response.status).toBe(400);
     expect(response.headers.get('content-type')).toContain('application/json');
-    expect(body.error.code).toBe('internal_error');
-    expect(body.error.type).toBe('server_error');
+    expect(body.error.code).toBe('invalid_value');
+    expect(body.error.type).toBe('invalid_request_error');
     expect(body.error.message).toMatch(/n: 1/i);
     expect(body.success).toBeUndefined();
     expect(body.requestId).toBeUndefined();
@@ -586,7 +586,7 @@ describe('openai-compatible routes', () => {
     const body = await response.json();
 
     expect(response.status).toBe(429);
-    expect(body.error.type).toBe('server_error');
+    expect(body.error.type).toBe('requests_error');
     expect(typeof body.error.message).toBe('string');
     expect(body.success).toBeUndefined();
     expect(body.requestId).toBeUndefined();
