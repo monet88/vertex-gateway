@@ -42,22 +42,43 @@ export const formatGatewayErrorBody = (
   requestId,
   error: {
     code: gatewayError.code,
-    message: gatewayError.message,
+    message: maskSensitiveInfo(gatewayError.message),
     retryable: gatewayError.retryable || undefined,
   },
 });
+
+export const maskSensitiveInfo = (message: string): string =>
+  message
+    .replace(/projects\/[a-z0-9-]+/gi, 'projects/<masked-project>')
+    .replace(/locations\/[a-z0-9-]+/gi, 'locations/<masked-location>');
 
 // OpenAI SDK clients expect a bare { error: { message, type, code } } envelope
 // with no gateway wrapper. See spec §3.
 export const formatOpenAiErrorBody = (
   gatewayError: GatewayError,
-): Record<string, unknown> => ({
-  error: {
-    message: gatewayError.message,
-    type: 'server_error',
-    code: 'internal_error',
-  },
-});
+): Record<string, unknown> => {
+  let type = 'server_error';
+  let code: string | null = 'internal_error';
+  switch (gatewayError.code) {
+    case 'UPSTREAM_QUOTA':
+      type = 'requests_error'; code = 'rate_limit_exceeded'; break;
+    case 'AUTH_INVALID':
+    case 'CORS_DENIED':
+      type = 'invalid_request_error'; code = 'invalid_api_key'; break;
+    case 'VALIDATION_FAILED':
+    case 'PAYLOAD_TOO_LARGE':
+      type = 'invalid_request_error'; code = 'invalid_value'; break;
+    case 'NOT_FOUND':
+      type = 'invalid_request_error'; code = 'model_not_found'; break;
+    case 'TIMEOUT':
+      type = 'server_error'; code = 'timeout'; break;
+    case 'METHOD_NOT_ALLOWED':
+    case 'NOT_IMPLEMENTED':
+      type = 'invalid_request_error'; code = 'invalid_value'; break;
+    // IMAGE_NOT_RETURNED, INTERNAL, UPSTREAM_UNAVAILABLE → default
+  }
+  return { error: { message: maskSensitiveInfo(gatewayError.message), type, code } };
+};
 
 export const sendError = (
   res: ServerResponse,
@@ -72,7 +93,7 @@ export const sendError = (
   sendJson(res, gatewayError.status, body);
 };
 
-const safeErrorMessage = (error: unknown): string => {
+export const safeErrorMessage = (error: unknown): string => {
   if (error instanceof Error) return error.message;
   if (error && typeof error === 'object') {
     const message = (error as Record<string, unknown>).message;
