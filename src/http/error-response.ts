@@ -61,7 +61,7 @@ export const formatOpenAiErrorBody = (
   let code: string | null = 'internal_error';
   switch (gatewayError.code) {
     case 'UPSTREAM_QUOTA':
-      type = 'requests_error'; code = 'rate_limit_exceeded'; break;
+      type = 'rate_limit_error'; code = 'rate_limit_exceeded'; break;
     case 'AUTH_INVALID':
     case 'CORS_DENIED':
       type = 'invalid_request_error'; code = 'invalid_api_key'; break;

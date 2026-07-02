@@ -586,7 +586,7 @@ describe('openai-compatible routes', () => {
     const body = await response.json();
 
     expect(response.status).toBe(429);
-    expect(body.error.type).toBe('requests_error');
+    expect(body.error.type).toBe('rate_limit_error');
     expect(typeof body.error.message).toBe('string');
     expect(body.success).toBeUndefined();
     expect(body.requestId).toBeUndefined();

@@ -515,11 +515,6 @@ export class GenAiPoolClient implements GenAiClient {
     return snapshot;
   }
 
-  private recordRetry(target: GenAiTarget): void {
-    target.health.retries += 1;
-    target.health.lastRetryAt = new Date().toISOString();
-  }
-
   private extractRequestedModel(request: Record<string, unknown>): string | null {
     return typeof request.model === 'string' && request.model.trim() ? request.model.trim() : null;
   }

@@ -46,7 +46,7 @@ const asHttpStatus = (value: unknown): number | undefined => {
  */
 export const getErrorStatus = (error: unknown): number | undefined => {
   if (error instanceof ApiError) {
-    const status = asFiniteInt(error.status);
+    const status = asHttpStatus(error.status);
     if (status !== undefined) return status;
   }
   try {

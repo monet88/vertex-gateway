@@ -181,13 +181,13 @@ describe('maskSensitiveInfo', () => {
 });
 
 describe('formatOpenAiErrorBody mapping', () => {
-  it('maps UPSTREAM_QUOTA to requests_error/rate_limit_exceeded', () => {
+  it('maps UPSTREAM_QUOTA to rate_limit_error/rate_limit_exceeded', () => {
     const err = new GatewayError(429, 'UPSTREAM_QUOTA', 'Quota exceeded');
     const body = formatOpenAiErrorBody(err);
     expect(body).toEqual({
       error: {
         message: 'Quota exceeded',
-        type: 'requests_error',
+        type: 'rate_limit_error',
         code: 'rate_limit_exceeded',
       },
     });
