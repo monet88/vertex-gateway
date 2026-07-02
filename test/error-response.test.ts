@@ -60,6 +60,15 @@ describe('getErrorStatus', () => {
     expect(getErrorStatus(new Error('mystery'))).toBeUndefined();
     expect(getErrorStatus('plain string')).toBeUndefined();
   });
+
+  it('ignores a string .code such as ECONNRESET', () => {
+    expect(getErrorStatus({ code: 'ECONNRESET' })).toBeUndefined();
+  });
+
+  it('ignores gRPC-style low integer .code outside the HTTP range', () => {
+    expect(getErrorStatus({ code: 8 })).toBeUndefined();
+    expect(getErrorStatus({ code: 14 })).toBeUndefined();
+  });
 });
 
 describe('classifyUpstreamError status mapping', () => {
@@ -96,9 +105,28 @@ describe('classifyUpstreamError status mapping', () => {
     }
   });
 
+  it('maps 408/504 to timeout', () => {
+    for (const status of [408, 504]) {
+      const c = classifyUpstreamError({ status });
+      expect(c.code).toBe('TIMEOUT');
+      expect(c).toMatchObject({ retryable: true, shouldCooldown: true, shouldFailover: true });
+    }
+  });
+
   it('falls back to message regex when no status is present', () => {
     const c = classifyUpstreamError(new Error('429 resource_exhausted'));
     expect(c.code).toBe('UPSTREAM_QUOTA');
     expect(c.retryable).toBe(true);
+  });
+
+  it('prefers status over the message regex', () => {
+    const error = new ApiError({ message: '429 resource_exhausted', status: 400 });
+    const c = classifyUpstreamError(error);
+    expect(c.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('ignores gRPC-style low integer .code and falls back to message', () => {
+    const c = classifyUpstreamError({ code: 8, message: '429 quota' });
+    expect(c.code).toBe('UPSTREAM_QUOTA');
   });
 });

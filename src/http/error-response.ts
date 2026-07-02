@@ -47,6 +47,10 @@ export const sendError = (res: ServerResponse, requestId: string, error: unknown
 
 const safeErrorMessage = (error: unknown): string => {
   if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const message = (error as Record<string, unknown>).message;
+    if (typeof message === 'string') return message;
+  }
   try {
     return String(error);
   } catch {
