@@ -86,7 +86,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
 
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const ctx = createRequestContext(req, res);
-    let errorFormat: import('./http/error-response.js').ErrorFormat = 'gateway';
+    let errorFormat: 'gateway' | 'openai' = 'gateway';
     try {
       const url = new URL(req.url ?? '/', 'http://gateway.local');
       if (await maybeHandleAdminRoute(req, res, url, config, runtime ?? undefined)) {

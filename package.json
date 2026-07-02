@@ -26,6 +26,11 @@
     "esbuild@0.28.0": true
   },
   "optionalDependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.62.2"
+    "@rollup/rollup-win32-x64-msvc": "^4.62.2",
+    "@rollup/rollup-linux-x64-gnu": "^4.62.2",
+    "@rollup/rollup-linux-arm64-gnu": "^4.62.2",
+    "@esbuild/win32-x64": "^0.28.0",
+    "@esbuild/linux-x64": "^0.28.0",
+    "@esbuild/linux-arm64": "^0.28.0"
   }
 }
