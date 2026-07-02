@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { GatewayErrorCode, ErrorFormat } from './error-response.js';
-import { GatewayError, toGatewayError, formatOpenAiErrorBody } from './error-response.js';
+import { GatewayError, toGatewayError, formatOpenAiErrorBody, maskSensitiveInfo } from './error-response.js';
 import { nextStreamStep } from '../lib/stream-guards.js';
 
 const initializeSse = (res: ServerResponse): void => {
@@ -70,15 +70,17 @@ export const writeSseError = async (
 ): Promise<'written' | 'closed'> => {
   const gatewayError = toGatewayError(error);
   const payload = format === 'openai'
-    ? { error: { message: gatewayError.message, type: 'server_error', code: null } }
+    ? formatOpenAiErrorBody(gatewayError)
     : {
         error: {
           code: gatewayError.code satisfies GatewayErrorCode,
-          message: gatewayError.message,
+          message: maskSensitiveInfo(gatewayError.message),
           retryable: gatewayError.retryable || undefined,
         },
       };
-  const status = await writeSseJson(res, payload, 'error');
+  // OpenAI SDKs only parse bare `data:` frames — omit `event: error` prefix.
+  // Gateway format retains the `error` event type for custom clients.
+  const status = await writeSseJson(res, payload, format === 'openai' ? undefined : 'error');
   if (status === 'written' && !res.destroyed && !res.writableEnded) {
     try {
       res.end();
@@ -161,6 +163,10 @@ export const driveSseStream = async (
 
   const onClose = () => {
     closed = true;
+    options.req?.off('close', onClose);
+    options.req?.off('error', onClose);
+    res.off('close', onClose);
+    res.off('error', onClose);
     void closeIterator();
   };
 

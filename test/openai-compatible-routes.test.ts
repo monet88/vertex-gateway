@@ -384,7 +384,7 @@ describe('openai-compatible routes', () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('event: error');
+    expect(body).not.toContain('event: error');
     expect(body).toContain('"type":"server_error"');
     expect(body).toContain('"message":"Internal gateway error."');
     expect(body).not.toContain('sk-live-secret');
