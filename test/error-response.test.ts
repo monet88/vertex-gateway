@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { toGatewayError } from '../src/http/error-response.js';
+import { ApiError } from '@google/genai';
+import { getErrorStatus, classifyUpstreamError } from '../src/lib/upstream-error-classifier.js';
 
 describe('error response mapping', () => {
   it('maps non-Error thrown details without leaking raw 500 messages', () => {
@@ -28,5 +30,75 @@ describe('error response mapping', () => {
     expect(error.status).toBe(404);
     expect(error.code).toBe('NOT_FOUND');
     expect(error.message).toBe('Upstream model or route was not found.');
+  });
+});
+
+describe('getErrorStatus', () => {
+  it('reads status from a @google/genai ApiError', () => {
+    const error = new ApiError({ message: 'quota', status: 429 });
+    expect(getErrorStatus(error)).toBe(429);
+  });
+
+  it('reads a plain .status field', () => {
+    expect(getErrorStatus({ status: 404 })).toBe(404);
+  });
+
+  it('reads .statusCode and .code fields', () => {
+    expect(getErrorStatus({ statusCode: 503 })).toBe(503);
+    expect(getErrorStatus({ code: 400 })).toBe(400);
+  });
+
+  it('reads a nested .response.status field', () => {
+    expect(getErrorStatus({ response: { status: 401 } })).toBe(401);
+  });
+
+  it('reads .error.code duck-typed status', () => {
+    expect(getErrorStatus({ error: { code: 422 } })).toBe(422);
+  });
+
+  it('returns undefined when no status is present', () => {
+    expect(getErrorStatus(new Error('mystery'))).toBeUndefined();
+    expect(getErrorStatus('plain string')).toBeUndefined();
+  });
+});
+
+describe('classifyUpstreamError status mapping', () => {
+  it('maps 429 to retryable quota with cooldown + failover', () => {
+    const c = classifyUpstreamError(new ApiError({ message: 'x', status: 429 }));
+    expect(c.code).toBe('UPSTREAM_QUOTA');
+    expect(c).toMatchObject({ retryable: true, shouldCooldown: true, shouldFailover: true });
+  });
+
+  it('maps 401/403 to non-retryable auth with cooldown + failover', () => {
+    for (const status of [401, 403]) {
+      const c = classifyUpstreamError({ status });
+      expect(c.code).toBe('AUTH_INVALID');
+      expect(c).toMatchObject({ retryable: false, shouldCooldown: true, shouldFailover: true });
+    }
+  });
+
+  it('maps 400/422 to validation with no retry, no cooldown, no failover', () => {
+    for (const status of [400, 422]) {
+      const c = classifyUpstreamError({ status });
+      expect(c.code).toBe('VALIDATION_FAILED');
+      expect(c).toMatchObject({ retryable: false, shouldCooldown: false, shouldFailover: false });
+    }
+  });
+
+  it('maps 404 to not-found', () => {
+    expect(classifyUpstreamError({ status: 404 }).code).toBe('NOT_FOUND');
+  });
+
+  it('maps 500/503 to retryable transient', () => {
+    for (const status of [500, 503]) {
+      const c = classifyUpstreamError({ status });
+      expect(c.retryable).toBe(true);
+    }
+  });
+
+  it('falls back to message regex when no status is present', () => {
+    const c = classifyUpstreamError(new Error('429 resource_exhausted'));
+    expect(c.code).toBe('UPSTREAM_QUOTA');
+    expect(c.retryable).toBe(true);
   });
 });

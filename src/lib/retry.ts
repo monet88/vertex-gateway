@@ -1,7 +1,7 @@
-export const isTransientError = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message : String(error);
-  return /429|5\d\d|resource_exhausted|unavailable|econnreset|etimedout/i.test(message);
-};
+import { classifyUpstreamError } from './upstream-error-classifier.js';
+
+export const isTransientError = (error: unknown): boolean =>
+  classifyUpstreamError(error).retryable;
 
 export const retryWithJitter = async <T>(
   task: () => Promise<T>,

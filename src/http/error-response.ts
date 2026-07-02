@@ -54,6 +54,31 @@ const safeErrorMessage = (error: unknown): string => {
   }
 };
 
+export const gatewayErrorFromStatus = (
+  status: number,
+  message: string,
+): GatewayError | undefined => {
+  if (status === 404) {
+    return new GatewayError(404, 'NOT_FOUND', 'Upstream model or route was not found.');
+  }
+  if (status === 400 || status === 422) {
+    return new GatewayError(400, 'VALIDATION_FAILED', 'Upstream request was rejected as invalid.');
+  }
+  if (status === 401 || status === 403) {
+    return new GatewayError(401, 'AUTH_INVALID', 'Upstream authentication failed.');
+  }
+  if (status === 429) {
+    return new GatewayError(429, 'UPSTREAM_QUOTA', 'Upstream quota exhausted.', true);
+  }
+  if (status === 408 || status === 504) {
+    return new GatewayError(504, 'TIMEOUT', 'Upstream request timed out.', true);
+  }
+  if (status >= 500) {
+    return new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Upstream service is unavailable.', true);
+  }
+  return undefined;
+};
+
 export const toGatewayError = (error: unknown): GatewayError => {
   if (error instanceof GatewayError) return error;
   const message = safeErrorMessage(error);
