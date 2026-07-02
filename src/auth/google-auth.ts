@@ -9,7 +9,7 @@ export interface ServiceAccountCredential {
 }
 
 export interface GoogleAuthStatus {
-  mode: 'adc' | 'serviceAccountJson';
+  mode: 'adc' | 'serviceAccountJson' | 'apiKey';
   project: string;
   location: string;
   apiVersion: string;
@@ -24,6 +24,7 @@ export interface GooglePoolAuthStatus {
   configuredTargets: number;
   enabledTargets: number;
   credentialFileTargets: number;
+  apiKeyTargets: number;
 }
 
 const readCredentialJson = (credentialsFile: string): Record<string, unknown> => {
@@ -112,11 +113,18 @@ export const getGoogleAuthStatus = (config: GatewayConfig): GoogleAuthStatus | G
       configuredTargets: config.vertexPools.length,
       enabledTargets: config.resolvedVertexTargets.length,
       credentialFileTargets: config.vertexPools.filter((entry) => Boolean(entry.credentialsFile)).length,
+      apiKeyTargets: config.vertexPools.filter((entry) => Boolean(entry.apiKey)).length,
     };
   }
   const serviceAccount = loadServiceAccountCredential(config.googleCredentialsFile);
+  const apiKey = config.googleApiKey;
+  const mode: GoogleAuthStatus['mode'] = apiKey
+    ? 'apiKey'
+    : serviceAccount
+      ? 'serviceAccountJson'
+      : 'adc';
   return {
-    mode: serviceAccount ? 'serviceAccountJson' : 'adc',
+    mode,
     project: serviceAccount?.project_id ?? config.googleProject,
     location: config.googleLocation,
     apiVersion: config.googleApiVersion,

@@ -23,7 +23,8 @@ export type GenAiTargetClientFactory = (
 ) => GenAiClient;
 
 export const createGoogleGenAiClientForTarget: GenAiTargetClientFactory = (config, target) => {
-  const serviceAccount = loadServiceAccountCredential(target.credentialsFile);
+  const apiKey = target.apiKey ?? null;
+  const serviceAccount = apiKey ? null : loadServiceAccountCredential(target.credentialsFile);
   const options: Record<string, unknown> = {
     vertexai: true,
     project: serviceAccount?.project_id ?? target.project,
@@ -31,7 +32,10 @@ export const createGoogleGenAiClientForTarget: GenAiTargetClientFactory = (confi
     apiVersion: config.googleApiVersion,
     httpOptions: { timeout: config.upstreamTimeoutMs },
   };
-  if (serviceAccount) {
+  if (apiKey) {
+    // Gemini Enterprise Agent Platform in express mode: API key auth, no service account.
+    options.apiKey = apiKey;
+  } else if (serviceAccount) {
     options.googleAuthOptions = {
       credentials: {
         client_email: serviceAccount.client_email,

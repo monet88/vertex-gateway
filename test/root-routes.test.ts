@@ -186,6 +186,7 @@ describe('root route', () => {
       configuredTargets: 2,
       enabledTargets: 1,
       credentialFileTargets: 0,
+      apiKeyTargets: 0,
     });
     expect(body.runtime).toEqual({
       mode: 'pool',

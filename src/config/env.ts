@@ -11,6 +11,7 @@ export interface VertexPoolConfig {
   project: string;
   location: string;
   credentialsFile: string | null;
+  apiKey?: string | null;
   enabled: boolean;
   weight: number;
   modelAllowlist: string[];
@@ -36,6 +37,7 @@ export interface GatewayConfig {
   googleProject: string;
   googleLocation: string;
   googleCredentialsFile: string | null;
+  googleApiKey: string | null;
   googleApiVersion: string;
   maxJsonBytes: number;
   maxImages: number;
@@ -93,6 +95,7 @@ type GatewayFileConfig = Partial<{
   googleProject: string;
   googleLocation: string;
   googleCredentialsFile: string | null;
+  googleApiKey: string | null;
   googleApiVersion: string;
   maxJsonBytes: number;
   maxImages: number;
@@ -270,6 +273,7 @@ const validateVertexPoolEntry = (
     assertString(config, key, `${filePath}:${prefix}`);
   }
   assertNullableString(config, 'credentialsFile', `${filePath}:${prefix}`);
+  assertNullableString(config, 'apiKey', `${filePath}:${prefix}`);
   assertBoolean(config, 'enabled', `${filePath}:${prefix}`);
   assertPositiveNumber(config, 'weight', `${filePath}:${prefix}`);
   if (config.modelAllowlist !== undefined) {
@@ -290,6 +294,7 @@ const validateVertexPoolEntry = (
     project,
     location,
     credentialsFile: typeof config.credentialsFile === 'string' ? config.credentialsFile.trim() : null,
+    apiKey: typeof config.apiKey === 'string' && config.apiKey.trim() ? config.apiKey.trim() : null,
     enabled: config.enabled !== undefined ? Boolean(config.enabled) : true,
     weight: Number(config.weight ?? 1),
     modelAllowlist: (config.modelAllowlist as string[] | undefined) ?? [],
@@ -304,6 +309,7 @@ const validateFileConfig = (config: Record<string, unknown>, filePath: string): 
     assertString(config, key, filePath);
   }
   assertNullableString(config, 'googleCredentialsFile', filePath);
+  assertNullableString(config, 'googleApiKey', filePath);
   for (const key of ['port', 'maxJsonBytes', 'maxImages', 'maxDecodedImageBytes', 'upstreamTimeoutMs', 'upstreamConcurrency', 'streamMaxDurationMs', 'streamIdleTimeoutMs', 'streamPerKeyLimit', 'streamQueueLimit', 'vertexPoolFailoverCooldownMs']) {
     assertPositiveNumber(config, key, filePath);
   }
@@ -468,6 +474,7 @@ const resolveVertexTargets = (config: GatewayConfig): ResolvedVertexTargetConfig
     project: config.googleProject,
     location: config.googleLocation,
     credentialsFile: config.googleCredentialsFile,
+    apiKey: config.googleApiKey,
     enabled: true,
     weight: 1,
     modelAllowlist: [],
@@ -499,6 +506,7 @@ export const loadConfig = (): GatewayConfig => {
     googleProject,
     googleLocation: process.env.GOOGLE_VERTEX_LOCATION?.trim() || fileConfig.googleLocation || DEFAULTS.googleLocation,
     googleCredentialsFile: process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim() || fileConfig.googleCredentialsFile || null,
+    googleApiKey: process.env.GOOGLE_GENAI_API_KEY?.trim() || fileConfig.googleApiKey || null,
     googleApiVersion: process.env.GOOGLE_GENAI_API_VERSION?.trim() || fileConfig.googleApiVersion || DEFAULTS.googleApiVersion,
     maxJsonBytes: numberEnv('GATEWAY_MAX_JSON_BYTES', fileConfig.maxJsonBytes ?? DEFAULTS.maxJsonBytes),
     maxImages: numberEnv('GATEWAY_MAX_IMAGES', fileConfig.maxImages ?? DEFAULTS.maxImages),
@@ -601,6 +609,9 @@ export const validateConfig = (config: GatewayConfig): void => {
       if (entry.credentialsFile) {
         loadServiceAccountCredential(entry.credentialsFile);
       }
+      if (entry.enabled && !entry.credentialsFile && !entry.apiKey) {
+        throw new Error(`Vertex pool ${entry.id} must include either credentialsFile or apiKey.`);
+      }
     }
     if (config.resolvedVertexTargets.length === 0) {
       throw new Error('At least one enabled vertex pool target is required.');
@@ -609,8 +620,8 @@ export const validateConfig = (config: GatewayConfig): void => {
   }
 
   const serviceAccount = loadServiceAccountCredential(config.googleCredentialsFile);
-  if (!config.googleProject && !serviceAccount?.project_id) {
-    throw new Error('GOOGLE_VERTEX_PROJECT, GOOGLE_CLOUD_PROJECT, or service account project_id is required.');
+  if (!config.googleApiKey && !config.googleProject && !serviceAccount?.project_id) {
+    throw new Error('GOOGLE_VERTEX_PROJECT, GOOGLE_CLOUD_PROJECT, or service account project_id is required (or set GOOGLE_GENAI_API_KEY for express mode).');
   }
   if (!config.googleLocation) throw new Error('GOOGLE_VERTEX_LOCATION is required.');
 };

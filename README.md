@@ -75,6 +75,11 @@ Edit `pool-config.local.json` to define multiple Vertex targets. Each target
 points to a different GCP project with its own service account. This
 distributes quota across projects and provides failover.
 
+Each pool target authenticates either with a service account JSON
+(`credentialsFile`) **or** with a Google Cloud API key (`apiKey`) for
+Gemini Enterprise Agent Platform in express mode. Mixing both across
+targets is allowed.
+
 ```json
 {
   "vertexPoolSelection": "weighted-round-robin",
@@ -93,7 +98,7 @@ distributes quota across projects and provides failover.
       "label": "Project B",
       "project": "project-b-id",
       "location": "global",
-      "credentialsFile": "/run/vertex-accounts/project-b.json",
+      "apiKey": "AIza...",
       "enabled": true,
       "weight": 1
     }
@@ -409,10 +414,17 @@ cookies.
 
 ### Upstream (Vertex AI)
 
-Server-side only. Service account JSON loaded from
-`GOOGLE_APPLICATION_CREDENTIALS` or per-pool `credentialsFile`. The client
-never sends Google credentials. OAuth client JSON (`installed`/`web`) is
-rejected.
+Server-side only. Two authentication modes per target:
+
+- **Service account JSON** — loaded from `GOOGLE_APPLICATION_CREDENTIALS`
+  (single mode) or per-pool `credentialsFile`. OAuth client JSON
+  (`installed`/`web`) is rejected.
+- **API key (express mode)** — a Google Cloud API key for Gemini Enterprise
+  Agent Platform in express mode, set via `GOOGLE_GENAI_API_KEY` (single
+  mode) or per-pool `apiKey`. No service account needed.
+
+The client never sends Google credentials to the browser. When a target has
+both, `apiKey` takes precedence.
 
 ## Vertex Pool and Failover
 

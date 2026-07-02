@@ -84,6 +84,19 @@ describe('google auth status', () => {
       configuredTargets: 2,
       enabledTargets: 1,
       credentialFileTargets: 1,
+      apiKeyTargets: 0,
+    });
+  });
+
+  it('reports apiKey express-mode auth when GOOGLE_GENAI_API_KEY is set', () => {
+    expect(getGoogleAuthStatus(testConfig({
+      googleApiKey: 'AIzaexpress-mode-test-key',
+    }))).toEqual({
+      mode: 'apiKey',
+      project: 'test-project',
+      location: 'us-central1',
+      apiVersion: 'v1',
+      hasGoogleCredentialsFile: false,
     });
   });
 
