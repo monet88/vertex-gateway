@@ -10,7 +10,7 @@ export const DEFAULT_RETRY_BASE_DELAY_MS = 250;
 const BACKOFF_CAP_MS = 30_000;
 
 export const computeBackoffMs = (attempt: number, baseDelayMs: number): number => {
-  const exponential = Math.min(baseDelayMs * 2 ** attempt, BACKOFF_CAP_MS);
+  const exponential = Math.min(baseDelayMs * 2 ** Math.min(attempt, 20), BACKOFF_CAP_MS);
   return exponential + Math.floor(Math.random() * baseDelayMs);
 };
 

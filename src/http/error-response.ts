@@ -92,6 +92,9 @@ export const gatewayErrorFromStatus = (
   if (status === 404) {
     return new GatewayError(404, 'NOT_FOUND', 'Upstream model or route was not found.');
   }
+  if (status === 413) {
+    return new GatewayError(413, 'PAYLOAD_TOO_LARGE', 'Upstream request payload was too large.');
+  }
   if (status === 400 || status === 422) {
     return new GatewayError(400, 'VALIDATION_FAILED', 'Upstream request was rejected as invalid.');
   }
@@ -113,6 +116,9 @@ export const gatewayErrorFromStatus = (
 export const toGatewayError = (error: unknown): GatewayError => {
   if (error instanceof GatewayError) return error;
   const message = safeErrorMessage(error);
+  if (/\b413\b|payload too large/i.test(message)) {
+    return new GatewayError(413, 'PAYLOAD_TOO_LARGE', 'Upstream request payload was too large.');
+  }
   if (/\b404\b|not found/i.test(message)) {
     return new GatewayError(404, 'NOT_FOUND', 'Upstream model or route was not found.');
   }

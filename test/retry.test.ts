@@ -16,6 +16,12 @@ describe('computeBackoffMs', () => {
     const value = computeBackoffMs(20, 250);
     expect(value).toBeLessThanOrEqual(30_000 + 250);
   });
+
+  it('bounds high attempt exponents to prevent overflow', () => {
+    const value = computeBackoffMs(1000, 250);
+    expect(Number.isFinite(value)).toBe(true);
+    expect(value).toBeLessThanOrEqual(30_000 + 250);
+  });
 });
 
 describe('retryWithJitter', () => {

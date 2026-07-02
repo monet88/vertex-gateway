@@ -98,6 +98,16 @@ describe('classifyUpstreamError status mapping', () => {
     expect(classifyUpstreamError({ status: 404 }).code).toBe('NOT_FOUND');
   });
 
+  it('maps 413 to payload too large with no retry, cooldown, or failover', () => {
+    const c = classifyUpstreamError({ status: 413 });
+    expect(c.code).toBe('PAYLOAD_TOO_LARGE');
+    expect(c).toMatchObject({ retryable: false, shouldCooldown: false, shouldFailover: false });
+
+    const msgErr = classifyUpstreamError(new Error('upstream: payload too large'));
+    expect(msgErr.code).toBe('PAYLOAD_TOO_LARGE');
+    expect(msgErr.retryable).toBe(false);
+  });
+
   it('maps 500/503 to retryable transient', () => {
     for (const status of [500, 503]) {
       const c = classifyUpstreamError({ status });

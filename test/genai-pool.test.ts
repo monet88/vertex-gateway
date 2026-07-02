@@ -1292,4 +1292,34 @@ describe('GenAI runtime pool', () => {
     expect(response.images).toHaveLength(1);
     expect(response.images[0]?.mimeType).toBe('image/png');
   });
+
+  it('propagates the real upstream lastError instead of model-exclusion errors if failover fails after an attempt', async () => {
+    const calls: string[] = [];
+    const runtime = createGenAiRuntime(testConfig({
+      ...poolConfigOverrides(0),
+      vertexPools: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [] },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: ['different-model-only'], modelExclusions: [] },
+      ],
+      resolvedVertexTargets: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [], source: 'pool' },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: ['different-model-only'], modelExclusions: [], source: 'pool' },
+      ],
+    }), (_config, target) => ({
+      models: {
+        generateContent: vi.fn(async () => {
+          calls.push(target.id);
+          throw new Error('429 resource_exhausted');
+        }),
+      },
+    }));
+
+    await expect(runtime.client.models.generateContent({
+      model: 'gemini-2.5-flash',
+    }, {
+      routeFamily: 'gemini',
+    })).rejects.toThrow('Upstream quota exhausted.');
+
+    expect(calls).toEqual(['project-a']);
+  });
 });

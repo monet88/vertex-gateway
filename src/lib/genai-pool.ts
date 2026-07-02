@@ -389,7 +389,15 @@ export class GenAiPoolClient implements GenAiClient {
         const requestedModel = this.extractRequestedModel(request);
 
         while (attempted.size < snapshot.targets.length) {
-          const target = this.selectAvailableTarget(snapshot, attempted, requestedModel, metadata.requestId);
+          let target;
+          try {
+            target = this.selectAvailableTarget(snapshot, attempted, requestedModel, metadata.requestId);
+          } catch (error) {
+            if (lastError) {
+              throw lastError;
+            }
+            throw error;
+          }
           attempted.add(target.id);
           console.info(JSON.stringify({
             event: 'genai_pool.target_selected',
@@ -547,7 +555,15 @@ export class GenAiPoolClient implements GenAiClient {
     let lastError: unknown;
 
     while (attempted.size < snapshot.targets.length) {
-      const target = this.selectAvailableTarget(snapshot, attempted, requestedModel, requestId);
+      let target;
+      try {
+        target = this.selectAvailableTarget(snapshot, attempted, requestedModel, requestId);
+      } catch (error) {
+        if (lastError) {
+          throw lastError;
+        }
+        throw error;
+      }
       attempted.add(target.id);
       console.info(JSON.stringify({
         event: 'genai_pool.target_selected',
