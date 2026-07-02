@@ -196,6 +196,8 @@ describe('root route', () => {
       healthyTargets: 1,
       cooldownTargets: 0,
     });
+    expect(body.limits.upstreamRetries).toBe(2);
+    expect(body.limits.upstreamRetryDelayMs).toBe(250);
     expect(generateContent).not.toHaveBeenCalled();
   });
 
