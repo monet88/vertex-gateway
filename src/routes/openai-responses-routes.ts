@@ -469,5 +469,5 @@ export const runOpenAiResponsesStreamRoute = async (
 
       writer.writeDone();
     },
-  }, { req, idleTimeoutMs: streamConfig.idleTimeoutMs, maxDurationMs: streamConfig.maxDurationMs });
+  }, { req, idleTimeoutMs: streamConfig.idleTimeoutMs, maxDurationMs: streamConfig.maxDurationMs, errorFormat: 'openai' });
 };

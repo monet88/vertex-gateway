@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { GatewayErrorCode } from './error-response.js';
-import { GatewayError, toGatewayError } from './error-response.js';
+import type { GatewayErrorCode, ErrorFormat } from './error-response.js';
+import { GatewayError, toGatewayError, formatOpenAiErrorBody } from './error-response.js';
 import { nextStreamStep } from '../lib/stream-guards.js';
 
 const initializeSse = (res: ServerResponse): void => {
@@ -66,15 +66,19 @@ export const writeSseDone = (res: ServerResponse): void => {
 export const writeSseError = async (
   res: ServerResponse,
   error: unknown,
+  format: ErrorFormat = 'gateway',
 ): Promise<'written' | 'closed'> => {
   const gatewayError = toGatewayError(error);
-  const status = await writeSseJson(res, {
-    error: {
-      code: gatewayError.code satisfies GatewayErrorCode,
-      message: gatewayError.message,
-      retryable: gatewayError.retryable || undefined,
-    },
-  }, 'error');
+  const payload = format === 'openai'
+    ? { error: { message: gatewayError.message, type: 'server_error', code: null } }
+    : {
+        error: {
+          code: gatewayError.code satisfies GatewayErrorCode,
+          message: gatewayError.message,
+          retryable: gatewayError.retryable || undefined,
+        },
+      };
+  const status = await writeSseJson(res, payload, 'error');
   if (status === 'written' && !res.destroyed && !res.writableEnded) {
     try {
       res.end();
@@ -114,6 +118,7 @@ export interface SseStreamDriveOptions {
   idleTimeoutMs?: number;
   maxDurationMs?: number;
   req?: IncomingMessage;
+  errorFormat?: ErrorFormat;
 }
 
 /**
@@ -132,6 +137,7 @@ export const driveSseStream = async (
   if (res.destroyed || res.writableEnded) {
     return;
   }
+  const errorFormat = options.errorFormat ?? 'gateway';
   const idleTimeoutMs = options.idleTimeoutMs ?? 30_000;
   const maxDurationMs = options.maxDurationMs ?? 240_000;
   const startedAt = Date.now();
@@ -165,7 +171,7 @@ export const driveSseStream = async (
     },
     writeError: async (error) => {
       wroteFrame = true;
-      await writeSseError(res, error);
+      await writeSseError(res, error, errorFormat);
     },
     writeDone: () => {
       writeSseDone(res);
@@ -222,7 +228,7 @@ export const driveSseStream = async (
 export const sendSseStream = async (
   res: ServerResponse,
   chunks: AsyncIterable<Record<string, unknown>>,
-  options: { includeDone?: boolean; idleTimeoutMs?: number; maxDurationMs?: number; req?: IncomingMessage } = {},
+  options: { includeDone?: boolean; idleTimeoutMs?: number; maxDurationMs?: number; req?: IncomingMessage; errorFormat?: ErrorFormat } = {},
 ): Promise<void> => {
   const includeDone = options.includeDone ?? false;
   await driveSseStream(
@@ -244,6 +250,7 @@ export const sendSseStream = async (
       req: options.req,
       idleTimeoutMs: options.idleTimeoutMs,
       maxDurationMs: options.maxDurationMs,
+      errorFormat: options.errorFormat,
     },
   );
 };

@@ -388,5 +388,5 @@ export const runOpenAiCompatibleStreamRoute = async (
     onComplete: (writer) => {
       writer.writeDone();
     },
-  }, { req, idleTimeoutMs: streamConfig.idleTimeoutMs, maxDurationMs: streamConfig.maxDurationMs });
+  }, { req, idleTimeoutMs: streamConfig.idleTimeoutMs, maxDurationMs: streamConfig.maxDurationMs, errorFormat: 'openai' });
 };

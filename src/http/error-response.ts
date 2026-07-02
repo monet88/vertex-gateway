@@ -15,6 +15,8 @@ export type GatewayErrorCode =
   | 'IMAGE_NOT_RETURNED'
   | 'INTERNAL';
 
+export type ErrorFormat = 'gateway' | 'openai';
+
 export class GatewayError extends Error {
   constructor(
     public readonly status: number,
@@ -32,17 +34,42 @@ export const sendJson = (res: ServerResponse, status: number, body: unknown): vo
   res.end(JSON.stringify(body));
 };
 
-export const sendError = (res: ServerResponse, requestId: string, error: unknown): void => {
+export const formatGatewayErrorBody = (
+  requestId: string,
+  gatewayError: GatewayError,
+): Record<string, unknown> => ({
+  success: false,
+  requestId,
+  error: {
+    code: gatewayError.code,
+    message: gatewayError.message,
+    retryable: gatewayError.retryable || undefined,
+  },
+});
+
+// OpenAI SDK clients expect a bare { error: { message, type, code } } envelope
+// with no gateway wrapper. See spec §3.
+export const formatOpenAiErrorBody = (
+  gatewayError: GatewayError,
+): Record<string, unknown> => ({
+  error: {
+    message: gatewayError.message,
+    type: 'server_error',
+    code: 'internal_error',
+  },
+});
+
+export const sendError = (
+  res: ServerResponse,
+  requestId: string,
+  error: unknown,
+  format: ErrorFormat = 'gateway',
+): void => {
   const gatewayError = toGatewayError(error);
-  sendJson(res, gatewayError.status, {
-    success: false,
-    requestId,
-    error: {
-      code: gatewayError.code,
-      message: gatewayError.message,
-      retryable: gatewayError.retryable || undefined,
-    },
-  });
+  const body = format === 'openai'
+    ? formatOpenAiErrorBody(gatewayError)
+    : formatGatewayErrorBody(requestId, gatewayError);
+  sendJson(res, gatewayError.status, body);
 };
 
 const safeErrorMessage = (error: unknown): string => {

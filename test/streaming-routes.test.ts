@@ -207,6 +207,7 @@ describe('streaming compatibility routes', () => {
       expect(body).toContain('data: {"candidates":[{"content":{"parts":[{"text":"hel"}]}}]}');
       expect(body).toContain('event: error');
       expect(body).toContain('"code":"TIMEOUT"');
+      expect(body).not.toContain('"type":"server_error"');
       expect(body).not.toContain('data: [DONE]');
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));

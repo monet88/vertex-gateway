@@ -5,7 +5,7 @@ import { extractGatewayKey, requireGatewayAuth } from './auth/gateway-auth.js';
 import { sendError, sendJson, GatewayError } from './http/error-response.js';
 import { createRequestContext } from './http/request-context.js';
 import { classifyRoute } from './http/request-classifier.js';
-import { isStreamingRequest, resolveRouteDispatch } from './http/route-dispatch.js';
+import { isStreamingRequest, resolveRouteDispatch, errorFormatForFamily } from './http/route-dispatch.js';
 import { applyCors } from './lib/cors.js';
 import { readJsonBody } from './lib/read-json.js';
 import { StreamAdmission } from './lib/stream-admission.js';
@@ -86,6 +86,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
 
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const ctx = createRequestContext(req, res);
+    let errorFormat: import('./http/error-response.js').ErrorFormat = 'gateway';
     try {
       const url = new URL(req.url ?? '/', 'http://gateway.local');
       if (await maybeHandleAdminRoute(req, res, url, config, runtime ?? undefined)) {
@@ -127,6 +128,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
       }
 
       const route = classifyRoute(req.method ?? 'GET', url.pathname);
+      errorFormat = errorFormatForFamily(route.family);
       requireGatewayAuth(req, config);
       const gatewayKey = extractGatewayKey(req);
       const expectsMultipartOpenAiEdit = route.family === 'openai'
@@ -226,7 +228,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
         }
         return;
       }
-      sendError(res, ctx.id, error);
+      sendError(res, ctx.id, error, errorFormat);
     } finally {
       ctx.log('request.complete', { status: res.statusCode, latencyMs: Date.now() - ctx.startedAt });
     }
