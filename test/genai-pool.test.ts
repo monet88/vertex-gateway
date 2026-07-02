@@ -86,7 +86,7 @@ describe('GenAI runtime pool', () => {
           generateContent: vi.fn(async () => {
             attempt += 1;
             calls.push(`${target.id}:${attempt}`);
-            if (attempt === 1) throw new Error('503 unavailable');
+            if (attempt === 1) throw new Error('429 quota exceeded');
             return { targetId: target.id };
           }),
         },
@@ -154,7 +154,7 @@ describe('GenAI runtime pool', () => {
               return {
                 next: async () => {
                   calls.push(`next:${target.id}`);
-                  if (target.id === 'project-a') throw new Error('503 unavailable');
+                  if (target.id === 'project-a') throw new Error('429 quota exceeded');
                   if (yielded) return { done: true, value: undefined };
                   yielded = true;
                   return { done: false, value: { event: `chunk:${target.id}` } };

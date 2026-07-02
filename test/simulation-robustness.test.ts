@@ -47,19 +47,17 @@ describe('Simulation Robustness Tests', () => {
       const response = await runtime.client.models.generateContent({ model: 'gemini-2.5-flash' }, { routeFamily: 'openai-chat' });
 
       expect(response).toEqual({ targetId: 'target-b' });
-      // target-a attempted 1 + 2 retries = 3 times, then failover to target-b once.
-      expect(calls).toEqual(['target-a', 'target-a', 'target-a', 'target-b']);
+      // UPSTREAM_UNAVAILABLE → immediate failover, no per-target retries
+      expect(calls).toEqual(['target-a', 'target-b']);
 
       const snapshot = runtime.getSnapshot().active;
       const targetA = snapshot.targets.find((t) => t.id === 'target-a')!.health;
       const targetB = snapshot.targets.find((t) => t.id === 'target-b')!.health;
 
       expect(targetA.failure).toBe(1);
-      expect(targetA.retries).toBe(2);
+      expect(targetA.retries).toBe(0);
       expect(targetA.status).toBe('cooldown');
-
       expect(targetB.success).toBe(1);
-      expect(targetB.failure).toBe(0);
       expect(targetB.status).toBe('healthy');
     });
 
@@ -113,17 +111,15 @@ describe('Simulation Robustness Tests', () => {
       }
 
       expect(events).toEqual(['chunk:target-b']);
-      // target-a: attempt 1 (next+return), retry attempt 2 (next+return), retry attempt 3 (next+return), then failover.
+      // UPSTREAM_UNAVAILABLE → immediate failover
       expect(calls).toEqual([
         'next:target-a', 'return:target-a:1',
-        'next:target-a', 'return:target-a:2',
-        'next:target-a', 'return:target-a:3',
         'next:target-b', 'next:target-b',
       ]);
 
       const snapshot = runtime.getSnapshot().active;
       const targetA = snapshot.targets.find((t) => t.id === 'target-a')!.health;
-      expect(targetA.retries).toBe(2);
+      expect(targetA.retries).toBe(0);
       expect(targetA.failure).toBe(1);
     });
   });
@@ -158,12 +154,12 @@ describe('Simulation Robustness Tests', () => {
       const response = await runtime.client.models.generateContent({ model: 'gemini-2.5-flash' }, { routeFamily: 'openai-chat' });
 
       expect(response).toEqual({ targetId: 'target-b' });
-      expect(calls).toEqual(['target-a', 'target-a', 'target-a', 'target-b']);
+      expect(calls).toEqual(['target-a', 'target-b']);
 
       const snapshot = runtime.getSnapshot().active;
       const targetA = snapshot.targets.find((t) => t.id === 'target-a')!.health;
       expect(targetA.failure).toBe(1);
-      expect(targetA.retries).toBe(2);
+      expect(targetA.retries).toBe(0);
       expect(targetA.status).toBe('cooldown');
     });
 
@@ -219,14 +215,12 @@ describe('Simulation Robustness Tests', () => {
       expect(events).toEqual(['chunk:target-b']);
       expect(calls).toEqual([
         'next:target-a', 'return:target-a:1',
-        'next:target-a', 'return:target-a:2',
-        'next:target-a', 'return:target-a:3',
         'next:target-b', 'next:target-b',
       ]);
 
       const snapshot = runtime.getSnapshot().active;
       const targetA = snapshot.targets.find((t) => t.id === 'target-a')!.health;
-      expect(targetA.retries).toBe(2);
+      expect(targetA.retries).toBe(0);
       expect(targetA.failure).toBe(1);
     });
   });

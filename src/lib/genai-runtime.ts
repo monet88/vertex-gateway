@@ -39,9 +39,11 @@ export class GenAiRuntime implements GenAiRuntimeLike {
     this.activeSnapshot = createGenAiPoolSnapshot(config, this.factory, this.version);
     this.client = new GenAiPoolClient(
       () => this.activeSnapshot,
-      config.vertexPoolFailoverCooldownMs,
-      config.upstreamRetries,
-      config.upstreamRetryDelayMs,
+      () => ({
+        cooldownMs: this.currentConfig.vertexPoolFailoverCooldownMs,
+        upstreamRetries: this.currentConfig.upstreamRetries,
+        upstreamRetryDelayMs: this.currentConfig.upstreamRetryDelayMs,
+      }),
     );
   }
 
