@@ -11,6 +11,7 @@ import type {
 import { GatewayError } from '../http/error-response.js';
 import { nextStreamStep } from './stream-guards.js';
 import { classifyUpstreamError, withClassifiedGatewayError } from './upstream-error-classifier.js';
+import { computeBackoffMs } from './retry.js';
 
 const RECENT_REQUEST_LIMIT = 10;
 
@@ -25,6 +26,8 @@ export interface GenAiTargetHealth {
   status: 'healthy' | 'cooldown' | 'disabled';
   success: number;
   failure: number;
+  retries: number;
+  lastRetryAt?: string;
   recent: GenAiTargetHealthEvent[];
   lastErrorCode?: string;
   lastErrorAt?: string;
@@ -101,6 +104,7 @@ const createSnapshotTarget = (
     status: 'healthy',
     success: 0,
     failure: 0,
+    retries: 0,
     recent: [],
     routeFamilyBuckets: emptyRouteFamilyBuckets(),
   },
@@ -396,59 +400,70 @@ export class GenAiPoolClient implements GenAiClient {
           }));
 
           let iterator: AsyncIterator<Record<string, unknown>> | null = null;
-          try {
-            if (!target.client.models.generateContentStream) {
-              throw new Error('Configured GenAI target does not support generateContentStream.');
-            }
-            const stream = await target.client.models.generateContentStream(request, metadata);
-            iterator = stream[Symbol.asyncIterator]();
-            const firstStep = await nextStreamStep(iterator, {
-              idleTimeoutMs: metadata.streamGuard?.idleTimeoutMs ?? 30_000,
-              maxDurationMs: metadata.streamGuard?.maxDurationMs ?? 240_000,
-              startedAt: Date.now(),
-            });
-            if (firstStep.done) {
-              markSuccess(target, routeFamily);
-              snapshot.refCount -= 1;
-              return {
-                async *[Symbol.asyncIterator]() {
-                  // Upstream completed before yielding content.
-                },
-              };
-            }
-            return wrapPinnedStream(
-              iterator,
-              firstStep,
-              () => markSuccess(target, routeFamily),
-              (error) => {
-                const classification = classifyUpstreamError(error);
-                markFailure(
-                  target,
-                  routeFamily,
-                  classification.code,
-                  this.cooldownMs,
-                  classification.shouldCooldown,
-                );
-              },
-              () => {
-                snapshot.refCount -= 1;
-              },
-            );
-          } catch (error) {
-            if (iterator && typeof iterator.return === 'function') {
-              try {
-                await iterator.return();
-              } catch {
-                // Ignore iterator cleanup after failed first step.
+          let attempt = 0;
+          let handled = false;
+          // Inner per-target retries around the first-chunk phase (spec §4). Each
+          // failed attempt cleans up its iterator before retrying the same target.
+          for (;;) {
+            try {
+              if (!target.client.models.generateContentStream) {
+                throw new Error('Configured GenAI target does not support generateContentStream.');
               }
-            }
-            const classification = classifyUpstreamError(error);
-            markFailure(target, routeFamily, classification.code, this.cooldownMs, classification.shouldCooldown);
-            lastError = withClassifiedGatewayError(error);
-            if (!classification.shouldFailover || attempted.size >= snapshot.targets.length) {
-              throw lastError;
+              const stream = await target.client.models.generateContentStream(request, metadata);
+              iterator = stream[Symbol.asyncIterator]();
+              const firstStep = await nextStreamStep(iterator, {
+                idleTimeoutMs: metadata.streamGuard?.idleTimeoutMs ?? 30_000,
+                maxDurationMs: metadata.streamGuard?.maxDurationMs ?? 240_000,
+                startedAt: Date.now(),
+              });
+              if (firstStep.done) {
+                markSuccess(target, routeFamily);
+                snapshot.refCount -= 1;
+                return {
+                  async *[Symbol.asyncIterator]() {
+                    // Upstream completed before yielding content.
+                  },
+                };
+              }
+              return wrapPinnedStream(
+                iterator,
+                firstStep,
+                () => markSuccess(target, routeFamily),
+                (error) => {
+                  const classification = classifyUpstreamError(error);
+                  markFailure(target, routeFamily, classification.code, this.cooldownMs, classification.shouldCooldown);
+                },
+                () => {
+                  snapshot.refCount -= 1;
+                },
+              );
+            } catch (error) {
+              if (iterator && typeof iterator.return === 'function') {
+                try {
+                  await iterator.return();
+                } catch {
+                  // Ignore iterator cleanup after failed first step.
+                }
+              }
+              iterator = null;
+              const classification = classifyUpstreamError(error);
+              if (classification.retryable && attempt < this.upstreamRetries) {
+                this.recordRetry(target);
+                const delay = computeBackoffMs(attempt, this.upstreamRetryDelayMs);
+                attempt += 1;
+                if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+                continue;
+              }
+              markFailure(target, routeFamily, classification.code, this.cooldownMs, classification.shouldCooldown);
+              lastError = withClassifiedGatewayError(error);
+              handled = true;
+              if (!classification.shouldFailover || attempted.size >= snapshot.targets.length) {
+                throw lastError;
+              }
+              break;
             }
           }
+          void handled;
         }
 
         throw withClassifiedGatewayError(lastError ?? new Error('No GenAI targets are available.'));
@@ -462,12 +477,19 @@ export class GenAiPoolClient implements GenAiClient {
   constructor(
     private readonly getActiveSnapshot: () => GenAiPoolSnapshot,
     private readonly cooldownMs: number,
+    private readonly upstreamRetries: number,
+    private readonly upstreamRetryDelayMs: number,
   ) {}
 
   private pinSnapshot(): GenAiPoolSnapshot {
     const snapshot = this.getActiveSnapshot();
     snapshot.refCount += 1;
     return snapshot;
+  }
+
+  private recordRetry(target: GenAiTarget): void {
+    target.health.retries += 1;
+    target.health.lastRetryAt = new Date().toISOString();
   }
 
   private extractRequestedModel(request: Record<string, unknown>): string | null {
@@ -537,18 +559,34 @@ export class GenAiPoolClient implements GenAiClient {
         routeFamily,
         streaming: false,
       }));
-      try {
-        const response = await execute(target);
-        markSuccess(target, routeFamily);
-        return response;
-      } catch (error) {
-        const classification = classifyUpstreamError(error);
-        markFailure(target, routeFamily, classification.code, this.cooldownMs, classification.shouldCooldown);
-        lastError = withClassifiedGatewayError(error);
-        if (!classification.shouldFailover || attempted.size >= snapshot.targets.length) {
-          throw lastError;
+
+      let attempt = 0;
+      let targetError: unknown;
+      // Inner per-target retries run before markFailure/cooldown/failover (spec §4).
+      for (;;) {
+        try {
+          const response = await execute(target);
+          markSuccess(target, routeFamily);
+          return response;
+        } catch (error) {
+          const classification = classifyUpstreamError(error);
+          targetError = error;
+          if (classification.retryable && attempt < this.upstreamRetries) {
+            this.recordRetry(target);
+            const delay = computeBackoffMs(attempt, this.upstreamRetryDelayMs);
+            attempt += 1;
+            if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
+          markFailure(target, routeFamily, classification.code, this.cooldownMs, classification.shouldCooldown);
+          lastError = withClassifiedGatewayError(error);
+          if (!classification.shouldFailover || attempted.size >= snapshot.targets.length) {
+            throw lastError;
+          }
+          break;
         }
       }
+      void targetError;
     }
 
     throw withClassifiedGatewayError(lastError ?? new Error('No GenAI targets are available.'));
