@@ -401,7 +401,6 @@ export class GenAiPoolClient implements GenAiClient {
 
           let iterator: AsyncIterator<Record<string, unknown>> | null = null;
           let attempt = 0;
-          let handled = false;
           // Inner per-target retries around the first-chunk phase (spec §4). Each
           // failed attempt cleans up its iterator before retrying the same target.
           for (;;) {
@@ -456,14 +455,12 @@ export class GenAiPoolClient implements GenAiClient {
               }
               markFailure(target, routeFamily, classification.code, this.cooldownMs, classification.shouldCooldown);
               lastError = withClassifiedGatewayError(error);
-              handled = true;
               if (!classification.shouldFailover || attempted.size >= snapshot.targets.length) {
                 throw lastError;
               }
               break;
             }
           }
-          void handled;
         }
 
         throw withClassifiedGatewayError(lastError ?? new Error('No GenAI targets are available.'));
@@ -561,7 +558,6 @@ export class GenAiPoolClient implements GenAiClient {
       }));
 
       let attempt = 0;
-      let targetError: unknown;
       // Inner per-target retries run before markFailure/cooldown/failover (spec §4).
       for (;;) {
         try {
@@ -570,7 +566,6 @@ export class GenAiPoolClient implements GenAiClient {
           return response;
         } catch (error) {
           const classification = classifyUpstreamError(error);
-          targetError = error;
           if (classification.retryable && attempt < this.upstreamRetries) {
             this.recordRetry(target);
             const delay = computeBackoffMs(attempt, this.upstreamRetryDelayMs);
@@ -586,7 +581,6 @@ export class GenAiPoolClient implements GenAiClient {
           break;
         }
       }
-      void targetError;
     }
 
     throw withClassifiedGatewayError(lastError ?? new Error('No GenAI targets are available.'));

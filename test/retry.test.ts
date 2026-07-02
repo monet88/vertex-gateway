@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
 import { retryWithJitter, computeBackoffMs, DEFAULT_RETRY_BASE_DELAY_MS } from '../src/lib/retry.js';
 
 describe('computeBackoffMs', () => {
@@ -19,6 +19,10 @@ describe('computeBackoffMs', () => {
 });
 
 describe('retryWithJitter', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('retries transient failures then succeeds and reports attempt count', async () => {
     vi.useFakeTimers();
     let calls = 0;
@@ -32,7 +36,6 @@ describe('retryWithJitter', () => {
     const result = await promise;
     expect(result).toEqual({ value: 'ok', retries: 2 });
     expect(task).toHaveBeenCalledTimes(3);
-    vi.useRealTimers();
   });
 
   it('does not retry when retries is 0', async () => {
