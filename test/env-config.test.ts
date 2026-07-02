@@ -402,6 +402,42 @@ describe('gateway config file', () => {
     expect(() => loadConfig()).toThrow(/At least one enabled vertex pool target is required/);
   });
 
+  it('fails when an enabled pool entry has neither credentialsFile nor apiKey', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const configPath = path.join(dir, 'config.yaml');
+    const poolPath = path.join(dir, 'pool.json');
+
+    fs.writeFileSync(configPath, [
+      'gatewayKeys:',
+      '  - gateway-key',
+      'googleProject: fallback-project',
+      'googleCredentialsFile: null',
+      'googleLocation: global',
+    ].join('\n'));
+    fs.writeFileSync(poolPath, JSON.stringify({
+      vertexPools: [
+        {
+          id: 'project-a',
+          project: 'pool-project-a',
+          location: 'global',
+          enabled: true,
+          weight: 1,
+        },
+      ],
+    }));
+
+    process.env.GATEWAY_CONFIG_FILE = configPath;
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    expect(() => loadConfig()).toThrow(/must include either credentialsFile or apiKey/);
+  });
+
   it('fails when Cloud Run tries to enable mutable file-store admin mode', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
     const configPath = path.join(dir, 'config.yaml');

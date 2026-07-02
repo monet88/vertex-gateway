@@ -27,22 +27,26 @@ export const createGoogleGenAiClientForTarget: GenAiTargetClientFactory = (confi
   const serviceAccount = apiKey ? null : loadServiceAccountCredential(target.credentialsFile);
   const options: Record<string, unknown> = {
     vertexai: true,
-    project: serviceAccount?.project_id ?? target.project,
-    location: target.location,
     apiVersion: config.googleApiVersion,
     httpOptions: { timeout: config.upstreamTimeoutMs },
   };
   if (apiKey) {
-    // Gemini Enterprise Agent Platform in express mode: API key auth, no service account.
+    // Express mode: API key auth, no service account.
+    // SDK discards apiKey when project+location are both present,
+    // so we intentionally omit them here.
     options.apiKey = apiKey;
-  } else if (serviceAccount) {
-    options.googleAuthOptions = {
-      credentials: {
-        client_email: serviceAccount.client_email,
-        private_key: serviceAccount.private_key,
-      },
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-    };
+  } else {
+    options.project = serviceAccount?.project_id ?? target.project;
+    options.location = target.location;
+    if (serviceAccount) {
+      options.googleAuthOptions = {
+        credentials: {
+          client_email: serviceAccount.client_email,
+          private_key: serviceAccount.private_key,
+        },
+        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      };
+    }
   }
   return new GoogleGenAI(options) as unknown as GenAiClient;
 };

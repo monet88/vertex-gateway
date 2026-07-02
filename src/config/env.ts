@@ -11,7 +11,7 @@ export interface VertexPoolConfig {
   project: string;
   location: string;
   credentialsFile: string | null;
-  apiKey?: string | null;
+  apiKey: string | null;
   enabled: boolean;
   weight: number;
   modelAllowlist: string[];

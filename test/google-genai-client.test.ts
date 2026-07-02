@@ -32,6 +32,7 @@ describe('Google GenAI client', () => {
         project: 'pool-project-a',
         location: 'global',
         credentialsFile: null,
+        apiKey: null,
         enabled: true,
         weight: 2,
         label: 'Project A',
@@ -73,9 +74,10 @@ describe('Google GenAI client', () => {
     expect(call).toMatchObject({
       vertexai: true,
       apiKey: 'AIzaexpress-mode-test-key',
-      project: 'pool-project-a',
-      location: 'global',
     });
+    // SDK discards apiKey when project+location are present, so we must omit them.
+    expect(call).not.toHaveProperty('project');
+    expect(call).not.toHaveProperty('location');
     expect(call).not.toHaveProperty('googleAuthOptions');
   });
 });
