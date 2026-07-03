@@ -15,4 +15,5 @@ export interface GenAiRequestMetadata {
   routeFamily?: GenAiRouteFamily;
   streamGuard?: GenAiStreamGuardMetadata;
   requestId?: string;
+  signal?: AbortSignal;
 }

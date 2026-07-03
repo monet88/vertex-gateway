@@ -11,8 +11,19 @@ import type {
 import { GatewayError } from '../http/error-response.js';
 import { nextStreamStep } from './stream-guards.js';
 import { classifyUpstreamError, withClassifiedGatewayError } from './upstream-error-classifier.js';
+import { retryWithJitter } from './retry.js';
 
 const RECENT_REQUEST_LIMIT = 10;
+
+// Client-side cancellation (request socket closed, AbortSignal fired) is not an
+// upstream fault, so a cancelled request must never penalize a healthy target
+// with cooldown/failover. retryWithJitter surfaces aborts as a DOMException
+// named 'AbortError'; the SDK may also raise its own AbortError.
+const isAbortError = (error: unknown, signal?: AbortSignal): boolean => {
+  if (signal?.aborted) return true;
+  if (error instanceof DOMException && error.name === 'AbortError') return true;
+  return Boolean(error && typeof error === 'object' && (error as { name?: unknown }).name === 'AbortError');
+};
 
 export interface GenAiTargetHealthEvent {
   at: string;
@@ -25,6 +36,8 @@ export interface GenAiTargetHealth {
   status: 'healthy' | 'cooldown' | 'disabled';
   success: number;
   failure: number;
+  retries: number;
+  lastRetryAt?: string;
   recent: GenAiTargetHealthEvent[];
   lastErrorCode?: string;
   lastErrorAt?: string;
@@ -101,6 +114,7 @@ const createSnapshotTarget = (
     status: 'healthy',
     success: 0,
     failure: 0,
+    retries: 0,
     recent: [],
     routeFamilyBuckets: emptyRouteFamilyBuckets(),
   },
@@ -353,6 +367,12 @@ const wrapPinnedStream = (
   },
 });
 
+export interface PoolRetryConfig {
+  cooldownMs: number;
+  upstreamRetries: number;
+  upstreamRetryDelayMs: number;
+}
+
 export class GenAiPoolClient implements GenAiClient {
   readonly models = {
     generateContent: async (
@@ -367,6 +387,7 @@ export class GenAiPoolClient implements GenAiClient {
           routeFamily,
           metadata.requestId,
           this.extractRequestedModel(request),
+          metadata.signal,
           (target) => target.client.models.generateContent(request, metadata),
         );
       } finally {
@@ -385,7 +406,15 @@ export class GenAiPoolClient implements GenAiClient {
         const requestedModel = this.extractRequestedModel(request);
 
         while (attempted.size < snapshot.targets.length) {
-          const target = this.selectAvailableTarget(snapshot, attempted, requestedModel, metadata.requestId);
+          let target;
+          try {
+            target = this.selectAvailableTarget(snapshot, attempted, requestedModel, metadata.requestId);
+          } catch (error) {
+            if (lastError) {
+              throw lastError;
+            }
+            throw error;
+          }
           attempted.add(target.id);
           console.info(JSON.stringify({
             event: 'genai_pool.target_selected',
@@ -395,19 +424,51 @@ export class GenAiPoolClient implements GenAiClient {
             streaming: true,
           }));
 
+          const { cooldownMs, upstreamRetries, upstreamRetryDelayMs } = this.getRetryConfig();
+          const startedAt = Date.now();
           let iterator: AsyncIterator<Record<string, unknown>> | null = null;
+          let attempts = 0;
+
+          const shouldRetryOnTarget = (error: unknown): boolean => {
+            const c = classifyUpstreamError(error);
+            if (c.code === 'TIMEOUT' || c.code === 'UPSTREAM_UNAVAILABLE') return false;
+            return c.retryable;
+          };
+
           try {
-            if (!target.client.models.generateContentStream) {
-              throw new Error('Configured GenAI target does not support generateContentStream.');
+            const { value: result, retries: retryCount } = await retryWithJitter(
+              async () => {
+                attempts++;
+                // Clean up previous attempt's iterator
+                if (iterator && typeof iterator.return === 'function') {
+                  try { await iterator.return(); } catch { /* ignore cleanup */ }
+                }
+                iterator = null;
+
+                if (!target.client.models.generateContentStream) {
+                  throw new Error('Configured GenAI target does not support generateContentStream.');
+                }
+                const stream = await target.client.models.generateContentStream(request, metadata);
+                iterator = stream[Symbol.asyncIterator]();
+                const firstStep = await nextStreamStep(iterator, {
+                  idleTimeoutMs: metadata.streamGuard?.idleTimeoutMs ?? 30_000,
+                  maxDurationMs: metadata.streamGuard?.maxDurationMs ?? 240_000,
+                  startedAt,
+                });
+                return { iterator, firstStep };
+              },
+              upstreamRetries,
+              shouldRetryOnTarget,
+              upstreamRetryDelayMs,
+              metadata.signal,
+            );
+
+            if (retryCount > 0) {
+              target.health.retries += retryCount;
+              target.health.lastRetryAt = new Date().toISOString();
             }
-            const stream = await target.client.models.generateContentStream(request, metadata);
-            iterator = stream[Symbol.asyncIterator]();
-            const firstStep = await nextStreamStep(iterator, {
-              idleTimeoutMs: metadata.streamGuard?.idleTimeoutMs ?? 30_000,
-              maxDurationMs: metadata.streamGuard?.maxDurationMs ?? 240_000,
-              startedAt: Date.now(),
-            });
-            if (firstStep.done) {
+
+            if (result.firstStep.done) {
               markSuccess(target, routeFamily);
               snapshot.refCount -= 1;
               return {
@@ -417,33 +478,34 @@ export class GenAiPoolClient implements GenAiClient {
               };
             }
             return wrapPinnedStream(
-              iterator,
-              firstStep,
+              result.iterator,
+              result.firstStep,
               () => markSuccess(target, routeFamily),
               (error) => {
+                // Client cancelled mid-stream — do not penalize a healthy target.
+                if (isAbortError(error, metadata.signal)) return;
                 const classification = classifyUpstreamError(error);
-                markFailure(
-                  target,
-                  routeFamily,
-                  classification.code,
-                  this.cooldownMs,
-                  classification.shouldCooldown,
-                );
+                markFailure(target, routeFamily, classification.code, cooldownMs, classification.shouldCooldown);
               },
-              () => {
-                snapshot.refCount -= 1;
-              },
+              () => { snapshot.refCount -= 1; },
             );
           } catch (error) {
-            if (iterator && typeof iterator.return === 'function') {
-              try {
-                await iterator.return();
-              } catch {
-                // Ignore iterator cleanup after failed first step.
-              }
+            const retryCount = Math.max(0, attempts - 1);
+            if (retryCount > 0) {
+              target.health.retries += retryCount;
+              target.health.lastRetryAt = new Date().toISOString();
+            }
+            const activeIterator = iterator as AsyncIterator<Record<string, unknown>> | null;
+            if (activeIterator && typeof activeIterator.return === 'function') {
+              try { await activeIterator.return(); } catch { /* ignore cleanup */ }
+            }
+            // Client cancelled — do not penalize a healthy target.
+            // Outer catch decrements refCount, so just rethrow here.
+            if (isAbortError(error, metadata.signal)) {
+              throw error;
             }
             const classification = classifyUpstreamError(error);
-            markFailure(target, routeFamily, classification.code, this.cooldownMs, classification.shouldCooldown);
+            markFailure(target, routeFamily, classification.code, cooldownMs, classification.shouldCooldown);
             lastError = withClassifiedGatewayError(error);
             if (!classification.shouldFailover || attempted.size >= snapshot.targets.length) {
               throw lastError;
@@ -461,7 +523,7 @@ export class GenAiPoolClient implements GenAiClient {
 
   constructor(
     private readonly getActiveSnapshot: () => GenAiPoolSnapshot,
-    private readonly cooldownMs: number,
+    private readonly getRetryConfig: () => PoolRetryConfig,
   ) {}
 
   private pinSnapshot(): GenAiPoolSnapshot {
@@ -522,13 +584,22 @@ export class GenAiPoolClient implements GenAiClient {
     routeFamily: GenAiRouteFamily,
     requestId: string | undefined,
     requestedModel: string | null,
+    signal: AbortSignal | undefined,
     execute: (target: GenAiTarget) => Promise<Record<string, unknown>>,
   ): Promise<Record<string, unknown>> {
     const attempted = new Set<string>();
     let lastError: unknown;
 
     while (attempted.size < snapshot.targets.length) {
-      const target = this.selectAvailableTarget(snapshot, attempted, requestedModel, requestId);
+      let target;
+      try {
+        target = this.selectAvailableTarget(snapshot, attempted, requestedModel, requestId);
+      } catch (error) {
+        if (lastError) {
+          throw lastError;
+        }
+        throw error;
+      }
       attempted.add(target.id);
       console.info(JSON.stringify({
         event: 'genai_pool.target_selected',
@@ -537,17 +608,47 @@ export class GenAiPoolClient implements GenAiClient {
         routeFamily,
         streaming: false,
       }));
+
+      const { cooldownMs, upstreamRetries, upstreamRetryDelayMs } = this.getRetryConfig();
+      const shouldRetryOnTarget = (error: unknown): boolean => {
+        const c = classifyUpstreamError(error);
+        if (c.code === 'TIMEOUT' || c.code === 'UPSTREAM_UNAVAILABLE') return false;
+        return c.retryable;
+      };
+
+      let attempts = 0;
       try {
-        const response = await execute(target);
+        const { value: response, retries: retryCount } = await retryWithJitter(
+          () => {
+            attempts++;
+            return execute(target);
+          },
+          upstreamRetries,
+          shouldRetryOnTarget,
+          upstreamRetryDelayMs,
+          signal,
+        );
+        if (retryCount > 0) {
+          target.health.retries += retryCount;
+          target.health.lastRetryAt = new Date().toISOString();
+        }
         markSuccess(target, routeFamily);
         return response;
       } catch (error) {
+        const retryCount = Math.max(0, attempts - 1);
+        if (retryCount > 0) {
+          target.health.retries += retryCount;
+          target.health.lastRetryAt = new Date().toISOString();
+        }
+        // Client cancelled — do not penalize a healthy target.
+        if (isAbortError(error, signal)) throw error;
         const classification = classifyUpstreamError(error);
-        markFailure(target, routeFamily, classification.code, this.cooldownMs, classification.shouldCooldown);
+        markFailure(target, routeFamily, classification.code, cooldownMs, classification.shouldCooldown);
         lastError = withClassifiedGatewayError(error);
         if (!classification.shouldFailover || attempted.size >= snapshot.targets.length) {
           throw lastError;
         }
+        // break to outer loop for failover
       }
     }
 

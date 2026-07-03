@@ -128,6 +128,43 @@ describe('admin routes', () => {
     expect(body.ok).toBe(true);
   });
 
+  it('never exposes raw express-mode apiKey in credential listings', async () => {
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        runtimeMode: 'pool',
+        vertexPools: [{
+          id: 'express-target',
+          label: 'Express target',
+          project: 'test-project',
+          location: 'us-central1',
+          credentialsFile: null,
+          apiKey: 'super-secret-google-api-key',
+          enabled: true,
+          weight: 1,
+          modelAllowlist: [],
+          modelExclusions: [],
+        }],
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/admin/api/vertex-credentials`, {
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    const entry = body.vertexPools.find((item: { id: string }) => item.id === 'express-target');
+    expect(entry).toBeDefined();
+    expect(entry.apiKey).toBeUndefined();
+    expect(entry.hasApiKey).toBe(true);
+    // Guard against the raw key leaking anywhere in the serialized response.
+    expect(JSON.stringify(body)).not.toContain('super-secret-google-api-key');
+  });
+
   it('serves the admin shell on /admin/ with a trailing slash', async () => {
     server = createApp({
       config: testConfig({

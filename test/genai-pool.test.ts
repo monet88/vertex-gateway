@@ -4,6 +4,14 @@ import type { GenAiTargetClientFactory } from '../src/lib/google-genai-client.js
 import { ImageWorkloads } from '../src/workloads/image-workloads.js';
 import { testConfig } from './test-config.js';
 
+const poolConfigOverrides = (upstreamRetries: number) => ({
+  runtimeMode: 'pool' as const,
+  vertexPoolSelection: 'round-robin' as const,
+  vertexPoolFailoverCooldownMs: 60000,
+  upstreamRetries,
+  upstreamRetryDelayMs: 0,
+});
+
 const createFactory = (calls: string[], streamEvents?: string[]): GenAiTargetClientFactory => (
   _config,
   target,
@@ -27,6 +35,160 @@ const createFactory = (calls: string[], streamEvents?: string[]): GenAiTargetCli
 });
 
 describe('GenAI runtime pool', () => {
+  it('retries the same target before failing over (non-streaming)', async () => {
+    const calls: string[] = [];
+    const runtime = createGenAiRuntime(testConfig({
+      ...poolConfigOverrides(2),
+      vertexPools: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [] },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [] },
+      ],
+      resolvedVertexTargets: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [], source: 'pool' },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [], source: 'pool' },
+      ],
+    }), (_config, target) => ({
+      models: {
+        generateContent: vi.fn(async () => {
+          calls.push(target.id);
+          if (target.id === 'project-a') throw new Error('429 quota exceeded');
+          return { targetId: target.id };
+        }),
+      },
+    }));
+
+    const response = await runtime.client.models.generateContent({ model: 'gemini-2.5-flash' }, { routeFamily: 'openai-chat' });
+
+    expect(response).toEqual({ targetId: 'project-b' });
+    // project-a attempted 1 + 2 retries = 3 times, then failover to project-b once.
+    expect(calls).toEqual(['project-a', 'project-a', 'project-a', 'project-b']);
+    const snapshot = runtime.getSnapshot().active;
+    const a = snapshot.targets.find((t) => t.id === 'project-a')!.health;
+    expect(a.failure).toBe(1);
+    expect(a.retries).toBe(2);
+    expect(a.status).toBe('cooldown');
+  });
+
+  it('recovers on the second attempt without failover or cooldown (non-streaming)', async () => {
+    const calls: string[] = [];
+    const runtime = createGenAiRuntime(testConfig({
+      ...poolConfigOverrides(2),
+      vertexPools: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [] },
+      ],
+      resolvedVertexTargets: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [], source: 'pool' },
+      ],
+    }), (_config, target) => {
+      let attempt = 0;
+      return {
+        models: {
+          generateContent: vi.fn(async () => {
+            attempt += 1;
+            calls.push(`${target.id}:${attempt}`);
+            if (attempt === 1) throw new Error('429 quota exceeded');
+            return { targetId: target.id };
+          }),
+        },
+      };
+    });
+
+    const response = await runtime.client.models.generateContent({ model: 'gemini-2.5-flash' });
+
+    expect(response).toEqual({ targetId: 'project-a' });
+    expect(calls).toEqual(['project-a:1', 'project-a:2']);
+    const a = runtime.getSnapshot().active.targets[0].health;
+    expect(a.success).toBe(1);
+    expect(a.failure).toBe(0);
+    expect(a.retries).toBe(1);
+    expect(a.status).toBe('healthy');
+  });
+
+  it('does not add retries when upstreamRetries is 0', async () => {
+    const calls: string[] = [];
+    const runtime = createGenAiRuntime(testConfig({
+      ...poolConfigOverrides(0),
+      vertexPools: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [] },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [] },
+      ],
+      resolvedVertexTargets: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [], source: 'pool' },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [], source: 'pool' },
+      ],
+    }), (_config, target) => ({
+      models: {
+        generateContent: vi.fn(async () => {
+          calls.push(target.id);
+          if (target.id === 'project-a') throw new Error('429 quota exceeded');
+          return { targetId: target.id };
+        }),
+      },
+    }));
+
+    await runtime.client.models.generateContent({ model: 'gemini-2.5-flash' });
+    expect(calls).toEqual(['project-a', 'project-b']);
+    expect(runtime.getSnapshot().active.targets.find((t) => t.id === 'project-a')!.health.retries).toBe(0);
+  });
+
+  it('retries the same target on first-chunk failure before failover (streaming)', async () => {
+    const calls: string[] = [];
+    const runtime = createGenAiRuntime(testConfig({
+      ...poolConfigOverrides(1),
+      vertexPools: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [] },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [] },
+      ],
+      resolvedVertexTargets: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [], source: 'pool' },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [], source: 'pool' },
+      ],
+    }), (_config, target) => {
+      let returnCount = 0;
+      return {
+        models: {
+          generateContent: vi.fn(),
+          generateContentStream: vi.fn(async () => ({
+            [Symbol.asyncIterator]() {
+              let yielded = false;
+              return {
+                next: async () => {
+                  calls.push(`next:${target.id}`);
+                  if (target.id === 'project-a') throw new Error('429 quota exceeded');
+                  if (yielded) return { done: true, value: undefined };
+                  yielded = true;
+                  return { done: false, value: { event: `chunk:${target.id}` } };
+                },
+                return: async () => {
+                  returnCount += 1;
+                  calls.push(`return:${target.id}:${returnCount}`);
+                  return { done: true, value: undefined };
+                },
+              };
+            },
+          })),
+        },
+      };
+    });
+
+    const stream = await runtime.client.models.generateContentStream?.({ model: 'gemini-2.5-flash' }, {
+      routeFamily: 'openai-responses',
+      streamGuard: { idleTimeoutMs: 250, maxDurationMs: 10000 },
+    });
+    const events: string[] = [];
+    for await (const chunk of stream ?? []) events.push(String(chunk.event));
+
+    expect(events).toEqual(['chunk:project-b']);
+    // project-a: attempt 1 (next+return), retry attempt 2 (next+return), then failover.
+    expect(calls).toEqual([
+      'next:project-a', 'return:project-a:1',
+      'next:project-a', 'return:project-a:2',
+      'next:project-b', 'next:project-b',
+    ]);
+    const a = runtime.getSnapshot().active.targets.find((t) => t.id === 'project-a')!.health;
+    expect(a.retries).toBe(1);
+    expect(a.failure).toBe(1);
+  });
   it('rotates across targets with round-robin selection', async () => {
     const calls: string[] = [];
     const runtime = createGenAiRuntime(testConfig({
@@ -548,6 +710,7 @@ describe('GenAI runtime pool', () => {
     const calls: string[] = [];
     const runtime = createGenAiRuntime(testConfig({
       runtimeMode: 'pool',
+      upstreamRetries: 0,
       vertexPoolSelection: 'round-robin',
       vertexPoolFailoverCooldownMs: 60000,
       vertexPools: [
@@ -831,6 +994,7 @@ describe('GenAI runtime pool', () => {
     const calls: string[] = [];
     const runtime = createGenAiRuntime(testConfig({
       runtimeMode: 'pool',
+      upstreamRetries: 0,
       vertexPools: [
         {
           id: 'project-a',
@@ -1127,5 +1291,35 @@ describe('GenAI runtime pool', () => {
     expect(attempts).toBe(2);
     expect(response.images).toHaveLength(1);
     expect(response.images[0]?.mimeType).toBe('image/png');
+  });
+
+  it('propagates the real upstream lastError instead of model-exclusion errors if failover fails after an attempt', async () => {
+    const calls: string[] = [];
+    const runtime = createGenAiRuntime(testConfig({
+      ...poolConfigOverrides(0),
+      vertexPools: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [] },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: ['different-model-only'], modelExclusions: [] },
+      ],
+      resolvedVertexTargets: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [], source: 'pool' },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, modelAllowlist: ['different-model-only'], modelExclusions: [], source: 'pool' },
+      ],
+    }), (_config, target) => ({
+      models: {
+        generateContent: vi.fn(async () => {
+          calls.push(target.id);
+          throw new Error('429 resource_exhausted');
+        }),
+      },
+    }));
+
+    await expect(runtime.client.models.generateContent({
+      model: 'gemini-2.5-flash',
+    }, {
+      routeFamily: 'gemini',
+    })).rejects.toThrow('Upstream quota exhausted.');
+
+    expect(calls).toEqual(['project-a']);
   });
 });

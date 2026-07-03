@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { GatewayErrorCode } from './error-response.js';
-import { GatewayError, toGatewayError } from './error-response.js';
+import type { GatewayErrorCode, ErrorFormat } from './error-response.js';
+import { GatewayError, toGatewayError, formatOpenAiErrorBody, maskSensitiveInfo } from './error-response.js';
 import { nextStreamStep } from '../lib/stream-guards.js';
 
 const initializeSse = (res: ServerResponse): void => {
@@ -66,15 +66,21 @@ export const writeSseDone = (res: ServerResponse): void => {
 export const writeSseError = async (
   res: ServerResponse,
   error: unknown,
+  format: ErrorFormat = 'gateway',
 ): Promise<'written' | 'closed'> => {
   const gatewayError = toGatewayError(error);
-  const status = await writeSseJson(res, {
-    error: {
-      code: gatewayError.code satisfies GatewayErrorCode,
-      message: gatewayError.message,
-      retryable: gatewayError.retryable || undefined,
-    },
-  }, 'error');
+  const payload = format === 'openai'
+    ? formatOpenAiErrorBody(gatewayError)
+    : {
+        error: {
+          code: gatewayError.code satisfies GatewayErrorCode,
+          message: maskSensitiveInfo(gatewayError.message),
+          retryable: gatewayError.retryable || undefined,
+        },
+      };
+  // OpenAI SDKs only parse bare `data:` frames — omit `event: error` prefix.
+  // Gateway format retains the `error` event type for custom clients.
+  const status = await writeSseJson(res, payload, format === 'openai' ? undefined : 'error');
   if (status === 'written' && !res.destroyed && !res.writableEnded) {
     try {
       res.end();
@@ -114,6 +120,7 @@ export interface SseStreamDriveOptions {
   idleTimeoutMs?: number;
   maxDurationMs?: number;
   req?: IncomingMessage;
+  errorFormat?: ErrorFormat;
 }
 
 /**
@@ -132,6 +139,7 @@ export const driveSseStream = async (
   if (res.destroyed || res.writableEnded) {
     return;
   }
+  const errorFormat = options.errorFormat ?? 'gateway';
   const idleTimeoutMs = options.idleTimeoutMs ?? 30_000;
   const maxDurationMs = options.maxDurationMs ?? 240_000;
   const startedAt = Date.now();
@@ -155,6 +163,10 @@ export const driveSseStream = async (
 
   const onClose = () => {
     closed = true;
+    options.req?.off('close', onClose);
+    options.req?.off('error', onClose);
+    res.off('close', onClose);
+    res.off('error', onClose);
     void closeIterator();
   };
 
@@ -165,7 +177,7 @@ export const driveSseStream = async (
     },
     writeError: async (error) => {
       wroteFrame = true;
-      await writeSseError(res, error);
+      await writeSseError(res, error, errorFormat);
     },
     writeDone: () => {
       writeSseDone(res);
@@ -222,7 +234,7 @@ export const driveSseStream = async (
 export const sendSseStream = async (
   res: ServerResponse,
   chunks: AsyncIterable<Record<string, unknown>>,
-  options: { includeDone?: boolean; idleTimeoutMs?: number; maxDurationMs?: number; req?: IncomingMessage } = {},
+  options: { includeDone?: boolean; idleTimeoutMs?: number; maxDurationMs?: number; req?: IncomingMessage; errorFormat?: ErrorFormat } = {},
 ): Promise<void> => {
   const includeDone = options.includeDone ?? false;
   await driveSseStream(
@@ -244,6 +256,7 @@ export const sendSseStream = async (
       req: options.req,
       idleTimeoutMs: options.idleTimeoutMs,
       maxDurationMs: options.maxDurationMs,
+      errorFormat: options.errorFormat,
     },
   );
 };

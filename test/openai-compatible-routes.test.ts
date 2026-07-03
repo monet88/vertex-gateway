@@ -384,12 +384,13 @@ describe('openai-compatible routes', () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('event: error');
-    expect(body).toContain('"code":"INTERNAL"');
+    expect(body).not.toContain('event: error');
+    expect(body).toContain('"type":"server_error"');
     expect(body).toContain('"message":"Internal gateway error."');
     expect(body).not.toContain('sk-live-secret');
     expect(body).not.toContain('/tmp/path');
     expect(body).not.toContain('"success":false');
+    expect(body).not.toContain('"code":"INTERNAL"');
   });
 
   it('returns a regular JSON error when the upstream stream fails before the first SSE frame', async () => {
@@ -418,8 +419,10 @@ describe('openai-compatible routes', () => {
 
     expect(response.status).toBe(500);
     expect(response.headers.get('content-type')).toContain('application/json');
-    expect(body.error.code).toBe('INTERNAL');
+    expect(body.error.type).toBe('server_error');
     expect(body.error.message).toBe('Internal gateway error.');
+    expect(body.success).toBeUndefined();
+    expect(body.requestId).toBeUndefined();
   });
 
   it('stops downstream streaming and cleans up the upstream iterator when the client disconnects', async () => {
@@ -506,8 +509,11 @@ describe('openai-compatible routes', () => {
 
     expect(response.status).toBe(400);
     expect(response.headers.get('content-type')).toContain('application/json');
-    expect(body.error.code).toBe('VALIDATION_FAILED');
+    expect(body.error.code).toBe('invalid_value');
+    expect(body.error.type).toBe('invalid_request_error');
     expect(body.error.message).toMatch(/tool calls/i);
+    expect(body.success).toBeUndefined();
+    expect(body.requestId).toBeUndefined();
     expect(generateContent).not.toHaveBeenCalled();
     expect(generateContentStream).not.toHaveBeenCalled();
   });
@@ -530,8 +536,11 @@ describe('openai-compatible routes', () => {
 
     expect(response.status).toBe(501);
     expect(response.headers.get('content-type')).toContain('application/json');
-    expect(body.error.code).toBe('NOT_IMPLEMENTED');
+    expect(body.error.code).toBe('invalid_value');
+    expect(body.error.type).toBe('invalid_request_error');
     expect(body.error.message).toMatch(/streaming is not implemented/i);
+    expect(body.success).toBeUndefined();
+    expect(body.requestId).toBeUndefined();
     expect(generateContent).not.toHaveBeenCalled();
   });
 
@@ -555,9 +564,31 @@ describe('openai-compatible routes', () => {
 
     expect(response.status).toBe(400);
     expect(response.headers.get('content-type')).toContain('application/json');
-    expect(body.error.code).toBe('VALIDATION_FAILED');
+    expect(body.error.code).toBe('invalid_value');
+    expect(body.error.type).toBe('invalid_request_error');
     expect(body.error.message).toMatch(/n: 1/i);
+    expect(body.success).toBeUndefined();
+    expect(body.requestId).toBeUndefined();
     expect(generateContent).not.toHaveBeenCalled();
     expect(generateContentStream).not.toHaveBeenCalled();
+  });
+
+  it('returns a pure OpenAI error envelope for non-stream chat failures', async () => {
+    const generateContent = vi.fn(async () => { throw new Error('429 resource_exhausted'); });
+    server = createApp({ config: testConfig(), genAiFactory: () => ({ models: { generateContent, generateContentStream: vi.fn() } }) });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/openai/v1/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer test-key', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'gemini-2.5-flash', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(body.error.type).toBe('rate_limit_error');
+    expect(typeof body.error.message).toBe('string');
+    expect(body.success).toBeUndefined();
+    expect(body.requestId).toBeUndefined();
   });
 });

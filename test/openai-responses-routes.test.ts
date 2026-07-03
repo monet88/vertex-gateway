@@ -162,8 +162,11 @@ describe('openai responses routes', () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error.code).toBe('VALIDATION_FAILED');
+    expect(body.error.code).toBe('invalid_value');
+    expect(body.error.type).toBe('invalid_request_error');
     expect(body.error.message).toMatch(/custom function tools/i);
+    expect(body.success).toBeUndefined();
+    expect(body.requestId).toBeUndefined();
     expect(generateContent).not.toHaveBeenCalled();
   });
 
@@ -379,8 +382,11 @@ describe('openai responses routes', () => {
 
     expect(response.status).toBe(503);
     expect(response.headers.get('content-type')).toContain('application/json');
-    expect(body.error.code).toBe('UPSTREAM_UNAVAILABLE');
+    expect(body.error.code).toBe('internal_error');
+    expect(body.error.type).toBe('server_error');
     expect(body.error.message).toMatch(/unavailable/i);
+    expect(body.success).toBeUndefined();
+    expect(body.requestId).toBeUndefined();
   });
 
   it('closes an empty Responses stream with a terminal DONE frame', async () => {

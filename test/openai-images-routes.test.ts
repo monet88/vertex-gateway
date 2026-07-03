@@ -294,8 +294,11 @@ describe('openai image routes', () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error.code).toBe('VALIDATION_FAILED');
+    expect(body.error.code).toBe('invalid_value');
+    expect(body.error.type).toBe('invalid_request_error');
     expect(body.error.message).toMatch(/response_format/);
+    expect(body.success).toBeUndefined();
+    expect(body.requestId).toBeUndefined();
     expect(generateContent).not.toHaveBeenCalled();
   });
 });
