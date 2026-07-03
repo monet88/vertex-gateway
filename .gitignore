@@ -8,9 +8,15 @@ accounts/*
 
 gateway-data/
 
+docker-compose.override.yml
+pool-config.express-test.json
+
 *.log
 .DS_Store
 .claude
 .agents
 .codex
 .codegraph
+skills-lock.json
+docs/deploy/
+docs/superpowers/

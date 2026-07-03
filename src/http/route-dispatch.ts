@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { GatewayConfig } from '../config/env.js';
 import type { ClassifiedRoute, RouteFamily } from './request-classifier.js';
 import { sendJson } from './error-response.js';
+import type { ErrorFormat } from './error-response.js';
 import { sendSseStream } from './sse-response.js';
 import type { GenAiClient } from '../lib/google-genai-client.js';
 import type { ImageWorkloads } from '../workloads/image-workloads.js';
@@ -10,6 +11,9 @@ import { runCustomImageRoute } from '../routes/custom-image-routes.js';
 import { runOpenAiImageEditRoute, runOpenAiImageGenerationRoute } from '../routes/openai-images-routes.js';
 import { runOpenAiCompatibleRoute, runOpenAiCompatibleStreamRoute } from '../routes/openai-compatible-routes.js';
 import { runOpenAiResponsesRoute, runOpenAiResponsesStreamRoute } from '../routes/openai-responses-routes.js';
+
+export const errorFormatForFamily = (family: RouteFamily): ErrorFormat =>
+  family === 'openai' ? 'openai' : 'gateway';
 
 /**
  * Everything a route handler needs to fully own its response. Handlers either
@@ -43,7 +47,7 @@ const runCompatibilityFamily = (
     await sendSseStream(
       ctx.res,
       await runCompatibilityStreamRoute(ctx.route, ctx.body, ctx.ai, ctx.requestId, ctx.streamConfig),
-      { includeDone: false, req: ctx.req, ...ctx.streamConfig },
+      { includeDone: false, req: ctx.req, ...ctx.streamConfig, errorFormat: errorFormatForFamily(ctx.route.family) },
     );
     return;
   }

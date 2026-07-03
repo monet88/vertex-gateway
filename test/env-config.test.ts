@@ -402,6 +402,42 @@ describe('gateway config file', () => {
     expect(() => loadConfig()).toThrow(/At least one enabled vertex pool target is required/);
   });
 
+  it('fails when an enabled pool entry has neither credentialsFile nor apiKey', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const configPath = path.join(dir, 'config.yaml');
+    const poolPath = path.join(dir, 'pool.json');
+
+    fs.writeFileSync(configPath, [
+      'gatewayKeys:',
+      '  - gateway-key',
+      'googleProject: fallback-project',
+      'googleCredentialsFile: null',
+      'googleLocation: global',
+    ].join('\n'));
+    fs.writeFileSync(poolPath, JSON.stringify({
+      vertexPools: [
+        {
+          id: 'project-a',
+          project: 'pool-project-a',
+          location: 'global',
+          enabled: true,
+          weight: 1,
+        },
+      ],
+    }));
+
+    process.env.GATEWAY_CONFIG_FILE = configPath;
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    expect(() => loadConfig()).toThrow(/must include either credentialsFile or apiKey/);
+  });
+
   it('fails when Cloud Run tries to enable mutable file-store admin mode', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
     const configPath = path.join(dir, 'config.yaml');
@@ -482,5 +518,163 @@ describe('gateway config file', () => {
     delete process.env.GCLOUD_PROJECT;
 
     expect(() => loadConfig()).toThrow(/must not overlap/);
+  });
+
+  it('defaults upstream retry policy when unset', () => {
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GATEWAY_UPSTREAM_RETRIES;
+    delete process.env.GATEWAY_UPSTREAM_RETRY_DELAY_MS;
+    process.env.GATEWAY_API_KEYS = 'k1';
+    process.env.GOOGLE_GENAI_API_KEY = 'express-key';
+
+    const config = loadConfig();
+    expect(config.upstreamRetries).toBe(2);
+    expect(config.upstreamRetryDelayMs).toBe(250);
+  });
+
+  it('accepts zero upstream retries to disable inner retry', () => {
+    process.env.GATEWAY_API_KEYS = 'k1';
+    process.env.GOOGLE_GENAI_API_KEY = 'express-key';
+    process.env.GATEWAY_UPSTREAM_RETRIES = '0';
+    process.env.GATEWAY_UPSTREAM_RETRY_DELAY_MS = '500';
+
+    const config = loadConfig();
+    expect(config.upstreamRetries).toBe(0);
+    expect(config.upstreamRetryDelayMs).toBe(500);
+  });
+
+  it('rejects negative or non-integer upstream retries', () => {
+    process.env.GATEWAY_API_KEYS = 'k1';
+    process.env.GOOGLE_GENAI_API_KEY = 'express-key';
+
+    process.env.GATEWAY_UPSTREAM_RETRIES = '-1';
+    expect(() => loadConfig()).toThrow(/GATEWAY_UPSTREAM_RETRIES/);
+
+    process.env.GATEWAY_UPSTREAM_RETRIES = '2.5';
+    expect(() => loadConfig()).toThrow(/GATEWAY_UPSTREAM_RETRIES/);
+  });
+
+  it('rejects negative or non-integer upstream retry delay', () => {
+    process.env.GATEWAY_API_KEYS = 'k1';
+    process.env.GOOGLE_GENAI_API_KEY = 'express-key';
+
+    process.env.GATEWAY_UPSTREAM_RETRY_DELAY_MS = '-5';
+    expect(() => loadConfig()).toThrow(/GATEWAY_UPSTREAM_RETRY_DELAY_MS/);
+
+    process.env.GATEWAY_UPSTREAM_RETRY_DELAY_MS = '12.5';
+    expect(() => loadConfig()).toThrow(/GATEWAY_UPSTREAM_RETRY_DELAY_MS/);
+  });
+
+  it('reads upstream retry policy from GATEWAY_POOL_CONFIG_FILE overlay', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-pool-'));
+    const poolPath = path.join(dir, 'pool.json');
+    fs.writeFileSync(poolPath, JSON.stringify({
+      upstreamRetries: 3,
+      upstreamRetryDelayMs: 400,
+      vertexPools: [{ id: 'p1', project: 'proj', location: 'global', apiKey: 'x', weight: 1 }],
+    }));
+    process.env.GATEWAY_API_KEYS = 'k1';
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+
+    const config = loadConfig();
+    expect(config.upstreamRetries).toBe(3);
+    expect(config.upstreamRetryDelayMs).toBe(400);
+  });
+
+  it('lets the env override the pool overlay retry policy', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-pool-'));
+    const poolPath = path.join(dir, 'pool.json');
+    fs.writeFileSync(poolPath, JSON.stringify({
+      upstreamRetries: 3,
+      upstreamRetryDelayMs: 400,
+      vertexPools: [{ id: 'p1', project: 'proj', location: 'global', apiKey: 'x', weight: 1 }],
+    }));
+    process.env.GATEWAY_API_KEYS = 'k1';
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+    process.env.GATEWAY_UPSTREAM_RETRIES = '5';
+
+    const config = loadConfig();
+    expect(config.upstreamRetries).toBe(5);
+    expect(config.upstreamRetryDelayMs).toBe(400);
+  });
+});
+
+describe('VERTEX_POOLS env var', () => {
+  it('creates pool entries from comma-separated project:location:apiKey', () => {
+    process.env.GATEWAY_API_KEYS = 'test-key';
+    process.env.VERTEX_POOLS = 'proj-a:global:AIzaKeyA,proj-b:us-central1:AIzaKeyB';
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+    delete process.env.GATEWAY_POOL_CONFIG_FILE;
+    delete process.env.GATEWAY_CONFIG_FILE;
+
+    const config = loadConfig();
+    expect(config.runtimeMode).toBe('pool');
+    expect(config.vertexPools).toHaveLength(2);
+    expect(config.vertexPools[0]).toMatchObject({
+      id: 'env-proj-a',
+      project: 'proj-a',
+      location: 'global',
+      apiKey: 'AIzaKeyA',
+      enabled: true,
+      weight: 1,
+    });
+    expect(config.vertexPools[1]).toMatchObject({
+      id: 'env-proj-b',
+      project: 'proj-b',
+      location: 'us-central1',
+      apiKey: 'AIzaKeyB',
+    });
+  });
+
+  it('pool overlay takes priority over VERTEX_POOLS env', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const credentialPath = writeCredentialFile(dir, 'overlay.json', 'overlay-project');
+    const poolPath = path.join(dir, 'pool-overlay.json');
+    fs.writeFileSync(poolPath, JSON.stringify({
+      vertexPools: [{
+        id: 'overlay-target',
+        project: 'overlay-project',
+        location: 'global',
+        credentialsFile: credentialPath,
+        enabled: true,
+        weight: 1,
+      }],
+    }));
+
+    process.env.GATEWAY_API_KEYS = 'test-key';
+    process.env.VERTEX_POOLS = 'env-proj:global:AIzaEnvKey';
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+    delete process.env.GATEWAY_CONFIG_FILE;
+
+    const config = loadConfig();
+    expect(config.vertexPools).toHaveLength(1);
+    expect(config.vertexPools[0].id).toBe('overlay-target');
+  });
+
+  it('rejects entries with missing colon separators', () => {
+    process.env.GATEWAY_API_KEYS = 'test-key';
+    process.env.VERTEX_POOLS = 'bad-entry-no-colons';
+    delete process.env.GATEWAY_POOL_CONFIG_FILE;
+    delete process.env.GATEWAY_CONFIG_FILE;
+
+    expect(() => loadConfig()).toThrow(/expected format/);
+  });
+
+  it('rejects entries with empty fields', () => {
+    process.env.GATEWAY_API_KEYS = 'test-key';
+    process.env.VERTEX_POOLS = 'proj-a::AIzaKey';
+    delete process.env.GATEWAY_POOL_CONFIG_FILE;
+    delete process.env.GATEWAY_CONFIG_FILE;
+
+    expect(() => loadConfig()).toThrow(/project, location, and apiKey are all required/);
   });
 });

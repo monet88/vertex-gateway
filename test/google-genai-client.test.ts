@@ -32,6 +32,7 @@ describe('Google GenAI client', () => {
         project: 'pool-project-a',
         location: 'global',
         credentialsFile: null,
+        apiKey: null,
         enabled: true,
         weight: 2,
         label: 'Project A',
@@ -47,5 +48,36 @@ describe('Google GenAI client', () => {
       apiVersion: 'v1beta',
       httpOptions: { timeout: 45678 },
     }));
+  });
+
+  it('passes the target apiKey to the SDK for express mode and skips service-account auth', async () => {
+    const { createGoogleGenAiClientForTarget } = await import('../src/lib/google-genai-client.js');
+
+    createGoogleGenAiClientForTarget(
+      testConfig(),
+      {
+        id: 'project-a',
+        project: 'pool-project-a',
+        location: 'global',
+        credentialsFile: null,
+        apiKey: 'AIzaexpress-mode-test-key',
+        enabled: true,
+        weight: 2,
+        label: 'Project A',
+        modelAllowlist: [],
+        modelExclusions: [],
+        source: 'pool',
+      },
+    );
+
+    const call = googleGenAiMock.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(call).toMatchObject({
+      vertexai: true,
+      apiKey: 'AIzaexpress-mode-test-key',
+    });
+    // SDK discards apiKey when project+location are present, so we must omit them.
+    expect(call).not.toHaveProperty('project');
+    expect(call).not.toHaveProperty('location');
+    expect(call).not.toHaveProperty('googleAuthOptions');
   });
 });

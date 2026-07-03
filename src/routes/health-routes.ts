@@ -48,6 +48,8 @@ export const readyResponse = (config: GatewayConfig, runtimeSnapshot?: GenAiRunt
     streamIdleTimeoutMs: config.streamIdleTimeoutMs,
     streamPerKeyLimit: config.streamPerKeyLimit,
     streamQueueLimit: config.streamQueueLimit,
+    upstreamRetries: config.upstreamRetries,
+    upstreamRetryDelayMs: config.upstreamRetryDelayMs,
   },
   routes: {
     wildcardCors: config.allowWildcardCors,
