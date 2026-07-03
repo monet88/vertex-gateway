@@ -72,6 +72,9 @@ describe('retryWithJitter', () => {
 
   it('throws AbortError when signal aborts during delay', async () => {
     vi.useFakeTimers();
+    // Pin jitter so the backoff delay is guaranteed > 0 and the retry loop
+    // actually enters the delay phase (full jitter can otherwise return 0).
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const controller = new AbortController();
     let calls = 0;
     const task = vi.fn(async () => {
@@ -85,10 +88,13 @@ describe('retryWithJitter', () => {
     controller.abort();
     await expect(promise).rejects.toThrow('Aborted');
     expect(calls).toBe(1);
+    randomSpy.mockRestore();
   });
 
   it('clears timeout when signal aborts during delay', async () => {
     vi.useFakeTimers();
+    // Pin jitter so the backoff delay is guaranteed > 0 (see note above).
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
     const controller = new AbortController();
     const task = vi.fn(async () => { throw new Error('503'); });
@@ -98,6 +104,7 @@ describe('retryWithJitter', () => {
     await expect(promise).rejects.toThrow('Aborted');
     expect(clearSpy).toHaveBeenCalled();
     clearSpy.mockRestore();
+    randomSpy.mockRestore();
   });
 
   it('rejects immediately without registering setTimeout when signal is aborted right before entering delay', async () => {

@@ -15,6 +15,16 @@ import { retryWithJitter } from './retry.js';
 
 const RECENT_REQUEST_LIMIT = 10;
 
+// Client-side cancellation (request socket closed, AbortSignal fired) is not an
+// upstream fault, so a cancelled request must never penalize a healthy target
+// with cooldown/failover. retryWithJitter surfaces aborts as a DOMException
+// named 'AbortError'; the SDK may also raise its own AbortError.
+const isAbortError = (error: unknown, signal?: AbortSignal): boolean => {
+  if (signal?.aborted) return true;
+  if (error instanceof DOMException && error.name === 'AbortError') return true;
+  return Boolean(error && typeof error === 'object' && (error as { name?: unknown }).name === 'AbortError');
+};
+
 export interface GenAiTargetHealthEvent {
   at: string;
   ok: boolean;
@@ -472,6 +482,8 @@ export class GenAiPoolClient implements GenAiClient {
               result.firstStep,
               () => markSuccess(target, routeFamily),
               (error) => {
+                // Client cancelled mid-stream — do not penalize a healthy target.
+                if (isAbortError(error, metadata.signal)) return;
                 const classification = classifyUpstreamError(error);
                 markFailure(target, routeFamily, classification.code, cooldownMs, classification.shouldCooldown);
               },
@@ -486,6 +498,11 @@ export class GenAiPoolClient implements GenAiClient {
             const activeIterator = iterator as AsyncIterator<Record<string, unknown>> | null;
             if (activeIterator && typeof activeIterator.return === 'function') {
               try { await activeIterator.return(); } catch { /* ignore cleanup */ }
+            }
+            // Client cancelled — do not penalize a healthy target.
+            // Outer catch decrements refCount, so just rethrow here.
+            if (isAbortError(error, metadata.signal)) {
+              throw error;
             }
             const classification = classifyUpstreamError(error);
             markFailure(target, routeFamily, classification.code, cooldownMs, classification.shouldCooldown);
@@ -623,6 +640,8 @@ export class GenAiPoolClient implements GenAiClient {
           target.health.retries += retryCount;
           target.health.lastRetryAt = new Date().toISOString();
         }
+        // Client cancelled — do not penalize a healthy target.
+        if (isAbortError(error, signal)) throw error;
         const classification = classifyUpstreamError(error);
         markFailure(target, routeFamily, classification.code, cooldownMs, classification.shouldCooldown);
         lastError = withClassifiedGatewayError(error);

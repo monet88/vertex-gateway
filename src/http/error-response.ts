@@ -94,12 +94,14 @@ export const sendError = (
 };
 
 export const safeErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === 'object') {
-    const message = (error as Record<string, unknown>).message;
-    if (typeof message === 'string') return message;
-  }
+  // A hostile error may expose `message` (or `toString`) as a throwing getter.
+  // Wrap the whole extraction so classification never throws while handling one.
   try {
+    if (error instanceof Error) return error.message;
+    if (error && typeof error === 'object') {
+      const message = (error as Record<string, unknown>).message;
+      if (typeof message === 'string') return message;
+    }
     return String(error);
   } catch {
     return '';
