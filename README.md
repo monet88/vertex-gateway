@@ -21,6 +21,15 @@ docker compose up -d --build     # http://localhost:19089
 curl -s http://localhost:19089/readyz
 ```
 
+Compose mounts a boot-safe [`pool-config.example.json`](pool-config.example.json)
+(single mode, no pools) by default, so a fresh checkout starts without extra
+setup. To use your own overlay, copy it and point `GATEWAY_POOL_CONFIG` at it in
+`.env` (the file is gitignored):
+
+```env
+GATEWAY_POOL_CONFIG=./pool-config.local.json
+```
+
 ### Multi-project (express mode)
 
 Add to `.env` — no JSON config needed:
@@ -83,7 +92,9 @@ r = client.chat.completions.create(
 
 ## Pool Mode
 
-`pool-config.local.json` defines multiple Vertex targets with weighted
+Point `GATEWAY_POOL_CONFIG` at your own overlay JSON (default is the boot-safe
+[`pool-config.example.json`](pool-config.example.json), which runs single mode
+with no pools). The overlay defines multiple Vertex targets with weighted
 round-robin (default) or round-robin selection. Each target uses either a
 service account (`credentialsFile`) or API key (`apiKey`). Failover with 60s
 cooldown; streaming fails over only before first chunk.

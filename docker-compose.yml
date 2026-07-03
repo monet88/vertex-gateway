@@ -15,7 +15,10 @@ services:
       - "${GATEWAY_HOST_PORT:-19089}:8080"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
-      - ./pool-config.local.json:/app/pool-config.local.json:ro
+      # Pool overlay. Defaults to the committed boot-safe example (single mode);
+      # override with your own file via GATEWAY_POOL_CONFIG in .env, e.g.
+      # GATEWAY_POOL_CONFIG=pool-config.local.json
+      - "${GATEWAY_POOL_CONFIG:-./pool-config.example.json}:/app/pool-config.local.json:ro"
       - "${VERTEX_ACCOUNTS_DIR:-./accounts}:/run/vertex-accounts:ro"
       - ./gateway-data/auths:/data/auths
     healthcheck:

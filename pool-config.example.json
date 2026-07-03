@@ -1,0 +1,18 @@
+{
+  "vertexPoolSelection": "weighted-round-robin",
+  "enableAdminRoutes": false,
+  "adminAllowMutations": false,
+  "adminStoreMode": "static-config",
+  "modelCatalog": {
+    "gemini": {
+      "aliases": {
+        "gemini-3.1-pro": "gemini-3.1-pro-preview",
+        "gemini-3-flash": "gemini-3-flash-preview",
+        "gemini-3.1-flash-image": "gemini-3.1-flash-image-preview"
+      },
+      "allowlist": [],
+      "disabled": []
+    }
+  },
+  "vertexPools": []
+}
