@@ -123,6 +123,7 @@ describe('retryWithJitter', () => {
     const promise = retryWithJitter(task, 3, () => true, 1000, controller.signal);
     await expect(promise).rejects.toThrow('Aborted');
     expect(calls).toBe(1);
+    expect(setTimeoutSpy).not.toHaveBeenCalled();
     setTimeoutSpy.mockRestore();
   });
 });

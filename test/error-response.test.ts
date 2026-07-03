@@ -193,6 +193,17 @@ describe('formatOpenAiErrorBody mapping', () => {
     });
   });
 
+  it('maps RATE_LIMITED to rate_limit_error/rate_limit_exceeded', () => {
+    const err = new GatewayError(429, 'RATE_LIMITED', 'Too many active streams');
+    expect(formatOpenAiErrorBody(err)).toEqual({
+      error: {
+        message: 'Too many active streams',
+        type: 'rate_limit_error',
+        code: 'rate_limit_exceeded',
+      },
+    });
+  });
+
   it('maps AUTH_INVALID and CORS_DENIED to invalid_request_error/invalid_api_key', () => {
     const err1 = new GatewayError(401, 'AUTH_INVALID', 'Auth failed');
     expect(formatOpenAiErrorBody(err1)).toEqual({

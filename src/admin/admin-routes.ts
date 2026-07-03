@@ -12,15 +12,31 @@ import {
   createCredentialStore,
   importServiceAccountCredential,
   type AdminCredentialStoreSnapshot,
+  type AdminVertexCredentialRecord,
 } from './credential-store.js';
+import type { GenAiTargetHealth } from '../lib/genai-pool.js';
 import { getProviderModelCatalog } from './model-store.js';
+
+// Response-only shape: the raw express-mode `apiKey` is stripped and replaced
+// with a boolean presence flag. Runtime health is attached for the admin UI.
+type SanitizedCredentialRecord = Omit<AdminVertexCredentialRecord, 'apiKey'> & {
+  hasApiKey: boolean;
+  health?: GenAiTargetHealth;
+};
+
+interface SanitizedCredentialSnapshot extends Omit<AdminCredentialStoreSnapshot, 'vertexPools'> {
+  vertexPools: SanitizedCredentialRecord[];
+}
 
 const parseJsonBody = async (
   req: IncomingMessage,
   maxBytes: number,
 ): Promise<Record<string, unknown>> => readJsonBody<Record<string, unknown>>(req, maxBytes);
 
-const findCredentialOrThrow = (snapshot: AdminCredentialStoreSnapshot, id: string) => {
+const findCredentialOrThrow = <T extends { id: string }>(
+  snapshot: { vertexPools: T[] },
+  id: string,
+): T => {
   const entry = snapshot.vertexPools.find((item) => item.id === id);
   if (!entry) {
     throw new GatewayError(404, 'NOT_FOUND', 'Credential not found.');
@@ -28,20 +44,28 @@ const findCredentialOrThrow = (snapshot: AdminCredentialStoreSnapshot, id: strin
   return entry;
 };
 
+// Never expose the raw express-mode API key in admin responses. Mirror how
+// service-account private keys are withheld (only client_email surfaces); expose
+// a boolean presence flag so the UI can still show that express mode is active.
+const redactApiKey = <T extends { apiKey?: string | null }>(entry: T): Omit<T, 'apiKey'> & { hasApiKey: boolean } => {
+  const { apiKey: _apiKey, ...rest } = entry;
+  return { ...rest, hasApiKey: Boolean(_apiKey) };
+};
+
 const withRuntimeHealth = (
   snapshot: AdminCredentialStoreSnapshot,
   runtime: GenAiRuntimeLike,
-): AdminCredentialStoreSnapshot => {
+): SanitizedCredentialSnapshot => {
   const healthById = new Map(
     runtime.getSnapshot().active.targets.map((target) => [target.id, target.health]),
   );
   return {
     ...snapshot,
-    vertexPools: snapshot.vertexPools.map((entry) => ({
+    vertexPools: snapshot.vertexPools.map((entry) => redactApiKey({
       ...entry,
       ...(healthById.get(entry.id) ? { health: healthById.get(entry.id) } : {}),
     })),
-  } as AdminCredentialStoreSnapshot;
+  };
 };
 
 const buildHealthResponse = (runtime: GenAiRuntimeLike, config: GatewayConfig) => ({
