@@ -68,7 +68,7 @@ describe('openai responses routes', () => {
     expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({
       model: 'gemini-3.5-flash',
       contents: [{ role: 'user', parts: [{ text: 'Reply with exactly ok' }] }],
-    }), expect.objectContaining({ routeFamily: 'openai-responses' }));
+    }), expect.objectContaining({ routeFamily: 'openai-responses', signal: expect.any(AbortSignal) }));
   });
 
   it('maps message-array input, instructions, and custom function tool choice into Gemini config', async () => {
@@ -142,7 +142,7 @@ describe('openai responses routes', () => {
           },
         },
       },
-    }), expect.objectContaining({ routeFamily: 'openai-responses' }));
+    }), expect.objectContaining({ routeFamily: 'openai-responses', signal: expect.any(AbortSignal) }));
   });
 
   it('rejects unsupported built-in tools before calling Gemini', async () => {
@@ -347,6 +347,7 @@ describe('openai responses routes', () => {
       contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
     }), expect.objectContaining({
       routeFamily: 'openai-responses',
+      signal: expect.any(AbortSignal),
       streamGuard: {
         idleTimeoutMs: 250,
         maxDurationMs: 10000,

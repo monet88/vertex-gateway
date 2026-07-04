@@ -72,7 +72,7 @@ export class ImageWorkloads {
     this.semaphore = new Semaphore(config.upstreamConcurrency);
   }
 
-  async generate(body: Record<string, unknown>, requestId?: string): Promise<{ images: ImageDto[] }> {
+  async generate(body: Record<string, unknown>, requestId?: string, signal?: AbortSignal): Promise<{ images: ImageDto[] }> {
     const prompt = assertString(body, 'prompt');
     const model = typeof body.model === 'string' ? body.model : defaultGenerateModel;
     const aspectRatio = typeof body.aspectRatio === 'string' && body.aspectRatio !== 'Default' ? body.aspectRatio : '1:1';
@@ -82,14 +82,14 @@ export class ImageWorkloads {
         model,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio } },
-      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}) }));
+      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}), ...(signal ? { signal } : {}) }));
       return normalizeInlineImages(response, { model, requestedIndex: index });
     }));
     const images = results.flat();
     return { images: images.map((image, index) => ({ ...image, index })) };
   }
 
-  async edit(body: Record<string, unknown>, requestId?: string): Promise<{ images: ImageDto[] }> {
+  async edit(body: Record<string, unknown>, requestId?: string, signal?: AbortSignal): Promise<{ images: ImageDto[] }> {
     const prompt = assertString(body, 'prompt');
     const images = validateImages(body.images, this.config);
     const model = typeof body.model === 'string' ? body.model : defaultImageModel;
@@ -104,14 +104,14 @@ export class ImageWorkloads {
           responseModalities: ['IMAGE'],
           ...(Object.keys(imageConfig).length > 0 && { imageConfig }),
         },
-      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}) }));
+      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}), ...(signal ? { signal } : {}) }));
       return normalizeInlineImages(response, { model, requestedIndex: index });
     }));
     const outputImages = results.flat();
     return { images: outputImages.map((image, index) => ({ ...image, index })) };
   }
 
-  async upscale(body: Record<string, unknown>, requestId?: string): Promise<{ images: ImageDto[] }> {
+  async upscale(body: Record<string, unknown>, requestId?: string, signal?: AbortSignal): Promise<{ images: ImageDto[] }> {
     const image = validateImages([body.image], this.config);
     const quality = typeof body.quality === 'string' ? body.quality : '2K';
     const model = typeof body.model === 'string' ? body.model : defaultImageModel;
@@ -119,28 +119,28 @@ export class ImageWorkloads {
       model,
       contents: [{ role: 'user', parts: [...buildImageParts(image), { text: `Upscale this image to ${quality}. Preserve the original subject and composition.` }] }],
       config: { responseModalities: ['IMAGE'], imageConfig: { imageSize: quality } },
-      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}) }));
+      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}), ...(signal ? { signal } : {}) }));
     return { images: normalizeInlineImages(response, { model, quality }) };
   }
 
-  async describe(body: Record<string, unknown>, requestId?: string): Promise<{ text: string }> {
+  async describe(body: Record<string, unknown>, requestId?: string, signal?: AbortSignal): Promise<{ text: string }> {
     const images = validateImages([body.image], this.config);
     const prompt = typeof body.prompt === 'string' ? body.prompt : 'Describe this image concisely.';
     const model = typeof body.model === 'string' ? body.model : 'gemini-2.5-flash';
     const response = await this.safeGenerate(() => this.ai.models.generateContent({
       model,
       contents: [{ role: 'user', parts: [...buildImageParts(images), { text: prompt }] }],
-      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}) }));
+      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}), ...(signal ? { signal } : {}) }));
     return { text: extractText(response) };
   }
 
-  async validateSession(body: Record<string, unknown>, requestId?: string): Promise<{ ok: true; model?: string; text?: string }> {
+  async validateSession(body: Record<string, unknown>, requestId?: string, signal?: AbortSignal): Promise<{ ok: true; model?: string; text?: string }> {
     const model = typeof body.model === 'string' ? body.model : undefined;
     if (!model) return { ok: true };
     const response = await this.safeGenerate(() => this.ai.models.generateContent({
       model,
       contents: [{ role: 'user', parts: [{ text: typeof body.prompt === 'string' ? body.prompt : 'Reply with ok.' }] }],
-      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}) }));
+      }, { routeFamily: 'images', ...(requestId ? { requestId } : {}), ...(signal ? { signal } : {}) }));
     return { ok: true, model, text: extractText(response) };
   }
 

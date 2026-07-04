@@ -199,6 +199,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
             workloads,
             streamConfig,
             requestId: ctx.id,
+            abortSignal: streamAbortController.signal,
             maxJsonBytes: config.maxJsonBytes,
             expectsMultipartOpenAiEdit,
             resolveImageEditModel: (value) => openAiModel(value) || geminiModel(value),

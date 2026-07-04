@@ -77,6 +77,17 @@ const readResponseMessage = async (response: Response): Promise<string> => {
   return text;
 };
 
+const createUpstreamGatewayError = (
+  status: number,
+  upstreamMessage: string,
+): GatewayError => {
+  const mapped = withClassifiedGatewayError({ status, message: upstreamMessage });
+  if (mapped.status === status && mapped.message === upstreamMessage) {
+    return mapped;
+  }
+  return new GatewayError(mapped.status, mapped.code, upstreamMessage, mapped.retryable);
+};
+
 const createAbortSignal = (
   timeoutMs: number,
   upstreamSignal?: AbortSignal,
@@ -111,10 +122,7 @@ const fetchJson = async (
     });
 
     if (!response.ok) {
-      throw withClassifiedGatewayError({
-        status: response.status,
-        message: await readResponseMessage(response),
-      });
+      throw createUpstreamGatewayError(response.status, await readResponseMessage(response));
     }
 
     return await response.json() as Record<string, unknown>;
@@ -139,6 +147,7 @@ const createSseIterator = async function* (
   const decoder = new TextDecoder();
   let buffer = '';
   let dataLines: string[] = [];
+  let completed = false;
 
   const flushEvent = (): Record<string, unknown> | null => {
     if (dataLines.length === 0) {
@@ -194,10 +203,18 @@ const createSseIterator = async function* (
         if (event) {
           yield event;
         }
+        completed = true;
         return;
       }
     }
   } finally {
+    if (!completed) {
+      try {
+        await reader.cancel();
+      } catch {
+        // Ignore cleanup failures during early iterator termination.
+      }
+    }
     reader.releaseLock();
   }
 };
@@ -218,10 +235,7 @@ const fetchStream = async (
     });
 
     if (!response.ok) {
-      throw withClassifiedGatewayError({
-        status: response.status,
-        message: await readResponseMessage(response),
-      });
+      throw createUpstreamGatewayError(response.status, await readResponseMessage(response));
     }
 
     const iterator = createSseIterator(response);

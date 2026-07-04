@@ -36,7 +36,7 @@ describe('custom image routes', () => {
     expect(body.images[0]).toMatchObject({ dataUrl: 'data:image/png;base64,abc', mimeType: 'image/png' });
     expect(generateContent).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'gemini-3.1-flash-image-preview' }),
-      expect.objectContaining({ routeFamily: 'images' }),
+      expect.objectContaining({ routeFamily: 'images', signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -159,7 +159,7 @@ describe('custom image routes', () => {
     expect(body.images[0]).toMatchObject({ dataUrl: 'data:image/png;base64,abc', mimeType: 'image/png' });
     expect(generateContent).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'gemini-3.1-flash-image-preview' }),
-      expect.objectContaining({ routeFamily: 'images' }),
+      expect.objectContaining({ routeFamily: 'images', signal: expect.any(AbortSignal) }),
     );
   });
 });

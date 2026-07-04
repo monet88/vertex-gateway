@@ -38,9 +38,11 @@ const buildGenerateRequest = (
 const compatibilityMetadata = (
   route: ClassifiedRoute,
   requestId?: string,
+  signal?: AbortSignal,
 ): GenAiRequestMetadata => ({
   routeFamily: route.family === 'gemini' ? 'gemini' : 'vertex',
   ...(requestId ? { requestId } : {}),
+  ...(signal ? { signal } : {}),
 });
 
 const buildPredictRequest = (
@@ -64,17 +66,18 @@ export const runCompatibilityRoute = async (
   body: Record<string, unknown>,
   ai: GenAiClient,
   requestId?: string,
+  signal?: AbortSignal,
 ): Promise<Record<string, unknown>> => {
   if (route.operation === 'models') return { models: [] };
   if (route.operation === 'predict') {
     return ai.models.generateContent(
       buildPredictRequest(route, body),
-      { routeFamily: 'vertex', ...(requestId ? { requestId } : {}) },
+      { routeFamily: 'vertex', ...(requestId ? { requestId } : {}), ...(signal ? { signal } : {}) },
     );
   }
   return ai.models.generateContent(
     buildGenerateRequest(route, body),
-    compatibilityMetadata(route, requestId),
+    compatibilityMetadata(route, requestId, signal),
   );
 };
 
@@ -84,6 +87,7 @@ export const runCompatibilityStreamRoute = async (
   ai: GenAiClient,
   requestId?: string,
   streamConfig?: { idleTimeoutMs: number; maxDurationMs: number },
+  signal?: AbortSignal,
 ): Promise<AsyncIterable<Record<string, unknown>>> => {
   if (!ai.models.generateContentStream) {
     throw new GatewayError(501, 'NOT_IMPLEMENTED', 'Streaming is not implemented by the configured GenAI client.');
@@ -91,7 +95,7 @@ export const runCompatibilityStreamRoute = async (
   return ai.models.generateContentStream(
     buildGenerateRequest(route, body),
     {
-      ...compatibilityMetadata(route, requestId),
+      ...compatibilityMetadata(route, requestId, signal),
       ...(streamConfig ? { streamGuard: streamConfig } : {}),
     },
   );

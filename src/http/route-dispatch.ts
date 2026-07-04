@@ -29,6 +29,7 @@ export interface RouteContext {
   workloads: ImageWorkloads;
   streamConfig: { idleTimeoutMs: number; maxDurationMs: number };
   requestId: string;
+  abortSignal?: AbortSignal;
   maxJsonBytes: number;
   expectsMultipartOpenAiEdit: boolean;
   resolveImageEditModel: (value: unknown) => string | undefined;
@@ -46,7 +47,7 @@ const runCompatibilityFamily = (
   if (ctx.route.stream) {
     await sendSseStream(
       ctx.res,
-      await runCompatibilityStreamRoute(ctx.route, ctx.body, ctx.ai, ctx.requestId, ctx.streamConfig),
+      await runCompatibilityStreamRoute(ctx.route, ctx.body, ctx.ai, ctx.requestId, ctx.streamConfig, ctx.abortSignal),
       { includeDone: false, req: ctx.req, ...ctx.streamConfig, errorFormat: errorFormatForFamily(ctx.route.family) },
     );
     return;
@@ -55,7 +56,7 @@ const runCompatibilityFamily = (
 };
 
 const runCompatibilitySync = (ctx: RouteContext) =>
-  runCompatibilityRoute(ctx.route, ctx.body, ctx.ai, ctx.requestId);
+  runCompatibilityRoute(ctx.route, ctx.body, ctx.ai, ctx.requestId, ctx.abortSignal);
 
 const runGeminiFamily = runCompatibilityFamily(runCompatibilitySync);
 
@@ -76,7 +77,7 @@ const runOpenAiFamily = async (ctx: RouteContext): Promise<void> => {
     resolveImageEditModel,
   } = ctx;
   if (route.operation === 'openaiImageGenerations') {
-    sendJson(res, 200, await runOpenAiImageGenerationRoute(body, workloads, requestId));
+    sendJson(res, 200, await runOpenAiImageGenerationRoute(body, workloads, requestId, ctx.abortSignal));
     return;
   }
   if (route.operation === 'openaiImageEdits') {
@@ -87,29 +88,30 @@ const runOpenAiFamily = async (ctx: RouteContext): Promise<void> => {
       maxJsonBytes,
       requestId,
       resolveImageEditModel,
+      ctx.abortSignal,
     ));
     return;
   }
   if (route.operation === 'chatCompletions' && body.stream === true) {
-    await runOpenAiCompatibleStreamRoute(req, res, route, body, ai, streamConfig, requestId);
+    await runOpenAiCompatibleStreamRoute(req, res, route, body, ai, streamConfig, requestId, ctx.abortSignal);
     return;
   }
   if (route.operation === 'responses' && body.stream === true) {
-    await runOpenAiResponsesStreamRoute(req, res, route, body, ai, streamConfig, requestId);
+    await runOpenAiResponsesStreamRoute(req, res, route, body, ai, streamConfig, requestId, ctx.abortSignal);
     return;
   }
   if (route.operation === 'responses') {
-    sendJson(res, 200, await runOpenAiResponsesRoute(route, body, ai, requestId));
+    sendJson(res, 200, await runOpenAiResponsesRoute(route, body, ai, requestId, ctx.abortSignal));
     return;
   }
-  sendJson(res, 200, await runOpenAiCompatibleRoute(route, body, ai, requestId));
+  sendJson(res, 200, await runOpenAiCompatibleRoute(route, body, ai, requestId, ctx.abortSignal));
 };
 
 const runCustomFamily = async (ctx: RouteContext): Promise<void> => {
   sendJson(
     ctx.res,
     200,
-    await runCustomImageRoute(ctx.route.operation, ctx.body, ctx.workloads, ctx.requestId),
+    await runCustomImageRoute(ctx.route.operation, ctx.body, ctx.workloads, ctx.requestId, ctx.abortSignal),
   );
 };
 

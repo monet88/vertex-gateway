@@ -59,7 +59,7 @@ describe('streaming compatibility routes', () => {
           model: 'gemini-2.5-flash',
           contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
         }),
-        expect.objectContaining({ routeFamily: 'gemini' }),
+        expect.objectContaining({ routeFamily: 'gemini', signal: expect.any(AbortSignal) }),
       );
       expect(generateContent).not.toHaveBeenCalled();
     } finally {
@@ -92,7 +92,7 @@ describe('streaming compatibility routes', () => {
           model: 'gemini-2.5-flash',
           contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
         }),
-        expect.objectContaining({ routeFamily: 'vertex' }),
+        expect.objectContaining({ routeFamily: 'vertex', signal: expect.any(AbortSignal) }),
       );
       expect(generateContent).not.toHaveBeenCalled();
     } finally {
