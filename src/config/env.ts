@@ -609,7 +609,7 @@ const loadFileConfig = (): GatewayFileConfig => {
   const config: Record<string, unknown> = {};
   let currentListKey: string | null = null;
 
-  for (const rawLine of source.split(/\r?\n/)) {
+  for (const [lineIndex, rawLine] of source.split(/\r?\n/).entries()) {
     const line = stripYamlComment(rawLine);
     if (!line.trim()) continue;
 
@@ -627,7 +627,7 @@ const loadFileConfig = (): GatewayFileConfig => {
     const entry = line.match(/^([A-Za-z0-9]+):\s*(.*)$/);
     if (!entry) {
       throw new Error(
-        `Invalid ${filePath}: unsupported line "${rawLine.trim()}"`,
+        `Invalid ${filePath}: unsupported syntax at line ${lineIndex + 1}.`,
       );
     }
 
@@ -668,7 +668,7 @@ const parseVertexPoolsEnv = (): VertexPoolConfig[] => {
       const secondColon = entry.indexOf(":", firstColon + 1);
       if (firstColon === -1 || secondColon === -1) {
         throw new Error(
-          `Invalid VERTEX_POOLS entry #${index + 1} "${entry}": expected format "project:location:apiKey".`,
+          `Invalid VERTEX_POOLS entry #${index + 1}: expected format "project:location:apiKey".`,
         );
       }
       const project = entry.slice(0, firstColon).trim();

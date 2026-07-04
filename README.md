@@ -23,12 +23,17 @@ curl -s http://localhost:19089/readyz
 
 Compose mounts a boot-safe [`pool-config.example.json`](pool-config.example.json)
 (single mode, no pools) by default, so a fresh checkout starts without extra
-setup. To use your own overlay, copy it and point `GATEWAY_POOL_CONFIG` at it in
-`.env` (the file is gitignored):
+setup. To use your own overlay with Docker, copy it and point the Compose
+host-side mount variable `GATEWAY_POOL_CONFIG` at it in `.env` (the file is
+gitignored):
 
 ```env
 GATEWAY_POOL_CONFIG=./pool-config.local.json
 ```
+
+Inside the container, Compose maps that file to `/app/pool-config.local.json`
+and sets `GATEWAY_POOL_CONFIG_FILE` for the gateway process. For non-Docker
+local runs, set `GATEWAY_POOL_CONFIG_FILE=./pool-config.local.json` directly.
 
 ### Multi-project (full Vertex API-key mode by default)
 
@@ -55,7 +60,8 @@ API-key mode and auto-creates pool mode with round-robin. For advanced options
 - Service account JSON via `credentialsFile` or `GOOGLE_APPLICATION_CREDENTIALS`
 - Google Cloud API key via `apiKey` or `GOOGLE_GENAI_API_KEY`
   - defaults to full Vertex API-key mode when the target includes `project` and `location` (including `VERTEX_POOLS` entries)
-  - use `apiKeyMode: "express"` in a pool target to keep SDK API-key-only behavior
+  - single mode with only `GOOGLE_GENAI_API_KEY` and no project remains legacy SDK API-key-only express behavior
+  - use `apiKeyMode: "express"` in a pool target to keep SDK API-key-only behavior for that target
 - If both present, `apiKey` wins
 
 ## API Surfaces
@@ -97,9 +103,9 @@ r = client.chat.completions.create(
 
 ## Pool Mode
 
-Point `GATEWAY_POOL_CONFIG` at your own overlay JSON (default is the boot-safe
-[`pool-config.example.json`](pool-config.example.json), which runs single mode
-with no pools). The overlay defines multiple Vertex targets with weighted
+Docker users set `GATEWAY_POOL_CONFIG` in `.env` to choose which host overlay
+file Compose mounts. Non-Docker users set `GATEWAY_POOL_CONFIG_FILE` directly to
+the overlay JSON path. The overlay defines multiple Vertex targets with weighted
 round-robin (default) or round-robin selection. Each target uses either a
 service account (`credentialsFile`) or API key (`apiKey`). API-key targets
 default to full Vertex routing when they include `project` + `location`; set

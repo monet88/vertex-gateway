@@ -478,6 +478,44 @@ describe('gateway config file', () => {
 
     expect(() => loadConfig()).toThrow(/apiKeyMode.*full.*express/);
   });
+  it('rejects unsupported YAML syntax without echoing raw line contents', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const configPath = path.join(dir, 'config.yaml');
+    fs.writeFileSync(configPath, [
+      'gatewayKeys:',
+      '  - gateway-key',
+      'googleProject: fallback-project',
+      'GOOGLE_GENAI_API_KEY=AIza-secret-should-not-appear',
+      'googleCredentialsFile: null',
+      'googleLocation: global',
+    ].join('\n'));
+
+    process.env.GATEWAY_CONFIG_FILE = configPath;
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    expect(() => loadConfig()).toThrow(/unsupported syntax at line 4/);
+    expect(() => loadConfig()).not.toThrow(/AIza-secret-should-not-appear/);
+  });
+
+  it('rejects malformed VERTEX_POOLS entries without echoing raw entry contents', () => {
+    process.env.GATEWAY_API_KEYS = 'gateway-key';
+    process.env.VERTEX_POOLS = 'project-a:AIza-secret-should-not-appear';
+    delete process.env.GATEWAY_CONFIG_FILE;
+    delete process.env.GATEWAY_POOL_CONFIG_FILE;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    expect(() => loadConfig()).toThrow(/Invalid VERTEX_POOLS entry #1: expected format/);
+    expect(() => loadConfig()).not.toThrow(/AIza-secret-should-not-appear/);
+  });
 
 
   it('defaults VERTEX_POOLS entries to full api-key mode', () => {
