@@ -30,7 +30,7 @@ setup. To use your own overlay, copy it and point `GATEWAY_POOL_CONFIG` at it in
 GATEWAY_POOL_CONFIG=./pool-config.local.json
 ```
 
-### Multi-project (express mode)
+### Multi-project (full Vertex API-key mode by default)
 
 Add to `.env` — no JSON config needed:
 
@@ -38,9 +38,12 @@ Add to `.env` — no JSON config needed:
 VERTEX_POOLS=project-a:global:AIzaKey1,project-b:global:AIzaKey2,project-c:global:AIzaKey3
 ```
 
-Format: `project:location:apiKey` per entry. Auto-creates pool mode with
-round-robin. For advanced options (weights, model filtering, service accounts),
-use `pool-config.local.json` instead — see [Pool Mode](#pool-mode).
+Format: `project:location:apiKey` per entry. Because each entry includes
+`project` + `location`, `VERTEX_POOLS` defaults these targets to full Vertex
+API-key mode and auto-creates pool mode with round-robin. For advanced options
+(weights, model filtering, service accounts, or explicit `apiKeyMode:
+"express"` API-key-only targets), use `pool-config.local.json` instead — see
+[Pool Mode](#pool-mode).
 
 ## Authentication
 
@@ -50,7 +53,9 @@ use `pool-config.local.json` instead — see [Pool Mode](#pool-mode).
 
 **Upstream** (gateway → Google, server-side only):
 - Service account JSON via `credentialsFile` or `GOOGLE_APPLICATION_CREDENTIALS`
-- Google Cloud API key via `apiKey` or `GOOGLE_GENAI_API_KEY` (express mode)
+- Google Cloud API key via `apiKey` or `GOOGLE_GENAI_API_KEY`
+  - defaults to full Vertex API-key mode when the target includes `project` and `location` (including `VERTEX_POOLS` entries)
+  - use `apiKeyMode: "express"` in a pool target to keep SDK API-key-only behavior
 - If both present, `apiKey` wins
 
 ## API Surfaces
@@ -96,8 +101,11 @@ Point `GATEWAY_POOL_CONFIG` at your own overlay JSON (default is the boot-safe
 [`pool-config.example.json`](pool-config.example.json), which runs single mode
 with no pools). The overlay defines multiple Vertex targets with weighted
 round-robin (default) or round-robin selection. Each target uses either a
-service account (`credentialsFile`) or API key (`apiKey`). Failover with 60s
-cooldown; streaming fails over only before first chunk.
+service account (`credentialsFile`) or API key (`apiKey`). API-key targets
+default to full Vertex routing when they include `project` + `location`; set
+`apiKeyMode: "express"` on a pool entry to use the SDK API-key-only path
+instead. Failover with 60s cooldown; streaming fails over only before first
+chunk.
 
 `modelCatalog` provides per-provider aliases, allowlist, disabled list, and
 default model.
