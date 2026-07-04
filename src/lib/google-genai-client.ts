@@ -1,8 +1,21 @@
 import { GoogleGenAI } from '@google/genai';
+import type {
+  GenerateContentParameters,
+  GenerateContentResponse,
+} from '@google/genai';
 import type { GatewayConfig, ResolvedVertexTargetConfig } from '../config/env.js';
 import { loadServiceAccountCredential } from '../auth/google-auth.js';
 import type { GenAiRequestMetadata } from './genai-request-metadata.js';
 import { createVertexRestClient } from './vertex-rest-client.js';
+
+interface GoogleGenAiSdkClient {
+  models: {
+    generateContent: (request: GenerateContentParameters) => Promise<GenerateContentResponse>;
+    generateContentStream: (
+      request: GenerateContentParameters,
+    ) => Promise<AsyncIterable<GenerateContentResponse>>;
+  };
+}
 
 export interface GenAiClient {
   models: {
@@ -22,6 +35,45 @@ export type GenAiTargetClientFactory = (
   config: GatewayConfig,
   target: ResolvedVertexTargetConfig,
 ) => GenAiClient;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const addSdkAbortSignal = (
+  request: Record<string, unknown>,
+  metadata?: GenAiRequestMetadata,
+): Record<string, unknown> => {
+  if (!metadata?.signal) {
+    return request;
+  }
+
+  const nextConfig = isRecord(request.config)
+    ? { ...request.config, abortSignal: metadata.signal }
+    : { abortSignal: metadata.signal };
+
+  return {
+    ...request,
+    config: nextConfig,
+  };
+};
+
+const createSdkClientAdapter = (sdkClient: GoogleGenAI): GenAiClient => ({
+  models: {
+    generateContent: async (
+      request: Record<string, unknown>,
+      metadata?: GenAiRequestMetadata,
+    ): Promise<Record<string, unknown>> => sdkClient.models.generateContent(
+      addSdkAbortSignal(request, metadata) as unknown as GenerateContentParameters,
+    ) as unknown as Promise<Record<string, unknown>>,
+    generateContentStream: async (
+      request: Record<string, unknown>,
+      metadata?: GenAiRequestMetadata,
+    ): Promise<AsyncIterable<Record<string, unknown>>> =>
+      sdkClient.models.generateContentStream(
+        addSdkAbortSignal(request, metadata) as unknown as GenerateContentParameters,
+      ) as unknown as Promise<AsyncIterable<Record<string, unknown>>>,
+  },
+});
 
 export const createGoogleGenAiClientForTarget: GenAiTargetClientFactory = (config, target) => {
   const apiKey = target.apiKey ?? null;
@@ -59,7 +111,7 @@ export const createGoogleGenAiClientForTarget: GenAiTargetClientFactory = (confi
       };
     }
   }
-  return new GoogleGenAI(options) as unknown as GenAiClient;
+  return createSdkClientAdapter(new GoogleGenAI(options));
 };
 
 export const createGoogleGenAiClient: GenAiFactory = (config) =>
