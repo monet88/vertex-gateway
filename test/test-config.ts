@@ -37,6 +37,7 @@ export const testConfig = (overrides: Partial<GatewayConfig> = {}): GatewayConfi
     location: 'us-central1',
     credentialsFile: null,
     apiKey: null,
+    apiKeyMode: 'full',
     enabled: true,
     weight: 1,
     modelAllowlist: [],

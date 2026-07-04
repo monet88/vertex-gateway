@@ -311,6 +311,153 @@ describe('gateway config file', () => {
     });
   });
 
+  it('defaults api-key pool targets with project and location to full mode', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const configPath = path.join(dir, 'config.yaml');
+    const poolPath = path.join(dir, 'pool.json');
+
+    fs.writeFileSync(configPath, [
+      'gatewayKeys:',
+      '  - gateway-key',
+      'googleProject: fallback-project',
+      'googleCredentialsFile: null',
+      'googleLocation: global',
+    ].join('\n'));
+    fs.writeFileSync(poolPath, JSON.stringify({
+      vertexPools: [
+        {
+          id: 'project-a',
+          project: 'pool-project-a',
+          location: 'global',
+          apiKey: 'AIza-test-key',
+          enabled: true,
+          weight: 1,
+        },
+      ],
+    }));
+
+    process.env.GATEWAY_CONFIG_FILE = configPath;
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    const config = loadConfig();
+
+    expect(config.vertexPools[0]).toEqual(expect.objectContaining({
+      id: 'project-a',
+      apiKeyMode: 'full',
+    }));
+    expect(config.resolvedVertexTargets[0]).toEqual(expect.objectContaining({
+      id: 'project-a',
+      apiKeyMode: 'full',
+      source: 'pool',
+    }));
+  });
+
+  it('preserves explicit express mode for api-key pool targets', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const configPath = path.join(dir, 'config.yaml');
+    const poolPath = path.join(dir, 'pool.json');
+
+    fs.writeFileSync(configPath, [
+      'gatewayKeys:',
+      '  - gateway-key',
+      'googleProject: fallback-project',
+      'googleCredentialsFile: null',
+      'googleLocation: global',
+    ].join('\n'));
+    fs.writeFileSync(poolPath, JSON.stringify({
+      vertexPools: [
+        {
+          id: 'project-a',
+          project: 'pool-project-a',
+          location: 'global',
+          apiKey: 'AIza-test-key',
+          apiKeyMode: 'express',
+          enabled: true,
+          weight: 1,
+        },
+      ],
+    }));
+
+    process.env.GATEWAY_CONFIG_FILE = configPath;
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    const config = loadConfig();
+
+    expect(config.resolvedVertexTargets[0]).toEqual(expect.objectContaining({
+      id: 'project-a',
+      apiKeyMode: 'express',
+    }));
+  });
+
+  it('rejects invalid apiKeyMode values in pool targets', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const configPath = path.join(dir, 'config.yaml');
+    const poolPath = path.join(dir, 'pool.json');
+
+    fs.writeFileSync(configPath, [
+      'gatewayKeys:',
+      '  - gateway-key',
+      'googleProject: fallback-project',
+      'googleCredentialsFile: null',
+      'googleLocation: global',
+    ].join('\n'));
+    fs.writeFileSync(poolPath, JSON.stringify({
+      vertexPools: [
+        {
+          id: 'project-a',
+          project: 'pool-project-a',
+          location: 'global',
+          apiKey: 'AIza-test-key',
+          apiKeyMode: 'legacy',
+          enabled: true,
+          weight: 1,
+        },
+      ],
+    }));
+
+    process.env.GATEWAY_CONFIG_FILE = configPath;
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    expect(() => loadConfig()).toThrow(/apiKeyMode.*full.*express/);
+  });
+
+  it('defaults VERTEX_POOLS entries to full api-key mode', () => {
+    process.env.GATEWAY_API_KEYS = 'gateway-key';
+    process.env.VERTEX_POOLS = 'project-a:global:AIza-test-key';
+    delete process.env.GATEWAY_CONFIG_FILE;
+    delete process.env.GATEWAY_POOL_CONFIG_FILE;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    const config = loadConfig();
+
+    expect(config.vertexPools[0]).toEqual(expect.objectContaining({
+      id: 'env-project-a',
+      apiKeyMode: 'full',
+    }));
+  });
+
   it('keeps single-target fallback when no vertex pool overlay is configured', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
     const configPath = path.join(dir, 'config.yaml');
