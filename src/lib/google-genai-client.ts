@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import type { GatewayConfig, ResolvedVertexTargetConfig } from '../config/env.js';
 import { loadServiceAccountCredential } from '../auth/google-auth.js';
 import type { GenAiRequestMetadata } from './genai-request-metadata.js';
+import { createVertexRestClient } from './vertex-rest-client.js';
 
 export interface GenAiClient {
   models: {
@@ -24,13 +25,23 @@ export type GenAiTargetClientFactory = (
 
 export const createGoogleGenAiClientForTarget: GenAiTargetClientFactory = (config, target) => {
   const apiKey = target.apiKey ?? null;
+  if (apiKey && target.apiKeyMode === 'full') {
+    return createVertexRestClient({
+      apiKey,
+      project: target.project,
+      location: target.location,
+      apiVersion: config.googleApiVersion,
+      timeoutMs: config.upstreamTimeoutMs,
+    });
+  }
+
   const serviceAccount = apiKey ? null : loadServiceAccountCredential(target.credentialsFile);
   const options: Record<string, unknown> = {
     vertexai: true,
     apiVersion: config.googleApiVersion,
     httpOptions: { timeout: config.upstreamTimeoutMs },
   };
-  if (apiKey) {
+  if (apiKey && target.apiKeyMode === 'express') {
     // Express mode: API key auth, no service account.
     // SDK discards apiKey when project+location are both present,
     // so we intentionally omit them here.

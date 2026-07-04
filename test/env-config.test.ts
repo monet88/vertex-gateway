@@ -401,6 +401,46 @@ describe('gateway config file', () => {
     }));
   });
 
+  it('rejects express apiKeyMode when apiKey is missing even if credentialsFile is present', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const configPath = path.join(dir, 'config.yaml');
+    const poolPath = path.join(dir, 'pool.json');
+    const credentialsFile = writeCredentialFile(dir, 'vertex-a.json', 'pool-project-a');
+
+    fs.writeFileSync(configPath, [
+      'gatewayKeys:',
+      '  - gateway-key',
+      'googleProject: fallback-project',
+      'googleCredentialsFile: null',
+      'googleLocation: global',
+    ].join('\n'));
+    fs.writeFileSync(poolPath, JSON.stringify({
+      vertexPools: [
+        {
+          id: 'project-a',
+          project: 'pool-project-a',
+          location: 'global',
+          credentialsFile,
+          apiKey: null,
+          apiKeyMode: 'express',
+          enabled: true,
+          weight: 1,
+        },
+      ],
+    }));
+
+    process.env.GATEWAY_CONFIG_FILE = configPath;
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    expect(() => loadConfig()).toThrow(/express.*apiKey/i);
+  });
+
   it('rejects invalid apiKeyMode values in pool targets', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
     const configPath = path.join(dir, 'config.yaml');
@@ -438,6 +478,7 @@ describe('gateway config file', () => {
 
     expect(() => loadConfig()).toThrow(/apiKeyMode.*full.*express/);
   });
+
 
   it('defaults VERTEX_POOLS entries to full api-key mode', () => {
     process.env.GATEWAY_API_KEYS = 'gateway-key';

@@ -1031,6 +1031,14 @@ export const validateConfig = (config: GatewayConfig): void => {
         );
       }
       if (
+        entry.apiKeyMode === "express" &&
+        !entry.apiKey
+      ) {
+        throw new Error(
+          `Vertex pool ${entry.id} uses apiKeyMode "express" and must include apiKey.`,
+        );
+      }
+      if (
         entry.apiKey &&
         entry.apiKeyMode === "full" &&
         (!entry.project.trim() || !entry.location.trim())
