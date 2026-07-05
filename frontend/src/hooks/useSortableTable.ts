@@ -4,6 +4,26 @@ export type SortDirection = 'asc' | 'desc';
 
 export type AriaSort = 'ascending' | 'descending' | 'none';
 
+/**
+ * Compares two cell values in their natural order:
+ * - numbers are compared numerically (so 2 < 10),
+ * - Date values are compared chronologically,
+ * - booleans are compared with false < true,
+ * - everything else falls back to locale-aware string comparison.
+ * Null/undefined always sort to the end.
+ */
+function compareValues(a: unknown, b: unknown): number {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
+  if (typeof a === 'boolean' && typeof b === 'boolean') return Number(a) - Number(b);
+
+  return String(a).localeCompare(String(b));
+}
+
 export function useSortableTable<T>(
   rows: readonly T[],
   initialKey: keyof T,
@@ -28,9 +48,8 @@ export function useSortableTable<T>(
 
   const sortedRows = useMemo(() => {
     return [...rows].sort((a, b) => {
-      const valA = String(a[sortKey] ?? '');
-      const valB = String(b[sortKey] ?? '');
-      return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      const result = compareValues(a[sortKey], b[sortKey]);
+      return direction === 'asc' ? result : -result;
     });
   }, [rows, sortKey, direction]);
 
