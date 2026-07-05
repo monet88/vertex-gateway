@@ -92,3 +92,57 @@ export const vertexTargets: VertexTargetRow[] = [
     health: 'degraded',
   },
 ];
+
+export const kpiMetrics = [
+  {
+    id: 'kpi-requests',
+    label: 'Requests 24h',
+    value: '84.2k',
+    trendIcon: 'trending_up',
+    trendValue: '+12%',
+    colorScheme: 'primary' as const,
+  },
+  {
+    id: 'kpi-error',
+    label: 'Error rate',
+    value: '0.04%',
+    trendIcon: 'trending_flat',
+    trendValue: '0.00%',
+    colorScheme: 'error' as const,
+  },
+  {
+    id: 'kpi-keys',
+    label: 'Active Gateway Keys',
+    value: '12',
+    icon: 'key',
+    colorScheme: 'primary' as const,
+  },
+  {
+    id: 'kpi-targets',
+    label: 'Vertex Targets',
+    value: '4',
+    icon: 'dns',
+    colorScheme: 'secondary' as const,
+  },
+];
+
+export const securityNotices = [
+  {
+    id: 'notice-1',
+    message: 'Token admin tách biệt với gateway key',
+    type: 'info' as const,
+    icon: 'info',
+  },
+  {
+    id: 'notice-2',
+    message: 'Không dùng wildcard CORS trong production',
+    type: 'error' as const,
+    icon: 'error',
+  },
+  {
+    id: 'notice-3',
+    message: 'File-store mutations bị vô hiệu hóa trên Cloud Run',
+    type: 'warning' as const,
+    icon: 'lock',
+  },
+];
