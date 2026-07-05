@@ -23,14 +23,19 @@ curl -s http://localhost:19089/readyz
 
 Compose mounts a boot-safe [`pool-config.example.json`](pool-config.example.json)
 (single mode, no pools) by default, so a fresh checkout starts without extra
-setup. To use your own overlay, copy it and point `GATEWAY_POOL_CONFIG` at it in
-`.env` (the file is gitignored):
+setup. To use your own overlay with Docker, copy it and point the Compose
+host-side mount variable `GATEWAY_POOL_CONFIG` at it in `.env` (the file is
+gitignored):
 
 ```env
 GATEWAY_POOL_CONFIG=./pool-config.local.json
 ```
 
-### Multi-project (express mode)
+Inside the container, Compose maps that file to `/app/pool-config.local.json`
+and sets `GATEWAY_POOL_CONFIG_FILE` for the gateway process. For non-Docker
+local runs, set `GATEWAY_POOL_CONFIG_FILE=./pool-config.local.json` directly.
+
+### Multi-project (full Vertex API-key mode by default)
 
 Add to `.env` — no JSON config needed:
 
@@ -38,9 +43,12 @@ Add to `.env` — no JSON config needed:
 VERTEX_POOLS=project-a:global:AIzaKey1,project-b:global:AIzaKey2,project-c:global:AIzaKey3
 ```
 
-Format: `project:location:apiKey` per entry. Auto-creates pool mode with
-round-robin. For advanced options (weights, model filtering, service accounts),
-use `pool-config.local.json` instead — see [Pool Mode](#pool-mode).
+Format: `project:location:apiKey` per entry. Because each entry includes
+`project` + `location`, `VERTEX_POOLS` defaults these targets to full Vertex
+API-key mode and auto-creates pool mode with round-robin. For advanced options
+(weights, model filtering, service accounts, or explicit `apiKeyMode:
+"express"` API-key-only targets), use `pool-config.local.json` instead — see
+[Pool Mode](#pool-mode).
 
 ## Authentication
 
@@ -50,7 +58,10 @@ use `pool-config.local.json` instead — see [Pool Mode](#pool-mode).
 
 **Upstream** (gateway → Google, server-side only):
 - Service account JSON via `credentialsFile` or `GOOGLE_APPLICATION_CREDENTIALS`
-- Google Cloud API key via `apiKey` or `GOOGLE_GENAI_API_KEY` (express mode)
+- Google Cloud API key via `apiKey` or `GOOGLE_GENAI_API_KEY`
+  - defaults to full Vertex API-key mode when the target includes `project` and `location` (including `VERTEX_POOLS` entries)
+  - single mode with only `GOOGLE_GENAI_API_KEY` and no project remains legacy SDK API-key-only express behavior
+  - use `apiKeyMode: "express"` in a pool target to keep SDK API-key-only behavior for that target
 - If both present, `apiKey` wins
 
 ## API Surfaces
@@ -92,12 +103,15 @@ r = client.chat.completions.create(
 
 ## Pool Mode
 
-Point `GATEWAY_POOL_CONFIG` at your own overlay JSON (default is the boot-safe
-[`pool-config.example.json`](pool-config.example.json), which runs single mode
-with no pools). The overlay defines multiple Vertex targets with weighted
+Docker users set `GATEWAY_POOL_CONFIG` in `.env` to choose which host overlay
+file Compose mounts. Non-Docker users set `GATEWAY_POOL_CONFIG_FILE` directly to
+the overlay JSON path. The overlay defines multiple Vertex targets with weighted
 round-robin (default) or round-robin selection. Each target uses either a
-service account (`credentialsFile`) or API key (`apiKey`). Failover with 60s
-cooldown; streaming fails over only before first chunk.
+service account (`credentialsFile`) or API key (`apiKey`). API-key targets
+default to full Vertex routing when they include `project` + `location`; set
+`apiKeyMode: "express"` on a pool entry to use the SDK API-key-only path
+instead. Failover with 60s cooldown; streaming fails over only before first
+chunk.
 
 `modelCatalog` provides per-provider aliases, allowlist, disabled list, and
 default model.
@@ -108,8 +122,10 @@ Three layers (highest priority first): **env vars** → **pool overlay JSON**
 (`GATEWAY_POOL_CONFIG_FILE`) → **base YAML** (`GATEWAY_CONFIG_FILE`).
 
 See [.env.example](.env.example) for all variables. Key defaults: port `8080`,
-location `us-central1`, upstream timeout 45s, concurrency 4, stream limit
-2/key.
+location `us-central1`, unrestricted CORS when `GATEWAY_CORS_ORIGINS` /
+`corsOrigins` is omitted or empty, upstream timeout 45s, concurrency 4, stream
+limit 2/key. Set `GATEWAY_CORS_ORIGINS` to a comma-separated origin list only
+when browser access should be restricted to specific domains.
 
 ## Admin API
 

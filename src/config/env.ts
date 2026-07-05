@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { loadServiceAccountCredential } from "../auth/google-auth.js";
 
 export type VertexPoolSelection = "round-robin" | "weighted-round-robin";
+export type VertexApiKeyMode = "full" | "express";
 export type AdminStoreMode = "static-config" | "file-store";
 export type GatewayRuntimeMode = "single" | "pool";
 
@@ -12,6 +13,7 @@ export interface VertexPoolConfig {
   location: string;
   credentialsFile: string | null;
   apiKey: string | null;
+  apiKeyMode: VertexApiKeyMode;
   enabled: boolean;
   weight: number;
   modelAllowlist: string[];
@@ -136,6 +138,10 @@ type GatewayPoolOverlayConfig = Partial<{
   adminStoreMode: AdminStoreMode;
   adminFileStoreDir: string | null;
 }>;
+
+type VertexPoolConfigInput = Omit<VertexPoolConfig, "apiKeyMode"> & {
+  apiKeyMode?: unknown;
+};
 
 const parseQuotedScalar = (trimmed: string): string => {
   if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
@@ -340,6 +346,60 @@ const validateProviderModelCatalog = (
   };
 };
 
+const normalizeApiKeyMode = (
+  value: unknown,
+  apiKey: string | null,
+  project: string,
+  location: string,
+  targetId: string,
+): VertexApiKeyMode => {
+  if (value === undefined || value === null || value === "") {
+    if (!apiKey) {
+      return "full";
+    }
+    return project.trim() && location.trim() ? "full" : "express";
+  }
+  if (value === "full" || value === "express") {
+    return value;
+  }
+  throw new Error(
+    `Vertex pool ${targetId} apiKeyMode must be "full" or "express".`,
+  );
+};
+
+const normalizeVertexPoolConfig = (
+  entry: VertexPoolConfigInput,
+): VertexPoolConfig => {
+  const apiKey = entry.apiKey?.trim() ? entry.apiKey.trim() : null;
+  const credentialsFile = entry.credentialsFile?.trim()
+    ? entry.credentialsFile.trim()
+    : null;
+  const project = entry.project?.trim() ?? "";
+  const location = entry.location?.trim() ?? "";
+  const targetId = entry.id?.trim() || "(unknown)";
+
+  return {
+    ...entry,
+    id: targetId === "(unknown)" ? "" : targetId,
+    ...(entry.label?.trim() ? { label: entry.label.trim() } : {}),
+    project,
+    location,
+    credentialsFile,
+    apiKey,
+    apiKeyMode: normalizeApiKeyMode(
+      entry.apiKeyMode,
+      apiKey,
+      project,
+      location,
+      targetId,
+    ),
+    enabled: Boolean(entry.enabled),
+    weight: Number(entry.weight),
+    modelAllowlist: [...(entry.modelAllowlist ?? [])],
+    modelExclusions: [...(entry.modelExclusions ?? [])],
+  };
+};
+
 const validateVertexPoolEntry = (
   entry: unknown,
   index: number,
@@ -352,6 +412,7 @@ const validateVertexPoolEntry = (
   }
   assertNullableString(config, "credentialsFile", `${filePath}:${prefix}`);
   assertNullableString(config, "apiKey", `${filePath}:${prefix}`);
+  assertString(config, "apiKeyMode", `${filePath}:${prefix}`);
   assertBoolean(config, "enabled", `${filePath}:${prefix}`);
   assertPositiveNumber(config, "weight", `${filePath}:${prefix}`);
   if (config.modelAllowlist !== undefined) {
@@ -368,7 +429,7 @@ const validateVertexPoolEntry = (
     throw new Error(`Invalid ${filePath}:${prefix}: project is required.`);
   if (!location)
     throw new Error(`Invalid ${filePath}:${prefix}: location is required.`);
-  return {
+  return normalizeVertexPoolConfig({
     id,
     ...(typeof config.label === "string" && config.label.trim()
       ? { label: config.label.trim() }
@@ -383,11 +444,12 @@ const validateVertexPoolEntry = (
       typeof config.apiKey === "string" && config.apiKey.trim()
         ? config.apiKey.trim()
         : null,
+    apiKeyMode: config.apiKeyMode,
     enabled: config.enabled !== undefined ? Boolean(config.enabled) : true,
     weight: Number(config.weight ?? 1),
     modelAllowlist: (config.modelAllowlist as string[] | undefined) ?? [],
     modelExclusions: (config.modelExclusions as string[] | undefined) ?? [],
-  };
+  });
 };
 
 const validateFileConfig = (
@@ -547,7 +609,7 @@ const loadFileConfig = (): GatewayFileConfig => {
   const config: Record<string, unknown> = {};
   let currentListKey: string | null = null;
 
-  for (const rawLine of source.split(/\r?\n/)) {
+  for (const [lineIndex, rawLine] of source.split(/\r?\n/).entries()) {
     const line = stripYamlComment(rawLine);
     if (!line.trim()) continue;
 
@@ -565,7 +627,7 @@ const loadFileConfig = (): GatewayFileConfig => {
     const entry = line.match(/^([A-Za-z0-9]+):\s*(.*)$/);
     if (!entry) {
       throw new Error(
-        `Invalid ${filePath}: unsupported line "${rawLine.trim()}"`,
+        `Invalid ${filePath}: unsupported syntax at line ${lineIndex + 1}.`,
       );
     }
 
@@ -606,7 +668,7 @@ const parseVertexPoolsEnv = (): VertexPoolConfig[] => {
       const secondColon = entry.indexOf(":", firstColon + 1);
       if (firstColon === -1 || secondColon === -1) {
         throw new Error(
-          `Invalid VERTEX_POOLS entry #${index + 1} "${entry}": expected format "project:location:apiKey".`,
+          `Invalid VERTEX_POOLS entry #${index + 1}: expected format "project:location:apiKey".`,
         );
       }
       const project = entry.slice(0, firstColon).trim();
@@ -617,18 +679,19 @@ const parseVertexPoolsEnv = (): VertexPoolConfig[] => {
           `Invalid VERTEX_POOLS entry #${index + 1}: project, location, and apiKey are all required.`,
         );
       }
-      return {
+      return normalizeVertexPoolConfig({
         id: `env-${project}`,
         label: `${project} (env)`,
         project,
         location,
         credentialsFile: null,
         apiKey,
+        apiKeyMode: "full",
         enabled: true,
         weight: 1,
         modelAllowlist: [],
         modelExclusions: [],
-      };
+      });
     });
 };
 
@@ -691,6 +754,13 @@ const resolveVertexTargets = (
       location: config.googleLocation,
       credentialsFile: config.googleCredentialsFile,
       apiKey: config.googleApiKey,
+      apiKeyMode: normalizeApiKeyMode(
+        undefined,
+        config.googleApiKey,
+        config.googleProject,
+        config.googleLocation,
+        "legacy-default",
+      ),
       enabled: true,
       weight: 1,
       modelAllowlist: [],
@@ -713,6 +783,11 @@ export const loadConfig = (): GatewayConfig => {
     fileConfig.googleProject ??
     ""
   ).trim();
+  const vertexPools = (
+    envPools.length > 0
+      ? envPools
+      : (poolOverlay.vertexPools ?? [])
+  ).map((entry) => normalizeVertexPoolConfig({ ...entry }));
 
   const config: GatewayConfig = {
     port: numberEnv("PORT", fileConfig.port ?? DEFAULTS.port),
@@ -819,20 +894,14 @@ export const loadConfig = (): GatewayConfig => {
       process.env.GATEWAY_ENABLE_IMAGE_ROUTES,
       fileConfig.enableImageRoutes ?? true,
     ),
-    runtimeMode:
-      (poolOverlay.vertexPools?.length ?? 0) > 0 || envPools.length > 0
-        ? "pool"
-        : "single",
+    runtimeMode: vertexPools.length > 0 ? "pool" : "single",
     vertexPoolSelection:
       (process.env.GATEWAY_VERTEX_POOL_SELECTION?.trim() as
         | VertexPoolSelection
         | undefined) ||
       poolOverlay.vertexPoolSelection ||
       DEFAULTS.vertexPoolSelection,
-    vertexPools:
-      (poolOverlay.vertexPools?.length ?? 0) > 0
-        ? poolOverlay.vertexPools!
-        : envPools,
+    vertexPools,
     resolvedVertexTargets: [],
     modelCatalog: normalizeModelCatalog(poolOverlay.modelCatalog),
     enableAdminRoutes: boolEnv(
@@ -874,7 +943,11 @@ export const createDerivedConfig = (
   const nextConfig: GatewayConfig = {
     ...config,
     ...(overrides.vertexPools
-      ? { vertexPools: overrides.vertexPools.map((entry) => ({ ...entry })) }
+      ? {
+          vertexPools: overrides.vertexPools.map((entry) =>
+            normalizeVertexPoolConfig({ ...entry }),
+          ),
+        }
       : {}),
     ...(overrides.modelCatalog
       ? { modelCatalog: normalizeModelCatalog(overrides.modelCatalog) }
@@ -952,6 +1025,28 @@ export const validateConfig = (config: GatewayConfig): void => {
           `Vertex pool ${entry.id} must include non-empty project and location.`,
         );
       }
+      if (entry.apiKeyMode !== "full" && entry.apiKeyMode !== "express") {
+        throw new Error(
+          `Vertex pool ${entry.id} apiKeyMode must be "full" or "express".`,
+        );
+      }
+      if (
+        entry.apiKeyMode === "express" &&
+        !entry.apiKey
+      ) {
+        throw new Error(
+          `Vertex pool ${entry.id} uses apiKeyMode "express" and must include apiKey.`,
+        );
+      }
+      if (
+        entry.apiKey &&
+        entry.apiKeyMode === "full" &&
+        (!entry.project.trim() || !entry.location.trim())
+      ) {
+        throw new Error(
+          `Vertex pool ${entry.id} uses apiKeyMode "full" and must include non-empty project and location.`,
+        );
+      }
       if (entry.weight <= 0) {
         throw new Error(
           `Vertex pool ${entry.id} must include a positive weight.`,
@@ -991,3 +1086,4 @@ export const validateConfig = (config: GatewayConfig): void => {
   if (!config.googleLocation)
     throw new Error("GOOGLE_VERTEX_LOCATION is required.");
 };
+

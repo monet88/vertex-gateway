@@ -22,14 +22,19 @@
 | Model ID                         | Status | Notes                                                           |
 | -------------------------------- | ------ | --------------------------------------------------------------- |
 | `gemini-3.1-flash-image-preview` | ✅     | **Recommended default**. Used by custom routes & OpenAI surface |
-| `gemini-3.1-flash-lite-image`    | ✅     | Lightweight variant. Works with express mode `global`           |
+| `gemini-3.1-flash-lite-image`    | ✅     | Lightweight variant. Verified with `location: global`           |
 | `gemini-3-pro-image`             | ✅     |                                                                 |
 | `gemini-3-pro-image-preview`     | ✅     |                                                                 |
-| `gemini-2.5-flash-image`         | ⚠️     | Requires Service Account + explicit regional location (not express mode `global`) |
+| `gemini-2.5-flash-image`         | ⚠️     | Fails in express API-key-only mode. Works with full Vertex API-key mode using `project` + `location: global`, or with service-account-backed full Vertex routing |
 
-⚠️ `gemini-2.5-flash-image` does **not** work with express API key mode (`apiKey`)
-because the SDK maps API keys to `asia-southeast1` where this model is unavailable.
-Use a **Service Account** (`credentialsFile`) with an explicit regional location instead.
+⚠️ `gemini-2.5-flash-image` does **not** work with express API-key-only mode
+(`apiKeyMode: "express"` / SDK `apiKey` path) because the SDK maps API keys to
+`asia-southeast1` where this model is unavailable.
+
+It **does** work when the gateway uses the full Vertex resource path: either
+full API-key mode with explicit `project` + `location: global`, or
+service-account-backed Vertex requests. Regional support beyond `global` is not
+documented here.
 
 ### OpenAI Image Surface Allowlist
 

@@ -261,6 +261,7 @@ export const importServiceAccountCredential = (
       location,
       credentialsFile,
       apiKey: null,
+      apiKeyMode: 'full',
       enabled: body.enabled !== false,
       weight: typeof body.weight === 'number' && body.weight > 0 ? body.weight : 1,
       modelAllowlist: Array.isArray(body.modelAllowlist)

@@ -300,6 +300,7 @@ export const runOpenAiCompatibleRoute = async (
   body: Record<string, unknown>,
   ai: GenAiClient,
   requestId?: string,
+  signal?: AbortSignal,
 ): Promise<Record<string, unknown>> => {
   if (route.operation === 'models') {
     return listModels();
@@ -312,6 +313,7 @@ export const runOpenAiCompatibleRoute = async (
   const response = await ai.models.generateContent(request, {
     routeFamily: 'openai-chat',
     ...(requestId ? { requestId } : {}),
+    ...(signal ? { signal } : {}),
   });
   return convertGeminiResponseToOpenAI(response, String(request.model));
 };
@@ -324,6 +326,7 @@ export const runOpenAiCompatibleStreamRoute = async (
   ai: GenAiClient,
   streamConfig: { idleTimeoutMs: number; maxDurationMs: number },
   requestId?: string,
+  signal?: AbortSignal,
 ): Promise<void> => {
   if (route.operation !== 'chatCompletions') {
     throw new GatewayError(404, 'NOT_FOUND', 'OpenAI-compatible route is not implemented.');
@@ -338,6 +341,7 @@ export const runOpenAiCompatibleStreamRoute = async (
   const stream = await ai.models.generateContentStream(request, {
     routeFamily: 'openai-chat',
     ...(requestId ? { requestId } : {}),
+    ...(signal ? { signal } : {}),
     streamGuard: {
       idleTimeoutMs: streamConfig.idleTimeoutMs,
       maxDurationMs: streamConfig.maxDurationMs,

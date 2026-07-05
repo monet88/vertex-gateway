@@ -6,11 +6,12 @@ export const runCustomImageRoute = async (
   body: Record<string, unknown>,
   workloads: ImageWorkloads,
   requestId?: string,
+  signal?: AbortSignal,
 ): Promise<Record<string, unknown>> => {
-  if (operation === 'imageGenerate') return { success: true, ...(await workloads.generate(body, requestId)) };
-  if (operation === 'imageEdit') return { success: true, ...(await workloads.edit(body, requestId)) };
-  if (operation === 'imageUpscale') return { success: true, ...(await workloads.upscale(body, requestId)) };
-  if (operation === 'imageDescribe') return { success: true, ...(await workloads.describe(body, requestId)) };
-  if (operation === 'sessionValidate') return { success: true, ...(await workloads.validateSession(body, requestId)) };
+  if (operation === 'imageGenerate') return { success: true, ...(await workloads.generate(body, requestId, signal)) };
+  if (operation === 'imageEdit') return { success: true, ...(await workloads.edit(body, requestId, signal)) };
+  if (operation === 'imageUpscale') return { success: true, ...(await workloads.upscale(body, requestId, signal)) };
+  if (operation === 'imageDescribe') return { success: true, ...(await workloads.describe(body, requestId, signal)) };
+  if (operation === 'sessionValidate') return { success: true, ...(await workloads.validateSession(body, requestId, signal)) };
   throw new GatewayError(404, 'NOT_FOUND', 'Custom route is not implemented.');
 };

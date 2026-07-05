@@ -224,6 +224,7 @@ describe('admin routes', () => {
     expect(imported.status).toBe(200);
     expect(importedBody.credential.private_key).toBeUndefined();
     expect(importedBody.credential.email).toBe('svc@example.test');
+    expect(importedBody.credential.apiKeyMode).toBe('full');
 
     const list = await fetch(`${baseUrl}/admin/api/vertex-credentials`, {
       headers: { authorization: 'Bearer admin-secret' },

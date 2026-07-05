@@ -301,6 +301,7 @@ export const runOpenAiResponsesRoute = async (
   body: Record<string, unknown>,
   ai: GenAiClient,
   requestId?: string,
+  signal?: AbortSignal,
 ): Promise<Record<string, unknown>> => {
   if (route.operation !== 'responses') {
     throw new GatewayError(404, 'NOT_FOUND', 'OpenAI Responses route is not implemented.');
@@ -310,6 +311,7 @@ export const runOpenAiResponsesRoute = async (
   const response = await ai.models.generateContent(request, {
     routeFamily: 'openai-responses',
     ...(requestId ? { requestId } : {}),
+    ...(signal ? { signal } : {}),
   });
   const responseId = `resp_${randomUUID().replace(/-/g, '')}`;
   const messageId = `msg_${randomUUID().replace(/-/g, '')}`;
@@ -332,6 +334,7 @@ export const runOpenAiResponsesStreamRoute = async (
   ai: GenAiClient,
   streamConfig: { idleTimeoutMs: number; maxDurationMs: number },
   requestId?: string,
+  signal?: AbortSignal,
 ): Promise<void> => {
   if (route.operation !== 'responses') {
     throw new GatewayError(404, 'NOT_FOUND', 'OpenAI Responses route is not implemented.');
@@ -344,6 +347,7 @@ export const runOpenAiResponsesStreamRoute = async (
   const stream = await ai.models.generateContentStream(request, {
     routeFamily: 'openai-responses',
     ...(requestId ? { requestId } : {}),
+    ...(signal ? { signal } : {}),
     streamGuard: {
       idleTimeoutMs: streamConfig.idleTimeoutMs,
       maxDurationMs: streamConfig.maxDurationMs,

@@ -62,7 +62,7 @@ describe('openai-compatible routes', () => {
       config: {
         systemInstruction: { parts: [{ text: 'You are concise.' }] },
       },
-    }), expect.objectContaining({ routeFamily: 'openai-chat' }));
+    }), expect.objectContaining({ routeFamily: 'openai-chat', signal: expect.any(AbortSignal) }));
   });
 
   it('returns one OpenAI choice for each requested Gemini candidate', async () => {
@@ -115,7 +115,7 @@ describe('openai-compatible routes', () => {
       model: 'gemini-3.5-flash',
       contents: [{ role: 'user', parts: [{ text: 'Give two options' }] }],
       config: { candidateCount: 2 },
-    }), expect.objectContaining({ routeFamily: 'openai-chat' }));
+    }), expect.objectContaining({ routeFamily: 'openai-chat', signal: expect.any(AbortSignal) }));
   });
 
   it('maps OpenAI generation options into Gemini config', async () => {
@@ -150,7 +150,7 @@ describe('openai-compatible routes', () => {
         maxOutputTokens: 64,
         stopSequences: ['END'],
       },
-    }), expect.objectContaining({ routeFamily: 'openai-chat' }));
+    }), expect.objectContaining({ routeFamily: 'openai-chat', signal: expect.any(AbortSignal) }));
   });
 
   it('maps OpenAI tools into Gemini config tools', async () => {
@@ -194,7 +194,7 @@ describe('openai-compatible routes', () => {
           }],
         }],
       },
-    }), expect.objectContaining({ routeFamily: 'openai-chat' }));
+    }), expect.objectContaining({ routeFamily: 'openai-chat', signal: expect.any(AbortSignal) }));
   });
 
   it('accepts image_url data URLs with embedded base64 whitespace', async () => {
@@ -278,6 +278,7 @@ describe('openai-compatible routes', () => {
       contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
     }), expect.objectContaining({
       routeFamily: 'openai-chat',
+      signal: expect.any(AbortSignal),
       streamGuard: {
         idleTimeoutMs: 250,
         maxDurationMs: 10000,

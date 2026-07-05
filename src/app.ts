@@ -13,7 +13,7 @@ import type { GenAiFactory } from './lib/google-genai-client.js';
 import { createGoogleGenAiClient } from './lib/google-genai-client.js';
 import { createGenAiRuntime, type GenAiRuntimeLike } from './lib/genai-runtime.js';
 import { maybeHandleAdminRoute } from './admin/admin-routes.js';
-import { getProviderModelCatalog, resolveProviderModel } from './admin/model-store.js';
+import { getProviderModelCatalog, listProviderRouteModels, resolveProviderModel } from './admin/model-store.js';
 import { renderDocsUi, renderLlmsTxt } from './routes/docs-ui.js';
 import { healthResponse, readyResponse, rootResponse } from './routes/health-routes.js';
 import { ImageWorkloads } from './workloads/image-workloads.js';
@@ -199,9 +199,11 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
             workloads,
             streamConfig,
             requestId: ctx.id,
+            abortSignal: streamAbortController.signal,
             maxJsonBytes: config.maxJsonBytes,
             expectsMultipartOpenAiEdit,
             resolveImageEditModel: (value) => openAiModel(value) || geminiModel(value),
+            listGeminiModels: () => listProviderRouteModels(config.modelCatalog, 'gemini'),
           });
           return;
         }

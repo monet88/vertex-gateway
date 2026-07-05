@@ -81,6 +81,64 @@ describe('app error fallback', () => {
 });
 
 describe('app model aliasing', () => {
+  it('answers CORS preflight from arbitrary browser origins by default', async () => {
+    const generateContent = vi.fn(async () => ({}));
+    const server = createApp({
+      config: testConfig({ corsOrigins: [] }),
+      genAiFactory: () => ({ models: { generateContent } }),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/gemini/v1beta/models/gemini-3.1-flash-image:generateContent`, {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://changstore-da7p92082-monet421992.vercel.app',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'authorization, content-type, x-goog-api-client',
+      },
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get('access-control-allow-origin')).toBe(
+      'https://changstore-da7p92082-monet421992.vercel.app',
+    );
+    expect(response.headers.get('access-control-allow-methods')).toBe('GET,POST,OPTIONS');
+    expect(generateContent).not.toHaveBeenCalled();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it('returns discoverable Gemini route models from built-ins and the configured catalog', async () => {
+    const generateContent = vi.fn(async () => ({}));
+    const server = createApp({
+      config: testConfig({
+        modelCatalog: {
+          gemini: {
+            defaultModel: 'gemini-2.5-flash',
+            aliases: {
+              fast: 'gemini-2.5-flash',
+              disabledAlias: 'gemini-3.1-pro-preview',
+            },
+            allowlist: ['gemini-2.5-flash'],
+            disabled: ['gemini-3.1-pro-preview'],
+          },
+        },
+      }),
+      genAiFactory: () => ({ models: { generateContent } }),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/gemini/v1beta/models`, {
+      headers: { authorization: 'Bearer test-key' },
+    });
+    const body = await response.json();
+    const modelNames = body.models.map((item: { name: string }) => item.name);
+
+    expect(response.status).toBe(200);
+    expect(modelNames).toEqual(['gemini-2.5-flash', 'fast']);
+    expect(generateContent).not.toHaveBeenCalled();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
   it('rewrites direct Gemini route models through the configured alias map', async () => {
     const generateContent = vi.fn(async () => ({ candidates: [{ content: { parts: [{ text: 'OK' }] } }] }));
     const server = createApp({
