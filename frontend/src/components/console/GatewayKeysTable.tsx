@@ -1,46 +1,28 @@
-import { useState } from 'react';
-import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
-import type { GatewayKeyRow } from '../../data/mockData';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import type { GatewayKeyRow } from '@/data/mockData';
 
 export interface GatewayKeysTableProps {
   readonly rows: readonly GatewayKeyRow[];
 }
 
+const columns: Array<{ key: keyof GatewayKeyRow; label: string }> = [
+  { key: 'label', label: 'Label' },
+  { key: 'preview', label: 'Preview' },
+  { key: 'status', label: 'Status' },
+  { key: 'createdAt', label: 'Created At' },
+];
+
+const getStatusColor = (status: string) => {
+  if (status === 'active') return 'bg-emerald-500 hover:bg-emerald-600';
+  if (status === 'revoked') return 'bg-red-500 hover:bg-red-600';
+  return 'bg-gray-500 hover:bg-gray-600';
+};
+
 export function GatewayKeysTable({ rows }: GatewayKeysTableProps) {
-  const [sortKey, setSortKey] = useState<keyof GatewayKeyRow>('createdAt');
-  const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
-
-  const getStatusColor = (status: string) => {
-    if (status === 'active') return 'bg-emerald-500 hover:bg-emerald-600';
-    if (status === 'revoked') return 'bg-red-500 hover:bg-red-600';
-    return 'bg-gray-500 hover:bg-gray-600';
-  };
-
-  const nextDirection = direction === 'asc' ? 'desc' : 'asc';
-  
-  const handleSort = (key: keyof GatewayKeyRow) => {
-    if (sortKey === key) {
-      setDirection(nextDirection);
-    } else {
-      setSortKey(key);
-      setDirection('asc');
-    }
-  };
-
-  const sortedRows = [...rows].sort((a, b) => {
-    const valA = String(a[sortKey] ?? '');
-    const valB = String(b[sortKey] ?? '');
-    return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-  });
-
-  const columns: Array<{ key: keyof GatewayKeyRow; label: string }> = [
-    { key: 'label', label: 'Label' },
-    { key: 'preview', label: 'Preview' },
-    { key: 'status', label: 'Status' },
-    { key: 'createdAt', label: 'Created At' },
-  ];
+  const { sortKey, direction, handleSort, ariaSort, sortedRows } = useSortableTable(rows, 'createdAt', 'desc');
 
   return (
     <div className="rounded-md border">
@@ -48,7 +30,7 @@ export function GatewayKeysTable({ rows }: GatewayKeysTableProps) {
         <TableHeader>
           <TableRow>
             {columns.map((col) => (
-              <TableHead key={col.key}>
+              <TableHead key={col.key} aria-sort={ariaSort(col.key)}>
                 <Button
                   variant="ghost"
                   size="sm"

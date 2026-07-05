@@ -1,14 +1,14 @@
-import { StitchConsoleShell } from '../components/stitch/StitchConsoleShell';
-import { StitchKpiStrip } from '../components/stitch/StitchKpiStrip';
-import { StitchSecurityRail } from '../components/stitch/StitchSecurityRail';
-import { ApiLogsTable } from '../components/console/ApiLogsTable';
-import { GatewayKeysTable } from '../components/console/GatewayKeysTable';
-import { VertexTargetsTable } from '../components/console/VertexTargetsTable';
-import { GatewayKeyDialog } from '../components/console/GatewayKeyDialog';
-import { VertexTargetDialog } from '../components/console/VertexTargetDialog';
-import { SecretInput } from '../components/console/SecretInput';
-import { useAdminToken } from '../hooks/useAdminToken';
-import { kpiMetrics, securityNotices, apiLogs, gatewayKeys, vertexTargets } from '../data/mockData';
+import { StitchConsoleShell } from '@/components/stitch/StitchConsoleShell';
+import { StitchKpiStrip } from '@/components/stitch/StitchKpiStrip';
+import { StitchSecurityRail } from '@/components/stitch/StitchSecurityRail';
+import { ApiLogsTable } from '@/components/console/ApiLogsTable';
+import { GatewayKeysTable } from '@/components/console/GatewayKeysTable';
+import { VertexTargetsTable } from '@/components/console/VertexTargetsTable';
+import { GatewayKeyDialog } from '@/components/console/GatewayKeyDialog';
+import { VertexTargetDialog } from '@/components/console/VertexTargetDialog';
+import { SecretInput } from '@/components/console/SecretInput';
+import { useAdminToken } from '@/hooks/useAdminToken';
+import { kpiMetrics, securityNotices, apiLogs, gatewayKeys, vertexTargets } from '@/data/mockData';
 
 export function Dashboard() {
   const { token, setToken } = useAdminToken();

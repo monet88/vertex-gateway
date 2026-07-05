@@ -25,3 +25,6 @@ dist-ssr
 
 # Review artifacts
 .review-screenshots
+
+# Stitch design tool artifacts
+.stitch

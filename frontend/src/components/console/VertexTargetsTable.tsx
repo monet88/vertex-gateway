@@ -1,49 +1,31 @@
-import { useState } from 'react';
-import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
-import type { VertexTargetRow } from '../../data/mockData';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import type { VertexTargetRow } from '@/data/mockData';
 
 export interface VertexTargetsTableProps {
   readonly rows: readonly VertexTargetRow[];
 }
 
+const columns: Array<{ key: keyof VertexTargetRow; label: string }> = [
+  { key: 'label', label: 'Label' },
+  { key: 'project', label: 'Project' },
+  { key: 'location', label: 'Location' },
+  { key: 'authType', label: 'Auth Type' },
+  { key: 'apiKeyMode', label: 'Mode' },
+  { key: 'health', label: 'Health' },
+];
+
+const getHealthColor = (health: string) => {
+  if (health === 'ready') return 'bg-emerald-500 hover:bg-emerald-600';
+  if (health === 'degraded') return 'bg-amber-500 hover:bg-amber-600 text-amber-950';
+  if (health === 'failed') return 'bg-red-500 hover:bg-red-600';
+  return 'bg-gray-500 hover:bg-gray-600';
+};
+
 export function VertexTargetsTable({ rows }: VertexTargetsTableProps) {
-  const [sortKey, setSortKey] = useState<keyof VertexTargetRow>('label');
-  const [direction, setDirection] = useState<'asc' | 'desc'>('asc');
-
-  const getHealthColor = (health: string) => {
-    if (health === 'ready') return 'bg-emerald-500 hover:bg-emerald-600';
-    if (health === 'degraded') return 'bg-amber-500 hover:bg-amber-600 text-amber-950';
-    if (health === 'failed') return 'bg-red-500 hover:bg-red-600';
-    return 'bg-gray-500 hover:bg-gray-600';
-  };
-
-  const nextDirection = direction === 'asc' ? 'desc' : 'asc';
-  
-  const handleSort = (key: keyof VertexTargetRow) => {
-    if (sortKey === key) {
-      setDirection(nextDirection);
-    } else {
-      setSortKey(key);
-      setDirection('asc');
-    }
-  };
-
-  const sortedRows = [...rows].sort((a, b) => {
-    const valA = String(a[sortKey] ?? '');
-    const valB = String(b[sortKey] ?? '');
-    return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-  });
-
-  const columns: Array<{ key: keyof VertexTargetRow; label: string }> = [
-    { key: 'label', label: 'Label' },
-    { key: 'project', label: 'Project' },
-    { key: 'location', label: 'Location' },
-    { key: 'authType', label: 'Auth Type' },
-    { key: 'apiKeyMode', label: 'Mode' },
-    { key: 'health', label: 'Health' },
-  ];
+  const { sortKey, direction, handleSort, ariaSort, sortedRows } = useSortableTable(rows, 'label', 'asc');
 
   return (
     <div className="rounded-md border">
@@ -51,7 +33,7 @@ export function VertexTargetsTable({ rows }: VertexTargetsTableProps) {
         <TableHeader>
           <TableRow>
             {columns.map((col) => (
-              <TableHead key={col.key}>
+              <TableHead key={col.key} aria-sort={ariaSort(col.key)}>
                 <Button
                   variant="ghost"
                   size="sm"

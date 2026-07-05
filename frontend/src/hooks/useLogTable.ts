@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import type { ApiLogRow } from '../data/mockData';
-import { getVisibleLogs, type LogTableFilters, type LogTableSort } from '../lib/table';
+import type { ApiLogRow } from '@/data/mockData';
+import { getVisibleLogs, type LogTableFilters, type LogTableSort } from '@/lib/table';
 
 const initialFilters: LogTableFilters = {
   routeFamily: 'all',

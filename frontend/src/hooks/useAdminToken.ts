@@ -1,27 +1,13 @@
 import { useState } from 'react';
 
-const storageKey = 'vertex-gateway-admin-token';
-
-function readStoredToken(): string {
-  try {
-    return typeof window !== 'undefined' ? sessionStorage.getItem(storageKey) ?? '' : '';
-  } catch {
-    return '';
-  }
-}
-
+/**
+ * Admin token is kept in memory only for the lifetime of the tab.
+ * It is intentionally NOT persisted to sessionStorage/localStorage so that
+ * an XSS payload cannot read a long-lived admin credential from Web Storage.
+ * Reloading the page clears the token and the operator re-enters it.
+ */
 export function useAdminToken() {
-  const [token, setTokenState] = useState(readStoredToken);
-
-  function setToken(nextToken: string) {
-    setTokenState(nextToken);
-    try {
-      if (nextToken) sessionStorage.setItem(storageKey, nextToken);
-      else sessionStorage.removeItem(storageKey);
-    } catch (error) {
-      console.warn('sessionStorage is not available:', error);
-    }
-  }
+  const [token, setToken] = useState('');
 
   return { token, setToken };
 }

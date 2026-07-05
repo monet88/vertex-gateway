@@ -1,10 +1,10 @@
-import type { ApiLogRow, LogStatus, RouteFamily } from '../../data/mockData';
-import { useLogTable } from '../../hooks/useLogTable';
-import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import type { ApiLogRow, LogStatus, RouteFamily } from '@/data/mockData';
+import { useLogTable } from '@/hooks/useLogTable';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export interface ApiLogsTableProps {
   readonly rows: readonly ApiLogRow[];
@@ -12,6 +12,7 @@ export interface ApiLogsTableProps {
 
 const routeFamilies: Array<RouteFamily | 'all'> = ['all', 'gemini', 'openai', 'vertex', 'vtx', 'custom'];
 const statuses: Array<LogStatus | 'all'> = ['all', '2xx', '4xx', '5xx'];
+const sortableColumns = ['time', 'routeFamily', 'model', 'latencyMs', 'status'] as const;
 
 export function ApiLogsTable({ rows }: ApiLogsTableProps) {
   const { filters, setFilters, sort, setSort, visibleRows } = useLogTable(rows);
@@ -48,43 +49,44 @@ export function ApiLogsTable({ rows }: ApiLogsTableProps) {
           />
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <Table id="api-log-table">
-          <TableHeader>
-            <TableRow>
-              {(['time', 'routeFamily', 'model', 'latencyMs', 'status'] as const).map((key) => (
-                <TableHead key={key}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="px-0 text-muted-foreground hover:text-foreground"
-                    onClick={() => setSort({ key, direction: sort.key === key ? nextDirection : 'asc' })}
-                  >
-                    {key} {sort.key === key ? (sort.direction === 'asc' ? '↑' : '↓') : ''}
-                  </Button>
-                </TableHead>
-              ))}
-              <TableHead>operation</TableHead>
-              <TableHead>gateway key</TableHead>
-              <TableHead>target</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visibleRows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="tabular-data">{row.time}</TableCell>
-                <TableCell>{row.routeFamily}</TableCell>
-                <TableCell className="tabular-data">{row.model}</TableCell>
-                <TableCell className="tabular-data">{row.latencyMs}ms</TableCell>
-                <TableCell><Badge variant={row.status === '2xx' ? 'default' : 'destructive'}>{row.status}</Badge></TableCell>
-                <TableCell>{row.operation}</TableCell>
-                <TableCell className="tabular-data">{row.gatewayKey}</TableCell>
-                <TableCell>{row.upstreamTarget}</TableCell>
-              </TableRow>
+      <Table id="api-log-table">
+        <TableHeader>
+          <TableRow>
+            {sortableColumns.map((key) => (
+              <TableHead
+                key={key}
+                aria-sort={sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="px-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => setSort({ key, direction: sort.key === key ? nextDirection : 'asc' })}
+                >
+                  {key} {sort.key === key ? (sort.direction === 'asc' ? '↑' : '↓') : ''}
+                </Button>
+              </TableHead>
             ))}
-          </TableBody>
-        </Table>
-      </div>
+            <TableHead>operation</TableHead>
+            <TableHead>gateway key</TableHead>
+            <TableHead>target</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {visibleRows.map((row) => (
+            <TableRow key={row.id}>
+              <TableCell className="tabular-data">{row.time}</TableCell>
+              <TableCell>{row.routeFamily}</TableCell>
+              <TableCell className="tabular-data">{row.model}</TableCell>
+              <TableCell className="tabular-data">{row.latencyMs}ms</TableCell>
+              <TableCell><Badge variant={row.status === '2xx' ? 'default' : 'destructive'}>{row.status}</Badge></TableCell>
+              <TableCell>{row.operation}</TableCell>
+              <TableCell className="tabular-data">{row.gatewayKey}</TableCell>
+              <TableCell>{row.upstreamTarget}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </section>
   );
 }

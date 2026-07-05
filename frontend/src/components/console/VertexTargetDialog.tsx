@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Button } from '../../components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
-import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { SecretInput } from './SecretInput';
 
 export interface VertexTargetDraft {
@@ -33,7 +33,7 @@ export function VertexTargetDialog({ onCreate }: VertexTargetDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button variant="secondary">Thêm target</Button></DialogTrigger>
+      <DialogTrigger asChild><Button>Thêm target</Button></DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Thêm Vertex target</DialogTitle>

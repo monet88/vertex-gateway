@@ -1,4 +1,4 @@
-import type { ApiLogRow, LogStatus, RouteFamily } from '../data/mockData';
+import type { ApiLogRow, LogStatus, RouteFamily } from '@/data/mockData';
 
 export type LogSortKey = 'time' | 'latencyMs' | 'status' | 'routeFamily' | 'model';
 export type SortDirection = 'asc' | 'desc';
