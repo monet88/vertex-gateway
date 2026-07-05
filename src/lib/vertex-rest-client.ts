@@ -86,15 +86,24 @@ const buildRequestBody = (request: Record<string, unknown>): string => {
 
   if (isRecord(config)) {
     const generationConfig: Record<string, unknown> = {};
+    const unsupportedKeys: string[] = [];
     for (const [key, value] of Object.entries(config)) {
       if (GENERATION_CONFIG_KEYS.has(key)) {
         generationConfig[key] = value;
       } else if (REQUEST_CONFIG_KEYS.has(key)) {
         nextRequest[key] = value;
+      } else {
+        unsupportedKeys.push(key);
       }
     }
     if (Object.keys(generationConfig).length > 0) {
       nextRequest.generationConfig = generationConfig;
+    }
+    if (unsupportedKeys.length > 0) {
+      console.warn(JSON.stringify({
+        event: 'vertex_rest_client.unsupported_config_keys',
+        keys: unsupportedKeys,
+      }));
     }
   }
 
@@ -162,8 +171,10 @@ const createAbortSignal = (
 const createNetworkGatewayError = (): GatewayError =>
   new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Upstream service is unavailable.', true);
 
-const isAbortError = (error: unknown): boolean =>
-  error instanceof DOMException && error.name === 'AbortError';
+const isAbortError = (error: unknown): boolean => {
+  if (error instanceof DOMException && error.name === 'AbortError') return true;
+  return Boolean(error && typeof error === 'object' && (error as { name?: unknown }).name === 'AbortError');
+};
 
 const postJson = async (
   options: VertexRestClientOptions,

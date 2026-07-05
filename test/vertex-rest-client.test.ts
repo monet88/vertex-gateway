@@ -97,6 +97,33 @@ describe('vertex REST client', () => {
     });
   });
 
+  it('warns when SDK config contains fields unsupported by the REST translation', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const fetchFn = vi.fn(async () => createJsonResponse({ candidates: [] }));
+      const client = createVertexRestClient({
+        apiKey: 'AIza-fake-test-key',
+        project: 'test-project',
+        location: 'global',
+        apiVersion: 'v1',
+        timeoutMs: 1_000,
+        fetchFn,
+      });
+
+      await client.models.generateContent({
+        model: 'gemini-2.5-flash',
+        config: { unsupportedFutureField: true },
+      });
+
+      expect(warnSpy).toHaveBeenCalledWith(JSON.stringify({
+        event: 'vertex_rest_client.unsupported_config_keys',
+        keys: ['unsupportedFutureField'],
+      }));
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   it('calls the regional endpoint for non-global locations', async () => {
     const fetchFn = vi.fn(async () => createJsonResponse({ candidates: [] }));
     const client = createVertexRestClient({
@@ -356,6 +383,24 @@ describe('vertex REST client', () => {
       code: 'UPSTREAM_UNAVAILABLE',
       retryable: true,
     });
+  });
+
+  it('preserves non-DOM abort errors from fetch implementations', async () => {
+    const abortError = new Error('aborted');
+    abortError.name = 'AbortError';
+    const fetchFn = vi.fn(async () => {
+      throw abortError;
+    });
+    const client = createVertexRestClient({
+      apiKey: 'AIza-fake-test-key',
+      project: 'test-project',
+      location: 'global',
+      apiVersion: 'v1',
+      timeoutMs: 1_000,
+      fetchFn,
+    });
+
+    await expect(client.models.generateContent({ model: 'gemini-2.5-flash' })).rejects.toBe(abortError);
   });
 
   it('classifies streaming fetch network failures as upstream unavailable', async () => {
