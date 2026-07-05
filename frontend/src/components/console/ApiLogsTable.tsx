@@ -19,7 +19,7 @@ export function ApiLogsTable({ rows }: ApiLogsTableProps) {
   const nextDirection = sort.direction === 'asc' ? 'desc' : 'asc';
 
   return (
-    <section id="logs" className="rounded-xl border border-border bg-card shadow-2xl shadow-black/10">
+    <section className="rounded-xl border border-border bg-card shadow-2xl shadow-black/10">
       <div className="flex flex-col gap-4 border-b border-border p-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-xl font-semibold tracking-tight">API call logs</h2>

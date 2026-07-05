@@ -35,7 +35,6 @@ export function Dashboard() {
         </section>
 
         <section id="logs" className="scroll-mt-6">
-          <h2 className="mb-4 text-xl font-semibold tracking-tight text-foreground">API call logs</h2>
           <ApiLogsTable rows={apiLogs} />
         </section>
 

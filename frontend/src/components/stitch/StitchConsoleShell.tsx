@@ -17,7 +17,6 @@ export function StitchConsoleShell({ children, rail }: StitchConsoleShellProps) 
             <a className="rounded-md bg-secondary px-3 py-2 text-foreground" href="#logs">API call logs</a>
             <a className="rounded-md px-3 py-2 hover:bg-secondary hover:text-foreground" href="#keys">Gateway keys</a>
             <a className="rounded-md px-3 py-2 hover:bg-secondary hover:text-foreground" href="#targets">Vertex targets</a>
-            <a className="rounded-md px-3 py-2 hover:bg-secondary hover:text-foreground" href="#policy">Domain policy</a>
           </nav>
         </aside>
         <section className="grid gap-4 p-4 xl:grid-cols-[1fr_340px] xl:p-6">
