@@ -4,10 +4,10 @@ port: 8080
 # Browser/client keys accepted by Authorization: Bearer or x-api-key.
 # Set GATEWAY_API_KEYS in gateway/.env or your deployment secret store.
 
-# Allowed browser origins for CORS
-corsOrigins:
-  - http://localhost:3000
-  - http://127.0.0.1:3000
+# Browser CORS is unrestricted by default when corsOrigins is omitted or empty.
+# Uncomment this list only when you want to restrict browser origins.
+# corsOrigins:
+#   - https://app.example
 
 # Vertex server-side auth and routing
 googleProject: project-b82b6a5a-13c8-42e4-a56

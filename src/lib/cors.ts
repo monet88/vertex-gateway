@@ -11,17 +11,21 @@ const isLocalOrigin = (origin: string): boolean => {
   }
 };
 
+const setCorsHeaders = (res: ServerResponse, origin: string): void => {
+  res.setHeader('access-control-allow-origin', origin);
+  res.setHeader('vary', 'origin');
+  res.setHeader(
+    'access-control-allow-headers',
+    'authorization, content-type, x-api-key, x-goog-api-key, x-goog-api-client, x-request-id',
+  );
+  res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS');
+};
+
 export const applyCors = (req: IncomingMessage, res: ServerResponse, config: GatewayConfig): void => {
   const origin = req.headers.origin;
   if (!origin) return;
-  if (config.corsOrigins.includes(origin)) {
-    res.setHeader('access-control-allow-origin', origin);
-    res.setHeader('vary', 'origin');
-    res.setHeader(
-      'access-control-allow-headers',
-      'authorization, content-type, x-api-key, x-goog-api-key, x-goog-api-client, x-request-id',
-    );
-    res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS');
+  if (config.corsOrigins.length === 0 || config.corsOrigins.includes(origin)) {
+    setCorsHeaders(res, origin);
     return;
   }
   const wildcardAllowed = config.corsOrigins.includes('*');
@@ -31,11 +35,5 @@ export const applyCors = (req: IncomingMessage, res: ServerResponse, config: Gat
   if (!wildcardAllowed) {
     throw new GatewayError(403, 'CORS_DENIED', 'Origin is not allowed.');
   }
-  res.setHeader('access-control-allow-origin', origin);
-  res.setHeader('vary', 'origin');
-  res.setHeader(
-    'access-control-allow-headers',
-    'authorization, content-type, x-api-key, x-goog-api-key, x-goog-api-client, x-request-id',
-  );
-  res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS');
+  setCorsHeaders(res, origin);
 };

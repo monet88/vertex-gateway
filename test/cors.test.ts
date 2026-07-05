@@ -13,6 +13,20 @@ const requestWithOrigin = (origin?: string) => {
 const createResponse = () => new ServerResponse(requestWithOrigin());
 
 describe('cors', () => {
+  it('allows any origin by default and includes Gemini SDK preflight headers', () => {
+    const res = createResponse();
+    applyCors(
+      requestWithOrigin('https://changstore-da7p92082-monet421992.vercel.app'),
+      res,
+      testConfig({ corsOrigins: [] }),
+    );
+
+    expect(res.getHeader('access-control-allow-origin')).toBe('https://changstore-da7p92082-monet421992.vercel.app');
+    expect(res.getHeader('access-control-allow-headers')).toBe(
+      'authorization, content-type, x-api-key, x-goog-api-key, x-goog-api-client, x-request-id',
+    );
+  });
+
   it('allows configured origins and includes Gemini SDK preflight headers', () => {
     const res = createResponse();
     applyCors(requestWithOrigin('http://localhost:3000'), res, testConfig());
@@ -23,9 +37,13 @@ describe('cors', () => {
     );
   });
 
-  it('rejects origins outside the allowlist', () => {
+  it('rejects origins outside an explicit allowlist', () => {
     const res = createResponse();
-    expect(() => applyCors(requestWithOrigin('http://localhost:3999'), res, testConfig())).toThrow(/not allowed/);
+    expect(() => applyCors(
+      requestWithOrigin('https://blocked.example'),
+      res,
+      testConfig({ corsOrigins: ['https://app.example'] }),
+    )).toThrow(/not allowed/);
   });
 
   it('rejects wildcard CORS for non-local origins by default', () => {

@@ -122,8 +122,10 @@ Three layers (highest priority first): **env vars** → **pool overlay JSON**
 (`GATEWAY_POOL_CONFIG_FILE`) → **base YAML** (`GATEWAY_CONFIG_FILE`).
 
 See [.env.example](.env.example) for all variables. Key defaults: port `8080`,
-location `us-central1`, upstream timeout 45s, concurrency 4, stream limit
-2/key.
+location `us-central1`, unrestricted CORS when `GATEWAY_CORS_ORIGINS` /
+`corsOrigins` is omitted or empty, upstream timeout 45s, concurrency 4, stream
+limit 2/key. Set `GATEWAY_CORS_ORIGINS` to a comma-separated origin list only
+when browser access should be restricted to specific domains.
 
 ## Admin API
 

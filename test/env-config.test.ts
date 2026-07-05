@@ -64,6 +64,32 @@ describe('gateway config file', () => {
     expect(config.googleLocation).toBe('global');
   });
 
+  it('defaults CORS to unrestricted browser origins when no allowlist is configured', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const configPath = path.join(dir, 'config.yaml');
+    fs.writeFileSync(configPath, [
+      'gatewayKeys:',
+      '  - from-file',
+      'googleProject: from-file-project',
+      'googleCredentialsFile: null',
+      'googleLocation: global',
+    ].join('\n'));
+
+    process.env.GATEWAY_CONFIG_FILE = configPath;
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GATEWAY_CORS_ORIGINS;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    const config = loadConfig();
+
+    expect(config.corsOrigins).toEqual([]);
+    expect(config.allowWildcardCors).toBe(false);
+  });
+
   it('lets env vars override file config', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
     const configPath = path.join(dir, 'config.yaml');

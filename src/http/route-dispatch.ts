@@ -33,6 +33,7 @@ export interface RouteContext {
   maxJsonBytes: number;
   expectsMultipartOpenAiEdit: boolean;
   resolveImageEditModel: (value: unknown) => string | undefined;
+  listGeminiModels: () => Array<{ name: string }>;
 }
 
 export interface RouteDispatchEntry {
@@ -56,7 +57,14 @@ const runCompatibilityFamily = (
 };
 
 const runCompatibilitySync = (ctx: RouteContext) =>
-  runCompatibilityRoute(ctx.route, ctx.body, ctx.ai, ctx.requestId, ctx.abortSignal);
+  runCompatibilityRoute(
+    ctx.route,
+    ctx.body,
+    ctx.ai,
+    ctx.requestId,
+    ctx.abortSignal,
+    ctx.route.family === 'gemini' ? { models: ctx.listGeminiModels() } : undefined,
+  );
 
 const runGeminiFamily = runCompatibilityFamily(runCompatibilitySync);
 

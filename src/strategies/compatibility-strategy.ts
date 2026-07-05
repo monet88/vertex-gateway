@@ -67,8 +67,9 @@ export const runCompatibilityRoute = async (
   ai: GenAiClient,
   requestId?: string,
   signal?: AbortSignal,
+  modelsResponse?: Record<string, unknown>,
 ): Promise<Record<string, unknown>> => {
-  if (route.operation === 'models') return { models: [] };
+  if (route.operation === 'models') return modelsResponse ?? { models: [] };
   if (route.operation === 'predict') {
     return ai.models.generateContent(
       buildPredictRequest(route, body),
