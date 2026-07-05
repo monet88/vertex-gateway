@@ -14,6 +14,42 @@ export interface VertexRestClientOptions {
 
 const JSON_CONTENT_TYPE = 'application/json';
 const SSE_ALT_QUERY = '?alt=sse';
+const GENERATION_CONFIG_KEYS = new Set([
+  'audioTimestamp',
+  'candidateCount',
+  'frequencyPenalty',
+  'imageConfig',
+  'logprobs',
+  'maxOutputTokens',
+  'mediaResolution',
+  'modelSelectionConfig',
+  'presencePenalty',
+  'responseJsonSchema',
+  'responseLogprobs',
+  'responseMimeType',
+  'responseModalities',
+  'responseSchema',
+  'routingConfig',
+  'seed',
+  'speechConfig',
+  'stopSequences',
+  'temperature',
+  'thinkingConfig',
+  'topK',
+  'topP',
+]);
+const REQUEST_CONFIG_KEYS = new Set([
+  'cachedContent',
+  'labels',
+  'modelArmorConfig',
+  'safetySettings',
+  'systemInstruction',
+  'toolConfig',
+  'tools',
+]);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const validateModel = (request: Record<string, unknown>): string => {
   const model = request.model;
@@ -45,8 +81,23 @@ const buildModelUrl = (
 };
 
 const buildRequestBody = (request: Record<string, unknown>): string => {
-  const nextRequest = { ...request };
-  delete nextRequest.model;
+  const { model: _model, config, ...rest } = request;
+  const nextRequest: Record<string, unknown> = { ...rest };
+
+  if (isRecord(config)) {
+    const generationConfig: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(config)) {
+      if (GENERATION_CONFIG_KEYS.has(key)) {
+        generationConfig[key] = value;
+      } else if (REQUEST_CONFIG_KEYS.has(key)) {
+        nextRequest[key] = value;
+      }
+    }
+    if (Object.keys(generationConfig).length > 0) {
+      nextRequest.generationConfig = generationConfig;
+    }
+  }
+
   return JSON.stringify(nextRequest);
 };
 
@@ -93,7 +144,9 @@ const createAbortSignal = (
   upstreamSignal?: AbortSignal,
 ): { signal: AbortSignal; cancelTimeout: () => void; didTimeout: () => boolean } => {
   const timeoutController = new AbortController();
+  let hasTimedOut = false;
   const timeoutHandle = setTimeout(() => {
+    hasTimedOut = true;
     timeoutController.abort(new DOMException('Upstream request timed out.', 'AbortError'));
   }, timeoutMs);
 
@@ -102,8 +155,33 @@ const createAbortSignal = (
       ? AbortSignal.any([upstreamSignal, timeoutController.signal])
       : timeoutController.signal,
     cancelTimeout: () => clearTimeout(timeoutHandle),
-    didTimeout: () => timeoutController.signal.aborted && !upstreamSignal?.aborted,
+    didTimeout: () => hasTimedOut,
   };
+};
+
+const createNetworkGatewayError = (): GatewayError =>
+  new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Upstream service is unavailable.', true);
+
+const isAbortError = (error: unknown): boolean =>
+  error instanceof DOMException && error.name === 'AbortError';
+
+const postJson = async (
+  options: VertexRestClientOptions,
+  url: string,
+  body: string,
+  signal: AbortSignal,
+): Promise<Response> => {
+  try {
+    return await (options.fetchFn ?? fetch)(url, {
+      method: 'POST',
+      headers: createHeaders(options.apiKey),
+      body,
+      signal,
+    });
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    throw createNetworkGatewayError();
+  }
 };
 
 const fetchJson = async (
@@ -114,12 +192,7 @@ const fetchJson = async (
 ): Promise<Record<string, unknown>> => {
   const { signal, cancelTimeout, didTimeout } = createAbortSignal(options.timeoutMs, metadata?.signal);
   try {
-    const response = await (options.fetchFn ?? fetch)(url, {
-      method: 'POST',
-      headers: createHeaders(options.apiKey),
-      body,
-      signal,
-    });
+    const response = await postJson(options, url, body, signal);
 
     if (!response.ok) {
       throw createUpstreamGatewayError(response.status, await readResponseMessage(response));
@@ -227,17 +300,13 @@ const fetchStream = async (
 ): Promise<AsyncIterable<Record<string, unknown>>> => {
   const { signal, cancelTimeout, didTimeout } = createAbortSignal(options.timeoutMs, metadata?.signal);
   try {
-    const response = await (options.fetchFn ?? fetch)(url, {
-      method: 'POST',
-      headers: createHeaders(options.apiKey),
-      body,
-      signal,
-    });
+    const response = await postJson(options, url, body, signal);
 
     if (!response.ok) {
       throw createUpstreamGatewayError(response.status, await readResponseMessage(response));
     }
 
+    cancelTimeout();
     const iterator = createSseIterator(response);
     return {
       async *[Symbol.asyncIterator]() {

@@ -53,6 +53,50 @@ describe('vertex REST client', () => {
     });
   });
 
+  it('translates SDK config into the Vertex REST request shape', async () => {
+    const fetchFn = vi.fn(async () => createJsonResponse({ candidates: [] }));
+    const client = createVertexRestClient({
+      apiKey: 'AIza-fake-test-key',
+      project: 'test-project',
+      location: 'global',
+      apiVersion: 'v1',
+      timeoutMs: 1_000,
+      fetchFn,
+    });
+
+    await client.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
+      config: {
+        temperature: 0.2,
+        topP: 0.8,
+        maxOutputTokens: 64,
+        responseModalities: ['TEXT'],
+        imageConfig: { aspectRatio: '1:1' },
+        systemInstruction: { parts: [{ text: 'be terse' }] },
+        tools: [{ functionDeclarations: [{ name: 'lookup' }] }],
+        toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
+        safetySettings: [{ category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }],
+      },
+    });
+
+    const [, init] = fetchFn.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
+      generationConfig: {
+        temperature: 0.2,
+        topP: 0.8,
+        maxOutputTokens: 64,
+        responseModalities: ['TEXT'],
+        imageConfig: { aspectRatio: '1:1' },
+      },
+      systemInstruction: { parts: [{ text: 'be terse' }] },
+      tools: [{ functionDeclarations: [{ name: 'lookup' }] }],
+      toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
+      safetySettings: [{ category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }],
+    });
+  });
+
   it('calls the regional endpoint for non-global locations', async () => {
     const fetchFn = vi.fn(async () => createJsonResponse({ candidates: [] }));
     const client = createVertexRestClient({
@@ -238,5 +282,99 @@ describe('vertex REST client', () => {
 
     expect(cancelSpy).toHaveBeenCalledTimes(1);
     expect(releaseLockSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the request timeout after streaming response headers arrive', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchFn = vi.fn(async () => createSseResponse(['data: {"chunk":1}\n\n']));
+      const client = createVertexRestClient({
+        apiKey: 'AIza-fake-test-key',
+        project: 'test-project',
+        location: 'global',
+        apiVersion: 'v1',
+        timeoutMs: 1_000,
+        fetchFn,
+      });
+
+      await client.models.generateContentStream?.({ model: 'gemini-2.5-flash' });
+      const [, init] = fetchFn.mock.calls[0] as [string, RequestInit];
+      vi.advanceTimersByTime(1_001);
+
+      expect((init.signal as AbortSignal).aborted).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('classifies timeouts correctly even if the caller aborts after the timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const abortController = new AbortController();
+      const fetchFn = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          abortController.abort();
+          reject(new DOMException('Upstream request timed out.', 'AbortError'));
+        }, { once: true });
+      }));
+      const client = createVertexRestClient({
+        apiKey: 'AIza-fake-test-key',
+        project: 'test-project',
+        location: 'global',
+        apiVersion: 'v1',
+        timeoutMs: 1_000,
+        fetchFn,
+      });
+
+      const promise = client.models.generateContent(
+        { model: 'gemini-2.5-flash' },
+        { signal: abortController.signal },
+      );
+      vi.advanceTimersByTime(1_001);
+
+      await expect(promise).rejects.toMatchObject({ status: 504, code: 'TIMEOUT' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('classifies fetch network failures as upstream unavailable', async () => {
+    const fetchFn = vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    });
+    const client = createVertexRestClient({
+      apiKey: 'AIza-fake-test-key',
+      project: 'test-project',
+      location: 'global',
+      apiVersion: 'v1',
+      timeoutMs: 1_000,
+      fetchFn,
+    });
+
+    await expect(client.models.generateContent({ model: 'gemini-2.5-flash' })).rejects.toMatchObject({
+      status: 503,
+      code: 'UPSTREAM_UNAVAILABLE',
+      retryable: true,
+    });
+  });
+
+  it('classifies streaming fetch network failures as upstream unavailable', async () => {
+    const fetchFn = vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    });
+    const client = createVertexRestClient({
+      apiKey: 'AIza-fake-test-key',
+      project: 'test-project',
+      location: 'global',
+      apiVersion: 'v1',
+      timeoutMs: 1_000,
+      fetchFn,
+    });
+
+    await expect(client.models.generateContentStream?.({ model: 'gemini-2.5-flash' })).rejects.toMatchObject({
+      status: 503,
+      code: 'UPSTREAM_UNAVAILABLE',
+      retryable: true,
+    });
   });
 });
