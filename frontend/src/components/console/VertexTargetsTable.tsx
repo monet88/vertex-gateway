@@ -31,8 +31,8 @@ export function VertexTargetsTable({ rows }: VertexTargetsTableProps) {
   };
 
   const sortedRows = [...rows].sort((a, b) => {
-    const valA = String(a[sortKey]);
-    const valB = String(b[sortKey]);
+    const valA = String(a[sortKey] ?? '');
+    const valB = String(b[sortKey] ?? '');
     return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
   });
 

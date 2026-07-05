@@ -21,7 +21,7 @@ export function filterLogs(rows: readonly ApiLogRow[], filters: LogTableFilters)
   return rows.filter((row) => {
     const routeMatches = filters.routeFamily === 'all' || row.routeFamily === filters.routeFamily;
     const statusMatches = filters.status === 'all' || row.status === filters.status;
-    const modelMatches = model.length === 0 || row.model.toLowerCase().includes(model);
+    const modelMatches = model.length === 0 || (row.model?.toLowerCase().includes(model) ?? false);
     return routeMatches && statusMatches && modelMatches;
   });
 }

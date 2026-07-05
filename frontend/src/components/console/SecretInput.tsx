@@ -15,6 +15,7 @@ export function SecretInput({ id, label, value, onChange, placeholder }: SecretI
 
   async function copyValue() {
     if (!value) return;
+    if (!navigator.clipboard) return;
     await navigator.clipboard.writeText(value);
   }
 
