@@ -64,6 +64,34 @@ describe('gateway config file', () => {
     expect(config.googleLocation).toBe('global');
   });
 
+  it('allows file-store admin bootstrap without static gateway keys or upstream credentials', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const configPath = path.join(dir, 'config.yaml');
+    const storeDir = path.join(dir, 'store');
+    fs.writeFileSync(configPath, [
+      'googleCredentialsFile: null',
+      'googleLocation: global',
+    ].join('\n'));
+
+    process.env.GATEWAY_CONFIG_FILE = configPath;
+    process.env.GATEWAY_ADMIN_STORE_MODE = 'file-store';
+    process.env.GATEWAY_ADMIN_FILE_STORE_DIR = storeDir;
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GOOGLE_GENAI_API_KEY;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    const config = loadConfig();
+
+    expect(config.gatewayKeys).toEqual([]);
+    expect(config.resolvedVertexTargets).toEqual([]);
+    expect(config.adminStoreMode).toBe('file-store');
+    expect(config.adminFileStoreDir).toBe(storeDir);
+  });
+
   it('defaults CORS to unrestricted browser origins when no allowlist is configured', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
     const configPath = path.join(dir, 'config.yaml');

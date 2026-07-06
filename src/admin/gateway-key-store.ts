@@ -49,10 +49,11 @@ export const hashGatewayKey = (secret: string): string =>
 const createSecret = (): string =>
   `vgw_${randomBytes(24).toString('base64url')}`;
 
-const previewSecret = (secret: string): string =>
-  secret.length >= 16
-    ? `${secret.slice(0, 8)}...${secret.slice(-4)}`
-    : `${secret.slice(0, 4)}...`;
+const previewSecret = (secret: string): string => {
+  if (secret.length >= 16) return `${secret.slice(0, 8)}...${secret.slice(-4)}`;
+  if (secret.length <= 4) return `${'*'.repeat(Math.max(secret.length, 1))}...`;
+  return `${secret.slice(0, 4)}...`;
+};
 
 const sanitize = ({ hash: _hash, ...record }: AdminGatewayKeyRecord): SanitizedGatewayKeyRecord =>
   record;
@@ -63,10 +64,14 @@ export const verifyManagedGatewayKey = (
 ): boolean => {
   if (hashes.length === 0) return false;
   const candidateHash = Buffer.from(hashGatewayKey(candidate), 'hex');
-  return hashes.some((hash) => {
+  let matched = false;
+  for (const hash of hashes) {
     const stored = Buffer.from(hash, 'hex');
-    return candidateHash.length === stored.length && timingSafeEqual(candidateHash, stored);
-  });
+    if (candidateHash.length === stored.length && timingSafeEqual(candidateHash, stored)) {
+      matched = true;
+    }
+  }
+  return matched;
 };
 
 const readJsonIfExists = <T>(filePath: string): T | null => {
@@ -122,13 +127,24 @@ export const createGatewayKeyStore = (
 
   const storeDir = config.adminFileStoreDir;
   const storePath = path.join(storeDir, STORE_FILE);
-  fs.mkdirSync(storeDir, { recursive: true, mode: 0o700 });
 
   const readRecords = (): AdminGatewayKeyRecord[] =>
     readJsonIfExists<AdminGatewayKeyRecord[]>(storePath) ?? [];
 
-  const writeRecords = (records: AdminGatewayKeyRecord[]): void =>
+  const writeRecords = (records: AdminGatewayKeyRecord[]): void => {
+    fs.mkdirSync(storeDir, { recursive: true, mode: 0o700 });
     writeJsonAtomic(storePath, records);
+  };
+
+  const restoreRecords = (records: AdminGatewayKeyRecord[] | null): void => {
+    if (records) {
+      writeRecords(records);
+      return;
+    }
+    if (fs.existsSync(storePath)) {
+      fs.rmSync(storePath);
+    }
+  };
 
   const deriveAndNotify = (records: AdminGatewayKeyRecord[]): void => {
     const activeHashes = records
@@ -168,24 +184,36 @@ export const createGatewayKeyStore = (
         createdAt: new Date().toISOString(),
         hash,
       };
-      const records = readRecords();
+      const previousRecords = readJsonIfExists<AdminGatewayKeyRecord[]>(storePath);
+      const records = previousRecords ? previousRecords.map((entry) => ({ ...entry })) : [];
       records.push(record);
-      writeRecords(records);
-      deriveAndNotify(records);
+      try {
+        writeRecords(records);
+        deriveAndNotify(records);
+      } catch (error) {
+        restoreRecords(previousRecords);
+        throw error;
+      }
       return { gatewayKey: sanitize(record), secret };
     },
 
     revoke(id: string): RevokedGatewayKey {
       assertWritableMode(config);
-      const records = readRecords();
+      const previousRecords = readJsonIfExists<AdminGatewayKeyRecord[]>(storePath);
+      const records = previousRecords ? previousRecords.map((entry) => ({ ...entry })) : [];
       const record = records.find((r) => r.id === id);
       if (!record) {
         throw new GatewayError(404, 'NOT_FOUND', `Gateway key ${id} not found.`);
       }
       record.status = 'revoked';
       record.revokedAt = new Date().toISOString();
-      writeRecords(records);
-      deriveAndNotify(records);
+      try {
+        writeRecords(records);
+        deriveAndNotify(records);
+      } catch (error) {
+        restoreRecords(previousRecords);
+        throw error;
+      }
       return { gatewayKey: sanitize(record) };
     },
   };

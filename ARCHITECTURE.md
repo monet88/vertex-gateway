@@ -108,8 +108,8 @@ lets tests inject a fake `generateContent`/`generateContentStream` pair.
 
 ### `src/lib/genai-pool.ts` and `src/lib/genai-runtime.ts`
 
-`genai-pool.ts` holds the pool selection algorithm (round-robin or weighted
-round-robin), per-target health tracking (success/failure counters, cooldown
+`genai-pool.ts` holds the pool selection algorithm (round-robin by default, or
+bind-first), per-target health tracking (success/failure counters, cooldown
 timestamps, a bounded recent-event ring buffer), and the failover loop that
 walks eligible targets on error. `GenAiRuntime` wraps a pool snapshot behind
 the same `GenAiClient` shape so `single` mode and `pool` mode are

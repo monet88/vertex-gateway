@@ -82,9 +82,8 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
   const workloads = new ImageWorkloads(ai, activeConfig);
 
   const reloadActiveConfig = (nextConfig: GatewayConfig) => {
-    const candidate = hydrateManagedGatewayKeyHashes(nextConfig);
-    runtime?.reload(candidate);
-    activeConfig = candidate;
+    runtime?.reload(nextConfig);
+    activeConfig = nextConfig;
   };
   const streamAdmission = new StreamAdmission(config.streamPerKeyLimit, config.streamQueueLimit);
   const streamConfig = {
@@ -157,7 +156,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
           || catalog.allowlist.length > 0
           || catalog.disabled.length > 0,
         );
-        return hasOpenAiRules ? resolveProviderModel(config.modelCatalog, 'openai', value) : undefined;
+        return hasOpenAiRules ? resolveProviderModel(activeConfig.modelCatalog, 'openai', value) : undefined;
       };
       if (resolvedRoute.family === 'gemini' || resolvedRoute.family === 'vertex' || resolvedRoute.family === 'vtx') {
         const nextModel = geminiModel(resolvedRoute.model);

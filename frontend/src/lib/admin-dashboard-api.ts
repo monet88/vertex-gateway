@@ -27,8 +27,9 @@ interface VertexCredentialsResponse {
 const mapHealth = (record: AdminVertexCredentialRecord): VertexTargetRow['health'] => {
   if (record.health?.status === 'healthy') return 'ready';
   if (record.health?.status === 'cooldown') return 'degraded';
-  if (record.health?.status === 'disabled') return 'failed';
-  return 'ready';
+  if (record.health?.status === 'disabled') return 'disabled';
+  if (record.health?.status === 'failed') return 'failed';
+  return 'unknown';
 };
 
 export const mapVertexTarget = (record: AdminVertexCredentialRecord): VertexTargetRow => ({
@@ -64,9 +65,18 @@ export async function revokeGatewayKey(options: AdminApiOptions, id: string) {
 }
 
 export interface VertexTargetDraftPayload { readonly label: string; readonly project: string; readonly location: string; readonly apiKey: string; }
+export interface ServiceAccountTargetDraftPayload { readonly label: string; readonly project: string; readonly location: string; readonly credential: Record<string, unknown>; }
 
 export async function createVertexTarget(options: AdminApiOptions, draft: VertexTargetDraftPayload): Promise<VertexTargetRow> {
   const response = await adminFetch<{ ok: true; credential: AdminVertexCredentialRecord }>('/admin/api/vertex-credentials/api-key', options, {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  });
+  return mapVertexTarget(response.credential);
+}
+
+export async function importServiceAccountTarget(options: AdminApiOptions, draft: ServiceAccountTargetDraftPayload): Promise<VertexTargetRow> {
+  const response = await adminFetch<{ ok: true; credential: AdminVertexCredentialRecord }>('/admin/api/vertex-credentials/import', options, {
     method: 'POST',
     body: JSON.stringify(draft),
   });

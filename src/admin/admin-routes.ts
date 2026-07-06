@@ -138,6 +138,7 @@ export const maybeHandleAdminRoute = async (
   });
   const gatewayKeyStore = createGatewayKeyStore(config, (nextConfig) => {
     onConfigReload?.(nextConfig);
+    if (!onConfigReload) runtime.reload(nextConfig);
   });
 
   if (req.method === 'GET' && normalizedPathname === '/admin/api/health') {
@@ -190,10 +191,15 @@ export const maybeHandleAdminRoute = async (
   if (req.method === 'POST' && normalizedPathname === '/admin/api/vertex-credentials/api-key') {
     const body = await parseJsonBody(req, config.maxJsonBytes);
     const credential = createApiKeyVertexCredential(config, body);
-    const snapshot = credentialStore.updateVertexPools((state) => ({
-      ...state,
-      vertexPools: [...state.vertexPools.filter((entry) => entry.id !== credential.id), credential],
-    }));
+    const snapshot = credentialStore.updateVertexPools((state) => {
+      if (state.vertexPools.some((entry) => entry.id === credential.id)) {
+        throw new GatewayError(400, 'VALIDATION_FAILED', `Credential ${credential.id} already exists.`);
+      }
+      return {
+        ...state,
+        vertexPools: [...state.vertexPools, credential],
+      };
+    });
     sendJson(res, 200, { ok: true, credential: findCredentialOrThrow(withRuntimeHealth(snapshot, runtime), credential.id) });
     return true;
   }

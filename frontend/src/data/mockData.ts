@@ -28,7 +28,7 @@ export interface VertexTargetRow {
   location: string;
   authType: 'Google Cloud API key' | 'Service Account JSON';
   apiKeyMode: 'full' | 'express';
-  health: 'ready' | 'degraded' | 'failed';
+  health: 'ready' | 'degraded' | 'failed' | 'disabled' | 'unknown';
 }
 
 export const apiLogs: ApiLogRow[] = [

@@ -5,6 +5,7 @@ import { ApiLogsTable } from '@/components/console/ApiLogsTable';
 import { GatewayKeysTable } from '@/components/console/GatewayKeysTable';
 import { VertexTargetsTable } from '@/components/console/VertexTargetsTable';
 import { GatewayKeyDialog } from '@/components/console/GatewayKeyDialog';
+import { ServiceAccountTargetDialog } from '@/components/console/ServiceAccountTargetDialog';
 import { VertexTargetDialog } from '@/components/console/VertexTargetDialog';
 import { SecretInput } from '@/components/console/SecretInput';
 import { useAdminToken } from '@/hooks/useAdminToken';
@@ -29,6 +30,7 @@ export function Dashboard() {
             </div>
             <GatewayKeyDialog onCreate={(label) => adminData.createKey(label)} disabled={!adminData.mutable} />
             <VertexTargetDialog onCreate={(target) => adminData.createTarget(target)} disabled={!adminData.mutable} />
+            <ServiceAccountTargetDialog onCreate={(target) => adminData.importServiceAccount(target)} disabled={!adminData.mutable} />
           </div>
         </section>
 
@@ -41,7 +43,15 @@ export function Dashboard() {
         </section>
 
         <section id="keys" className="scroll-mt-6">
-          <h2 className="mb-4 text-xl font-semibold tracking-tight text-foreground">Gateway keys</h2>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xl font-semibold tracking-tight text-foreground">Gateway keys</h2>
+            {adminData.loading && <span className="text-sm text-muted-foreground">Đang tải dữ liệu admin...</span>}
+          </div>
+          {adminData.error && (
+            <p className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {adminData.error}
+            </p>
+          )}
           <GatewayKeysTable rows={adminData.gatewayKeys} onRevoke={(id) => adminData.revokeKey(id)} mutable={adminData.mutable} />
         </section>
 

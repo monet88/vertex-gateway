@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { loadServiceAccountCredential } from "../auth/google-auth.js";
 
-export type VertexPoolSelection = "round-robin" | "weighted-round-robin";
+export type VertexPoolSelection = "round-robin" | "bind-first";
 export type VertexApiKeyMode = "full" | "express";
 export type AdminStoreMode = "static-config" | "file-store";
 export type GatewayRuntimeMode = "single" | "pool";
@@ -87,7 +87,7 @@ const DEFAULTS = {
   vertexPoolFailoverCooldownMs: 60_000,
   upstreamRetries: 2,
   upstreamRetryDelayMs: 250,
-  vertexPoolSelection: "weighted-round-robin" as VertexPoolSelection,
+  vertexPoolSelection: "round-robin" as VertexPoolSelection,
   adminStoreMode: "static-config" as AdminStoreMode,
 };
 
@@ -518,10 +518,10 @@ const validatePoolOverlayConfig = (
   if (config.vertexPoolSelection !== undefined) {
     if (
       config.vertexPoolSelection !== "round-robin" &&
-      config.vertexPoolSelection !== "weighted-round-robin"
+      config.vertexPoolSelection !== "bind-first"
     ) {
       throw new Error(
-        `Invalid ${filePath}: vertexPoolSelection must be "round-robin" or "weighted-round-robin".`,
+        `Invalid ${filePath}: vertexPoolSelection must be "round-robin" or "bind-first".`,
       );
     }
     normalized.vertexPoolSelection = config.vertexPoolSelection;
@@ -745,6 +745,10 @@ const resolveVertexTargets = (
     return config.vertexPools
       .filter((entry) => entry.enabled)
       .map((entry) => ({ ...entry, source: "pool" as const }));
+  }
+
+  if (!config.googleApiKey && !config.googleProject && !config.googleCredentialsFile) {
+    return [];
   }
 
   return [
@@ -976,14 +980,16 @@ export const createDerivedConfig = (
 };
 
 export const validateConfig = (config: GatewayConfig): void => {
-  if (config.gatewayKeys.length === 0)
-    throw new Error("GATEWAY_API_KEYS is required.");
+  const canLoadManagedKeys = config.adminStoreMode === "file-store" && Boolean(config.adminFileStoreDir);
+  if (config.gatewayKeys.length === 0 && config.managedGatewayKeyHashes.length === 0 && !canLoadManagedKeys) {
+    throw new Error("GATEWAY_API_KEYS or managed gateway key file-store is required.");
+  }
   if (
     config.vertexPoolSelection !== "round-robin" &&
-    config.vertexPoolSelection !== "weighted-round-robin"
+    config.vertexPoolSelection !== "bind-first"
   ) {
     throw new Error(
-      'GATEWAY_VERTEX_POOL_SELECTION must be "round-robin" or "weighted-round-robin".',
+      'GATEWAY_VERTEX_POOL_SELECTION must be "round-robin" or "bind-first".',
     );
   }
   if (
@@ -1088,6 +1094,7 @@ export const validateConfig = (config: GatewayConfig): void => {
     !config.googleProject &&
     !serviceAccount?.project_id
   ) {
+    if (canLoadManagedKeys) return;
     throw new Error(
       "GOOGLE_VERTEX_PROJECT, GOOGLE_CLOUD_PROJECT, or service account project_id is required (or set GOOGLE_GENAI_API_KEY for express mode).",
     );

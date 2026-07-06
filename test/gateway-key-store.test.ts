@@ -37,13 +37,32 @@ describe('gateway key store', () => {
     expect(verifyManagedGatewayKey(created.secret, store.getActiveHashes())).toBe(false);
   });
 
+  it('does not create the file-store directory for read-only snapshots', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-keys-'));
+    const storeDir = path.join(root, 'missing-store');
+    const store = createGatewayKeyStore(testConfig({
+      enableAdminRoutes: true,
+      adminToken: 'admin-secret',
+      adminAllowMutations: true,
+      adminStoreMode: 'file-store',
+      adminFileStoreDir: storeDir,
+    }));
+
+    expect(store.getSnapshot().gatewayKeys).toEqual([]);
+    expect(fs.existsSync(storeDir)).toBe(false);
+    store.create({ label: 'Mobile app' });
+    expect(fs.existsSync(storeDir)).toBe(true);
+  });
+
   it('lists static config keys as read-only sanitized previews', () => {
-    const store = createGatewayKeyStore(testConfig({ gatewayKeys: ['test-key', 'second-key'] }));
+    const store = createGatewayKeyStore(testConfig({ gatewayKeys: ['test-key', 'second-key', 'abcd'] }));
     const snapshot = store.getSnapshot();
+    const serialized = JSON.stringify(snapshot);
     expect(snapshot.mode).toBe('static-config');
     expect(snapshot.mutable).toBe(false);
-    expect(snapshot.gatewayKeys).toHaveLength(2);
-    expect(JSON.stringify(snapshot)).not.toContain('second-key');
+    expect(snapshot.gatewayKeys).toHaveLength(3);
+    expect(serialized).not.toContain('second-key');
+    expect(serialized).not.toContain('abcd');
   });
 
   it('rejects create in static-config mode', () => {

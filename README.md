@@ -46,7 +46,7 @@ VERTEX_POOLS=project-a:global:AIzaKey1,project-b:global:AIzaKey2,project-c:globa
 Format: `project:location:apiKey` per entry. Because each entry includes
 `project` + `location`, `VERTEX_POOLS` defaults these targets to full Vertex
 API-key mode and auto-creates pool mode with round-robin. For advanced options
-(weights, model filtering, service accounts, or explicit `apiKeyMode:
+(model filtering, service accounts, or explicit `apiKeyMode:
 "express"` API-key-only targets), use `pool-config.local.json` instead — see
 [Pool Mode](#pool-mode).
 
@@ -105,8 +105,9 @@ r = client.chat.completions.create(
 
 Docker users set `GATEWAY_POOL_CONFIG` in `.env` to choose which host overlay
 file Compose mounts. Non-Docker users set `GATEWAY_POOL_CONFIG_FILE` directly to
-the overlay JSON path. The overlay defines multiple Vertex targets with weighted
-round-robin (default) or round-robin selection. Each target uses either a
+the overlay JSON path. The overlay defines multiple Vertex targets with
+round-robin selection by default, or `bind-first` to keep using the first
+healthy target and rotate only on failover/cooldown. Each target uses either a
 service account (`credentialsFile`) or API key (`apiKey`). API-key targets
 default to full Vertex routing when they include `project` + `location`; set
 `apiKeyMode: "express"` on a pool entry to use the SDK API-key-only path

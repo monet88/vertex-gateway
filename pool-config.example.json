@@ -1,5 +1,5 @@
 {
-  "vertexPoolSelection": "weighted-round-robin",
+  "vertexPoolSelection": "round-robin",
   "enableAdminRoutes": false,
   "adminAllowMutations": false,
   "adminStoreMode": "static-config",

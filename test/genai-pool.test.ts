@@ -276,144 +276,70 @@ describe('GenAI runtime pool', () => {
     expect(calls).toEqual(['project-a', 'project-b', 'project-c']);
   });
 
-  it('uses weighted round-robin for uneven target weights', async () => {
+  it('keeps using the first healthy target with bind-first selection', async () => {
     const calls: string[] = [];
     const runtime = createGenAiRuntime(testConfig({
       runtimeMode: 'pool',
-      vertexPoolSelection: 'weighted-round-robin',
+      vertexPoolSelection: 'bind-first',
       vertexPools: [
-        {
-          id: 'project-a',
-          project: 'project-a',
-          location: 'global',
-          credentialsFile: null,
-          enabled: true,
-          weight: 3,
-          label: 'Project A',
-          modelAllowlist: [],
-          modelExclusions: [],
-        },
-        {
-          id: 'project-b',
-          project: 'project-b',
-          location: 'global',
-          credentialsFile: null,
-          enabled: true,
-          weight: 1,
-          label: 'Project B',
-          modelAllowlist: [],
-          modelExclusions: [],
-        },
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 3, label: 'Project A', modelAllowlist: [], modelExclusions: [] },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, label: 'Project B', modelAllowlist: [], modelExclusions: [] },
       ],
       resolvedVertexTargets: [
-        {
-          id: 'project-a',
-          project: 'project-a',
-          location: 'global',
-          credentialsFile: null,
-          enabled: true,
-          weight: 3,
-          label: 'Project A',
-          modelAllowlist: [],
-          modelExclusions: [],
-          source: 'pool',
-        },
-        {
-          id: 'project-b',
-          project: 'project-b',
-          location: 'global',
-          credentialsFile: null,
-          enabled: true,
-          weight: 1,
-          label: 'Project B',
-          modelAllowlist: [],
-          modelExclusions: [],
-          source: 'pool',
-        },
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 3, label: 'Project A', modelAllowlist: [], modelExclusions: [], source: 'pool' },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, label: 'Project B', modelAllowlist: [], modelExclusions: [], source: 'pool' },
       ],
     }), createFactory(calls));
-
-    for (let index = 0; index < 8; index += 1) {
-      await runtime.client.models.generateContent({ model: 'gemini-2.5-flash' });
-    }
-
-    expect(calls.filter((id) => id === 'project-a')).toHaveLength(6);
-    expect(calls.filter((id) => id === 'project-b')).toHaveLength(2);
-  });
-
-  it('uses only active candidate weights when one target is cooling down', async () => {
-    const calls: string[] = [];
-    const runtime = createGenAiRuntime(testConfig({
-      runtimeMode: 'pool',
-      vertexPoolSelection: 'weighted-round-robin',
-      vertexPoolFailoverCooldownMs: 60_000,
-      vertexPools: [
-        {
-          id: 'project-a',
-          project: 'project-a',
-          location: 'global',
-          credentialsFile: null,
-          enabled: true,
-          weight: 3,
-          label: 'Project A',
-          modelAllowlist: [],
-          modelExclusions: [],
-        },
-        {
-          id: 'project-b',
-          project: 'project-b',
-          location: 'global',
-          credentialsFile: null,
-          enabled: true,
-          weight: 1,
-          label: 'Project B',
-          modelAllowlist: [],
-          modelExclusions: [],
-        },
-      ],
-      resolvedVertexTargets: [
-        {
-          id: 'project-a',
-          project: 'project-a',
-          location: 'global',
-          credentialsFile: null,
-          enabled: true,
-          weight: 3,
-          label: 'Project A',
-          modelAllowlist: [],
-          modelExclusions: [],
-          source: 'pool',
-        },
-        {
-          id: 'project-b',
-          project: 'project-b',
-          location: 'global',
-          credentialsFile: null,
-          enabled: true,
-          weight: 1,
-          label: 'Project B',
-          modelAllowlist: [],
-          modelExclusions: [],
-          source: 'pool',
-        },
-      ],
-    }), createFactory(calls));
-
-    const snapshot = runtime.getSnapshot().active;
-    snapshot.targets.find((target) => target.id === 'project-b')!.health.cooldownUntil = Date.now() + 60_000;
-    snapshot.targets.find((target) => target.id === 'project-b')!.health.status = 'cooldown';
-
-    await runtime.client.models.generateContent({ model: 'gemini-2.5-flash' });
-    await runtime.client.models.generateContent({ model: 'gemini-2.5-flash' });
-
-    snapshot.targets.find((target) => target.id === 'project-b')!.health.cooldownUntil = undefined;
-    snapshot.targets.find((target) => target.id === 'project-b')!.health.status = 'healthy';
 
     for (let index = 0; index < 4; index += 1) {
       await runtime.client.models.generateContent({ model: 'gemini-2.5-flash' });
     }
 
-    expect(calls).toEqual(['project-a', 'project-a', 'project-b', 'project-a', 'project-a', 'project-a']);
+    expect(calls).toEqual(['project-a', 'project-a', 'project-a', 'project-a']);
+  });
+
+  it('fails over to the next target when the first bind-first target fails', async () => {
+    const calls: string[] = [];
+    const runtime = createGenAiRuntime(testConfig({
+      runtimeMode: 'pool',
+      vertexPoolSelection: 'bind-first',
+      vertexPoolFailoverCooldownMs: 60_000,
+      vertexPools: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 3, label: 'Project A', modelAllowlist: [], modelExclusions: [] },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, label: 'Project B', modelAllowlist: [], modelExclusions: [] },
+      ],
+      resolvedVertexTargets: [
+        { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 3, label: 'Project A', modelAllowlist: [], modelExclusions: [], source: 'pool' },
+        { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, label: 'Project B', modelAllowlist: [], modelExclusions: [], source: 'pool' },
+      ],
+    }), (_config, target) => ({
+      models: {
+        generateContent: vi.fn(async () => {
+          calls.push(target.id);
+          if (target.id === 'project-a') throw new Error('503 unavailable');
+          return { targetId: target.id };
+        }),
+      },
+    }));
+
+    await runtime.client.models.generateContent({ model: 'gemini-2.5-flash' });
+    await runtime.client.models.generateContent({ model: 'gemini-2.5-flash' });
+
+    expect(calls).toEqual(['project-a', 'project-b', 'project-b']);
+  });
+
+  it('starts with no targets and returns a 503 until credentials are added', async () => {
+    const runtime = createGenAiRuntime(testConfig({
+      runtimeMode: 'pool',
+      vertexPools: [],
+      resolvedVertexTargets: [],
+    }), createFactory([]));
+
+    expect(runtime.getSnapshot().active.targetCount).toBe(0);
+    await expect(runtime.client.models.generateContent({ model: 'gemini-2.5-flash' })).rejects.toMatchObject({
+      status: 503,
+      code: 'UPSTREAM_UNAVAILABLE',
+    });
   });
 
   it('keeps a stable proxy across reload and sends future traffic to new targets', async () => {

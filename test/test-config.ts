@@ -28,7 +28,7 @@ export const testConfig = (overrides: Partial<GatewayConfig> = {}): GatewayConfi
   enableVtxRoutes: true,
   enableImageRoutes: true,
   runtimeMode: 'single',
-  vertexPoolSelection: 'weighted-round-robin',
+  vertexPoolSelection: 'round-robin',
   vertexPools: [],
   resolvedVertexTargets: [{
     id: 'legacy-default',

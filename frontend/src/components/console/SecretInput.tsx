@@ -8,9 +8,10 @@ export interface SecretInputProps {
   readonly value: string;
   readonly onChange: (value: string) => void;
   readonly placeholder?: string;
+  readonly disabled?: boolean;
 }
 
-export function SecretInput({ id, label, value, onChange, placeholder }: SecretInputProps) {
+export function SecretInput({ id, label, value, onChange, placeholder, disabled = false }: SecretInputProps) {
   const [revealed, setRevealed] = useState(false);
 
   async function copyValue() {
@@ -30,11 +31,12 @@ export function SecretInput({ id, label, value, onChange, placeholder }: SecretI
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           autoComplete="off"
+          disabled={disabled}
         />
-        <Button type="button" variant="secondary" onClick={() => setRevealed((current) => !current)}>
+        <Button type="button" variant="secondary" onClick={() => setRevealed((current) => !current)} disabled={disabled}>
           {revealed ? 'Ẩn' : 'Hiện'}
         </Button>
-        <Button type="button" variant="secondary" onClick={copyValue} disabled={!value}>
+        <Button type="button" variant="secondary" onClick={copyValue} disabled={!value || disabled}>
           Copy
         </Button>
       </div>

@@ -211,7 +211,6 @@ Must include:
 - Location.
 - Auth type: Google Cloud API key or Service Account JSON.
 - apiKeyMode: full or express.
-- Weight.
 - Enabled toggle.
 - Health state.
 - Last probe result.

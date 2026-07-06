@@ -27,6 +27,12 @@ export function VertexTargetDialog({ onCreate, disabled }: VertexTargetDialogPro
     setDraft((current) => ({ ...current, ...update }));
   }
 
+  function handleOpenChange(nextOpen: boolean) {
+    if (pending && !nextOpen) return;
+    setError(null);
+    setOpen(nextOpen);
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -43,7 +49,7 @@ export function VertexTargetDialog({ onCreate, disabled }: VertexTargetDialogPro
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild><Button disabled={disabled}>Thêm target</Button></DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -65,7 +71,7 @@ export function VertexTargetDialog({ onCreate, disabled }: VertexTargetDialogPro
               <Input id="target-location" value={draft.location} onChange={(event) => patch({ location: event.target.value })} required disabled={pending} />
             </div>
           </div>
-          <SecretInput id="target-api-key" label="Google Cloud API key" value={draft.apiKey} onChange={(apiKey) => patch({ apiKey })} />
+          <SecretInput id="target-api-key" label="Google Cloud API key" value={draft.apiKey} onChange={(apiKey) => patch({ apiKey })} disabled={pending} />
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" disabled={pending}>{pending ? 'Đang tạo…' : 'Thêm target'}</Button>
         </form>

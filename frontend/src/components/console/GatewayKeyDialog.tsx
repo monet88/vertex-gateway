@@ -32,6 +32,7 @@ export function GatewayKeyDialog({ onCreate, disabled }: GatewayKeyDialogProps) 
   }
 
   function handleClose(nextOpen: boolean) {
+    if (!nextOpen && pending) return;
     if (!nextOpen) {
       setSecret(null);
       setError(null);

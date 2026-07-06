@@ -486,6 +486,40 @@ describe('admin routes', () => {
     expect(revokedBody.gatewayKey.status).toBe('revoked');
   });
 
+  it('rolls back managed gateway key persistence when runtime reload fails', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    const runtime = createFakeRuntime();
+    runtime.reload = vi.fn(() => {
+      throw new Error('reload failed');
+    });
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const headers = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+
+    const created = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ label: 'Mobile app' }),
+    });
+    expect(created.status).toBe(500);
+
+    const list = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const listBody = await list.json();
+    expect(listBody.gatewayKeys).toHaveLength(0);
+    expect(fs.existsSync(path.join(dir, 'gateway-keys.json'))).toBe(false);
+  });
+
   it('lists static config gateway keys but rejects managed key mutations in read-only mode', async () => {
     server = createApp({
       config: testConfig({ enableAdminRoutes: true, adminToken: 'admin-secret' }),
@@ -539,5 +573,89 @@ describe('admin routes', () => {
     const listBody = await list.json();
     expect(JSON.stringify(listBody)).not.toContain('google-secret');
     expect(runtime.reload).toHaveBeenCalled();
+  });
+
+  it('rejects duplicate API-key Vertex targets instead of replacing them', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+        runtimeMode: 'pool',
+        vertexPools: [],
+        resolvedVertexTargets: [],
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const headers = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+    const payload = { label: 'Global key', project: 'project-a', location: 'global', apiKey: 'google-secret' };
+
+    const first = await fetch(`${baseUrl}/admin/api/vertex-credentials/api-key`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    expect(first.status).toBe(200);
+
+    const duplicate = await fetch(`${baseUrl}/admin/api/vertex-credentials/api-key`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ...payload, apiKey: 'replacement-secret' }),
+    });
+    const duplicateBody = await duplicate.json();
+    expect(duplicate.status).toBe(400);
+    expect(duplicateBody.error.message).toMatch(/already exists/i);
+
+    const list = await fetch(`${baseUrl}/admin/api/vertex-credentials`, { headers: { authorization: 'Bearer admin-secret' } });
+    const listBody = await list.json();
+    expect(listBody.vertexPools).toHaveLength(1);
+    expect(JSON.stringify(listBody)).not.toContain('replacement-secret');
+  });
+
+  it('applies admin-updated OpenAI model catalog rules without restart', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const adminHeaders = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+
+    const modelPut = await fetch(`${baseUrl}/admin/api/models/openai`, {
+      method: 'PUT',
+      headers: adminHeaders,
+      body: JSON.stringify({
+        aliases: { fast: 'gemini-3.5-flash' },
+        allowlist: ['gemini-3.5-flash'],
+        disabled: [],
+      }),
+    });
+    expect(modelPut.status).toBe(200);
+
+    const completion = await fetch(`${baseUrl}/openai/v1/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer test-key', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'fast',
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    });
+    expect(completion.status).toBe(200);
+    expect(runtime.client.models.generateContent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gemini-3.5-flash' }),
+      expect.any(Object),
+    );
   });
 });
