@@ -2,7 +2,7 @@
 
 Node 22 HTTP gateway between frontend apps and Google Vertex AI. Accepts a
 **gateway API key**, authenticates upstream with server-side credentials.
-Exposes Gemini, OpenAI, Vertex, and custom image API surfaces.
+Exposes Gemini and OpenAI-compatible API surfaces.
 
 Pure `node:http` + `@google/genai` SDK, zero framework.
 
@@ -72,9 +72,6 @@ Interactive docs at `GET /docs`. LLM-friendly summary at `GET /llms.txt`.
 |---------|----------|---------------|
 | **Gemini** | `/gemini/` | `GET models`, `POST models/{m}:generateContent`, `POST models/{m}:streamGenerateContent` |
 | **OpenAI** | `/openai/v1` | `GET models`, `POST chat/completions`, `POST responses`, `POST images/generations`, `POST images/edits` |
-| **Vertex** | `/vertex/v1/projects/…` | `POST :generateContent`, `POST :streamGenerateContent`, `POST :predict` |
-| **Vtx** (shorthand) | `/vtx/v1/` | `POST models/{m}:generateContent`, `POST models/{m}:predict` |
-| **Custom** | `/api/` | `POST images/generate`, `POST images/edit`, `POST images/upscale`, `POST images/describe`, `POST session/validate` |
 
 > ⚠️ OpenAI `images/generations` rejects `response_format`, `quality`, `style`,
 > `background`, `user`. Always returns `b64_json`.

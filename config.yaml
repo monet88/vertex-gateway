@@ -24,6 +24,3 @@ upstreamConcurrency: 4
 
 # Route switches
 enableGeminiRoutes: true
-enableVertexRoutes: true
-enableVtxRoutes: true
-enableImageRoutes: true

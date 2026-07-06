@@ -169,7 +169,7 @@ describe('app model aliasing', () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
-  it('rewrites custom image route body models through the configured alias map', async () => {
+  it('rewrites OpenAI image route body models through the configured alias map', async () => {
     const generateContent = vi.fn(async () => ({
       candidates: [{ content: { parts: [{ inlineData: { data: 'abc', mimeType: 'image/png' } }] } }],
     }));
@@ -187,13 +187,13 @@ describe('app model aliasing', () => {
     });
     const baseUrl = await listen(server);
 
-    const response = await fetch(`${baseUrl}/api/images/edit`, {
+    const response = await fetch(`${baseUrl}/openai/v1/images/edits`, {
       method: 'POST',
       headers: { authorization: 'Bearer test-key', 'content-type': 'application/json' },
       body: JSON.stringify({
         model: 'gemini-3.1-flash-image',
         prompt: 'edit',
-        images: [{ mimeType: 'image/png', data: 'YWJj' }],
+        image: 'data:image/png;base64,YWJj',
       }),
     });
 
@@ -205,7 +205,7 @@ describe('app model aliasing', () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
-  it('does not inject default model into custom image routes when the client omitted model', async () => {
+  it('does not inject default model into OpenAI image routes when the client omitted model', async () => {
     const generateContent = vi.fn(async () => ({
       candidates: [{ content: { parts: [{ inlineData: { data: 'abc', mimeType: 'image/png' } }] } }],
     }));
@@ -224,12 +224,12 @@ describe('app model aliasing', () => {
     });
     const baseUrl = await listen(server);
 
-    const response = await fetch(`${baseUrl}/api/images/edit`, {
+    const response = await fetch(`${baseUrl}/openai/v1/images/edits`, {
       method: 'POST',
       headers: { authorization: 'Bearer test-key', 'content-type': 'application/json' },
       body: JSON.stringify({
         prompt: 'edit',
-        images: [{ mimeType: 'image/png', data: 'YWJj' }],
+        image: 'data:image/png;base64,YWJj',
       }),
     });
 

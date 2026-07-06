@@ -40,9 +40,6 @@ describe('gateway config file', () => {
       'googleCredentialsFile: null',
       'googleLocation: global',
       'enableGeminiRoutes: true',
-      'enableVertexRoutes: true',
-      'enableVtxRoutes: true',
-      'enableImageRoutes: true',
     ].join('\n'));
 
     delete process.env.PORT;

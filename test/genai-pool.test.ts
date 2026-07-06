@@ -1165,7 +1165,7 @@ describe('GenAI runtime pool', () => {
     await runtime.client.models.generateContent({
       model: 'gemini-2.5-flash',
     }, {
-      routeFamily: 'vertex',
+      routeFamily: 'gemini',
     });
 
     expect(warnSpy).toHaveBeenCalled();

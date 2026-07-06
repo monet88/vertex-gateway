@@ -10,7 +10,7 @@
 Node.js (`node:http`, zero-framework) HTTP gateway proxy between
 **client/frontend** and **Google Vertex AI / Gemini API**.
 
-- 5 API surfaces: Gemini, OpenAI, Vertex, vtx shorthand, custom image
+- 2 public API surfaces: Gemini and OpenAI
 - Pool mode: load-balance + failover across multiple GCP projects
 - See `README.md` for full endpoint reference and SDK examples
 
@@ -114,7 +114,7 @@ Restart: `docker compose up -d --build`
 | `src/auth/google-auth.ts` | SA JSON loading, fingerprint cache |
 | `src/lib/google-genai-client.ts` | Client factory (full API-key REST vs express SDK vs SA) |
 | `src/lib/vertex-rest-client.ts` | Full Vertex API-key REST client + SSE parser |
-| `src/lib/genai-pool.ts` | Pool selection (WRR/RR), failover, health |
+| `src/lib/genai-pool.ts` | Pool selection (round-robin/bind-first), failover, health |
 | `src/lib/genai-runtime.ts` | Runtime lifecycle, hot-reload, probe |
 | `src/routes/openai-images-routes.ts` | Rejects: `response_format`, `quality`, `style`, `background`, `user` |
 | `src/admin/credential-store.ts` | File-store persistence, atomic write |

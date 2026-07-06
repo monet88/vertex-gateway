@@ -56,9 +56,6 @@ export interface GatewayConfig {
   upstreamRetryDelayMs: number;
   enableGeminiRoutes: boolean;
   enableOpenAiRoutes: boolean;
-  enableVertexRoutes: boolean;
-  enableVtxRoutes: boolean;
-  enableImageRoutes: boolean;
   runtimeMode: GatewayRuntimeMode;
   vertexPoolSelection: VertexPoolSelection;
   vertexPools: VertexPoolConfig[];
@@ -122,9 +119,6 @@ type GatewayFileConfig = Partial<{
   upstreamRetryDelayMs: number;
   enableGeminiRoutes: boolean;
   enableOpenAiRoutes: boolean;
-  enableVertexRoutes: boolean;
-  enableVtxRoutes: boolean;
-  enableImageRoutes: boolean;
 }>;
 
 type GatewayPoolOverlayConfig = Partial<{
@@ -486,9 +480,6 @@ const validateFileConfig = (
     "allowWildcardCors",
     "enableGeminiRoutes",
     "enableOpenAiRoutes",
-    "enableVertexRoutes",
-    "enableVtxRoutes",
-    "enableImageRoutes",
   ]) {
     assertBoolean(config, key, filePath);
   }
@@ -899,18 +890,6 @@ export const loadConfig = (): GatewayConfig => {
     enableOpenAiRoutes: boolEnv(
       process.env.GATEWAY_ENABLE_OPENAI_ROUTES,
       fileConfig.enableOpenAiRoutes ?? true,
-    ),
-    enableVertexRoutes: boolEnv(
-      process.env.GATEWAY_ENABLE_VERTEX_ROUTES,
-      fileConfig.enableVertexRoutes ?? true,
-    ),
-    enableVtxRoutes: boolEnv(
-      process.env.GATEWAY_ENABLE_VTX_ROUTES,
-      fileConfig.enableVtxRoutes ?? true,
-    ),
-    enableImageRoutes: boolEnv(
-      process.env.GATEWAY_ENABLE_IMAGE_ROUTES,
-      fileConfig.enableImageRoutes ?? true,
     ),
     runtimeMode: vertexPools.length > 0 ? "pool" : "single",
     vertexPoolSelection:

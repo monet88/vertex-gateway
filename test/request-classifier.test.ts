@@ -10,15 +10,6 @@ describe('request classifier', () => {
     });
   });
 
-  it('classifies Vertex publisher routes', () => {
-    expect(classifyRoute('POST', '/vertex/v1/projects/p/locations/us-central1/publishers/google/models/gemini-2.5-flash:predict')).toMatchObject({
-      family: 'vertex',
-      operation: 'predict',
-      project: 'p',
-      location: 'us-central1',
-    });
-  });
-
   it('classifies OpenAI-compatible routes under /openai prefix', () => {
     expect(classifyRoute('GET', '/openai/v1/models')).toMatchObject({
       family: 'openai',
@@ -36,5 +27,11 @@ describe('request classifier', () => {
 
   it('does not allow root v1beta aliases', () => {
     expect(() => classifyRoute('POST', '/v1beta/models/gemini-2.5-flash:generateContent')).toThrow(/allowlist/);
+  });
+
+  it('does not allow native Vertex, vtx shorthand, or custom routes', () => {
+    expect(() => classifyRoute('POST', '/vertex/v1/projects/p/locations/us-central1/publishers/google/models/gemini-2.5-flash:generateContent')).toThrow(/allowlist/);
+    expect(() => classifyRoute('POST', '/vtx/v1/models/gemini-2.5-flash:generateContent')).toThrow(/allowlist/);
+    expect(() => classifyRoute('POST', '/api/images/generate')).toThrow(/allowlist/);
   });
 });

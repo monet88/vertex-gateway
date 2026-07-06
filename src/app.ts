@@ -158,16 +158,10 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
         );
         return hasOpenAiRules ? resolveProviderModel(activeConfig.modelCatalog, 'openai', value) : undefined;
       };
-      if (resolvedRoute.family === 'gemini' || resolvedRoute.family === 'vertex' || resolvedRoute.family === 'vtx') {
+      if (resolvedRoute.family === 'gemini') {
         const nextModel = geminiModel(resolvedRoute.model);
         if (nextModel) {
           resolvedRoute.model = nextModel;
-        }
-      }
-      if (resolvedRoute.family === 'custom' && typeof resolvedBody.model !== 'undefined') {
-        const nextModel = geminiModel(resolvedBody.model);
-        if (nextModel) {
-          resolvedBody.model = nextModel;
         }
       }
       if (resolvedRoute.family === 'openai' && typeof resolvedBody.model !== 'undefined') {

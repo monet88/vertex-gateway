@@ -63,17 +63,6 @@ export const renderDocsUi = (origin: string): string => {
       }
     ]
   }'`;
-  const vertexCurl = `curl ${baseUrl}/vertex/v1/projects/project-b82b6a5a-13c8-42e4-a56/locations/global/publishers/google/models/gemini-2.5-flash:generateContent \\
-  -H "Authorization: Bearer YOUR_GATEWAY_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "contents": [
-      {
-        "role": "user",
-        "parts": [{"text": "Reply with exactly: VERTEX_OK"}]
-      }
-    ]
-  }'`;
   const imageCurl = `curl ${baseUrl}/openai/v1/images/generations \\
   -H "Authorization: Bearer YOUR_GATEWAY_KEY" \\
   -H "Content-Type: application/json" \\
@@ -486,7 +475,7 @@ console.log(data);`;
         </div>
         <div class="hero-grid">
           <div>
-            <h1>One HTTPS surface for Gemini, OpenAI, Vertex, and image workloads.</h1>
+            <h1>One HTTPS surface for Gemini, OpenAI, and image workloads.</h1>
             <p class="hero-copy">
               Integrate this gateway when you want app teams to ship against a stable public interface
               while the VPS handles Vertex credentials, model routing, and image-compatible workloads
@@ -506,7 +495,7 @@ console.log(data);`;
               </div>
               <div class="kv">
                 <strong>Best Fit</strong>
-                <span>Apps already speaking OpenAI or teams needing direct Gemini and Vertex-compatible routes.</span>
+                <span>Apps already speaking OpenAI or teams needing direct Gemini-compatible routes.</span>
               </div>
             </div>
           </div>
@@ -518,7 +507,6 @@ console.log(data);`;
         <a href="#health">Health</a>
         <a href="#gemini">Gemini</a>
         <a href="#openai">OpenAI</a>
-        <a href="#vertex">Vertex</a>
         <a href="#streaming">Streaming</a>
         <a href="#images">Images</a>
         <a href="#models">Models</a>
@@ -592,26 +580,12 @@ console.log(data);`;
         ${block('openai responses curl', openAiResponsesCurl)}
       </section>
 
-      <section class="section glass" id="vertex">
-        <div class="eyebrow">Vertex-Compatible</div>
-        <h2>Preserve a Vertex-style path shape when upstream clients expect publisher-model URLs.</h2>
-        <div class="route">
-          <strong><code>POST /vertex/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent</code></strong>
-          <span>Sync generation.</span>
-        </div>
-        <div class="route">
-          <strong><code>POST /vertex/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:streamGenerateContent</code></strong>
-          <span>Streaming generation.</span>
-        </div>
-        ${block('vertex curl', vertexCurl)}
-      </section>
-
       <section class="section glass" id="streaming">
         <div class="eyebrow">Streaming</div>
         <h2>For live output, use streamed chat or Gemini stream routes.</h2>
         <p>
           The gateway supports streamed chat via the OpenAI-compatible surface and streamed content
-          generation via Gemini and Vertex-style routes. Consume the response body as a stream and
+          generation via Gemini routes. Consume the response body as a stream and
           forward chunks to your UI.
         </p>
         ${block('javascript streaming example', streamingFetch)}
@@ -701,8 +675,6 @@ Public integration surface for the Chang Store Vertex Gateway.
 - ${baseUrl}/openai/v1/responses : OpenAI-compatible responses
 - ${baseUrl}/openai/v1/images/generations : OpenAI-compatible image generation
 - ${baseUrl}/openai/v1/images/edits : OpenAI-compatible image edits
-- ${baseUrl}/vertex/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent : Vertex-compatible generateContent
-- ${baseUrl}/vertex/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:streamGenerateContent : Vertex-compatible streaming
 
 ## Notes
 - Protected API routes require Authorization: Bearer YOUR_GATEWAY_KEY

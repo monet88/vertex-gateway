@@ -83,6 +83,11 @@ describe('root route', () => {
       'POST /openai/v1/images/generations',
       'POST /openai/v1/images/edits',
     ]));
+    expect(body.endpoints).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('/vertex/'),
+      expect.stringContaining('/vtx/'),
+      expect.stringContaining('/api/images/'),
+    ]));
     expect(generateContent).not.toHaveBeenCalled();
   });
 
@@ -104,7 +109,8 @@ describe('root route', () => {
     expect(body).toContain('javascript streaming example');
     expect(body).toContain('data-copy=');
     expect(body).toContain('Copy');
-    expect(body).toContain('/vertex/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent');
+    expect(body).not.toContain('/vertex/v1/projects');
+    expect(body).not.toContain('/vtx/v1');
     expect(generateContent).not.toHaveBeenCalled();
   });
 
