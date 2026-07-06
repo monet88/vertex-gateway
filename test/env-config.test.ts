@@ -74,6 +74,8 @@ describe('gateway config file', () => {
     ].join('\n'));
 
     process.env.GATEWAY_CONFIG_FILE = configPath;
+    process.env.GATEWAY_ENABLE_ADMIN_ROUTES = 'true';
+    process.env.GATEWAY_ADMIN_ALLOW_MUTATIONS = 'true';
     process.env.GATEWAY_ADMIN_STORE_MODE = 'file-store';
     process.env.GATEWAY_ADMIN_FILE_STORE_DIR = storeDir;
     delete process.env.GATEWAY_API_KEYS;
@@ -88,8 +90,40 @@ describe('gateway config file', () => {
 
     expect(config.gatewayKeys).toEqual([]);
     expect(config.resolvedVertexTargets).toEqual([]);
+    expect(config.enableAdminRoutes).toBe(true);
+    expect(config.adminToken).toBeNull();
     expect(config.adminStoreMode).toBe('file-store');
     expect(config.adminFileStoreDir).toBe(storeDir);
+  });
+
+  it('loads a bootstrapped admin token from the admin file store', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const configPath = path.join(dir, 'config.yaml');
+    const storeDir = path.join(dir, 'store');
+    fs.mkdirSync(storeDir, { recursive: true });
+    fs.writeFileSync(path.join(storeDir, 'admin-settings.json'), JSON.stringify({ adminToken: 'bootstrapped-admin-token' }));
+    fs.writeFileSync(configPath, [
+      'googleCredentialsFile: null',
+      'googleLocation: global',
+    ].join('\n'));
+
+    process.env.GATEWAY_CONFIG_FILE = configPath;
+    process.env.GATEWAY_ENABLE_ADMIN_ROUTES = 'true';
+    process.env.GATEWAY_ADMIN_ALLOW_MUTATIONS = 'true';
+    process.env.GATEWAY_ADMIN_STORE_MODE = 'file-store';
+    process.env.GATEWAY_ADMIN_FILE_STORE_DIR = storeDir;
+    delete process.env.GATEWAY_ADMIN_TOKEN;
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GOOGLE_GENAI_API_KEY;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    const config = loadConfig();
+
+    expect(config.adminToken).toBe('bootstrapped-admin-token');
   });
 
   it('defaults CORS to unrestricted browser origins when no allowlist is configured', () => {

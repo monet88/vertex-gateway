@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { StitchConsoleShell } from '@/components/stitch/StitchConsoleShell';
 import { StitchKpiStrip } from '@/components/stitch/StitchKpiStrip';
 import { StitchSecurityRail } from '@/components/stitch/StitchSecurityRail';
@@ -8,6 +9,7 @@ import { GatewayKeyDialog } from '@/components/console/GatewayKeyDialog';
 import { ServiceAccountTargetDialog } from '@/components/console/ServiceAccountTargetDialog';
 import { VertexTargetDialog } from '@/components/console/VertexTargetDialog';
 import { SecretInput } from '@/components/console/SecretInput';
+import { Button } from '@/components/ui/button';
 import { useAdminToken } from '@/hooks/useAdminToken';
 import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
 import { kpiMetrics, securityNotices, apiLogs } from '@/data/mockData';
@@ -15,6 +17,18 @@ import { kpiMetrics, securityNotices, apiLogs } from '@/data/mockData';
 export function Dashboard() {
   const { token, setToken } = useAdminToken();
   const adminData = useAdminDashboardData(token);
+  const [bootstrapping, setBootstrapping] = useState(false);
+
+  async function bootstrapAdminPassword() {
+    setBootstrapping(true);
+    try {
+      await adminData.bootstrapAdmin();
+    } catch {
+      // Error is already surfaced through adminData.error.
+    } finally {
+      setBootstrapping(false);
+    }
+  }
 
   return (
     <StitchConsoleShell rail={<StitchSecurityRail notices={securityNotices} />}>
@@ -28,6 +42,9 @@ export function Dashboard() {
             <div className="min-w-72">
               <SecretInput id="admin-token" label="Admin token" value={token} onChange={setToken} placeholder="Bearer token" />
             </div>
+            <Button variant="secondary" disabled={token.trim().length < 12 || bootstrapping} onClick={bootstrapAdminPassword}>
+              {bootstrapping ? 'Đang lưu...' : 'Set admin password'}
+            </Button>
             <GatewayKeyDialog onCreate={(label) => adminData.createKey(label)} disabled={!adminData.mutable} />
             <VertexTargetDialog onCreate={(target) => adminData.createTarget(target)} disabled={!adminData.mutable} />
             <ServiceAccountTargetDialog onCreate={(target) => adminData.importServiceAccount(target)} disabled={!adminData.mutable} />

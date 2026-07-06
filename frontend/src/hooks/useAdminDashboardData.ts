@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GatewayKeyRow, VertexTargetRow } from '@/data/mockData';
 import {
+  bootstrapAdminToken,
   createGatewayKey,
   createVertexTarget,
   fetchGatewayKeys,
@@ -70,6 +71,16 @@ export function useAdminDashboardData(token: string) {
     }
   }, [options, refresh]);
 
+  const bootstrapAdmin = useCallback(async () => {
+    try {
+      await bootstrapAdminToken(options, token);
+      await refresh();
+    } catch (error) {
+      setState((current) => ({ ...current, error: errorMessage(error, 'Failed to bootstrap admin token') }));
+      throw error;
+    }
+  }, [options, refresh, token]);
+
   const revokeKey = useCallback(async (id: string) => {
     try {
       await revokeGatewayKey(options, id);
@@ -102,6 +113,7 @@ export function useAdminDashboardData(token: string) {
   return {
     ...state,
     refresh,
+    bootstrapAdmin,
     createKey,
     revokeKey,
     createTarget,

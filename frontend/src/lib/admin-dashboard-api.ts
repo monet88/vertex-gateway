@@ -64,6 +64,13 @@ export async function revokeGatewayKey(options: AdminApiOptions, id: string) {
   });
 }
 
+export async function bootstrapAdminToken(options: AdminApiOptions, adminToken: string) {
+  return adminFetch<{ ok: true; hasAdminToken: boolean }>('/admin/api/bootstrap/admin-token', options, {
+    method: 'POST',
+    body: JSON.stringify({ adminToken }),
+  });
+}
+
 export interface VertexTargetDraftPayload { readonly label: string; readonly project: string; readonly location: string; readonly apiKey: string; }
 export interface ServiceAccountTargetDraftPayload { readonly label: string; readonly project: string; readonly location: string; readonly credential: Record<string, unknown>; }
 

@@ -18,6 +18,10 @@ import {
 import type { GenAiTargetHealth } from '../lib/genai-pool.js';
 import { getProviderModelCatalog } from './model-store.js';
 import { createGatewayKeyStore } from './gateway-key-store.js';
+import {
+  canBootstrapAdminToken,
+  persistAdminFileStoreSettings,
+} from '../config/admin-settings-store.js';
 
 // Response-only shape: the raw express-mode `apiKey` is stripped and replaced
 // with a boolean presence flag. Runtime health is attached for the admin UI.
@@ -127,6 +131,27 @@ export const maybeHandleAdminRoute = async (
   if (!normalizedPathname.startsWith('/admin/api/')) {
     throw new GatewayError(404, 'NOT_FOUND', 'Admin route is not implemented.');
   }
+
+  if (req.method === 'POST' && normalizedPathname === '/admin/api/bootstrap/admin-token') {
+    if (!canBootstrapAdminToken(config)) {
+      throw new GatewayError(409, 'VALIDATION_FAILED', 'Admin token bootstrap is not available.');
+    }
+    const body = await parseJsonBody(req, config.maxJsonBytes);
+    const adminToken = typeof body.adminToken === 'string' ? body.adminToken.trim() : '';
+    if (adminToken.length < 12) {
+      throw new GatewayError(400, 'VALIDATION_FAILED', 'adminToken must be at least 12 characters.');
+    }
+    if (config.gatewayKeys.includes(adminToken)) {
+      throw new GatewayError(400, 'VALIDATION_FAILED', 'adminToken must not overlap with gateway keys.');
+    }
+    persistAdminFileStoreSettings(config, { adminToken });
+    const nextConfig = createDerivedConfig(config, { adminToken });
+    onConfigReload?.(nextConfig);
+    if (!onConfigReload) runtime?.reload(nextConfig);
+    sendJson(res, 200, { ok: true, hasAdminToken: true });
+    return true;
+  }
+
   requireAdminAuth(req.headers, config);
   if (!runtime) {
     throw new GatewayError(500, 'INTERNAL', 'Admin runtime is unavailable.');

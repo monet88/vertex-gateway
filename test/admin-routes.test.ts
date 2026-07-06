@@ -109,6 +109,44 @@ describe('admin routes', () => {
     expect(response.headers.get('access-control-allow-origin')).toBeNull();
   });
 
+  it('bootstraps the first admin token in file-store mode', async () => {
+    const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-store-'));
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: null,
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: storeDir,
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const unauthenticatedHealth = await fetch(`${baseUrl}/admin/api/health`);
+    expect(unauthenticatedHealth.status).toBe(401);
+
+    const bootstrap = await fetch(`${baseUrl}/admin/api/bootstrap/admin-token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ adminToken: 'new-admin-password' }),
+    });
+    expect(bootstrap.status).toBe(200);
+    expect(JSON.parse(fs.readFileSync(path.join(storeDir, 'admin-settings.json'), 'utf8')).adminToken).toBe('new-admin-password');
+
+    const authenticatedHealth = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: 'Bearer new-admin-password' },
+    });
+    expect(authenticatedHealth.status).toBe(200);
+
+    const secondBootstrap = await fetch(`${baseUrl}/admin/api/bootstrap/admin-token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ adminToken: 'another-admin-password' }),
+    });
+    expect(secondBootstrap.status).toBe(409);
+  });
+
   it('accepts trailing slashes on admin API routes', async () => {
     server = createApp({
       config: testConfig({
