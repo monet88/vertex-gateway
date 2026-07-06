@@ -83,11 +83,9 @@ describe('root route', () => {
       'POST /openai/v1/images/generations',
       'POST /openai/v1/images/edits',
     ]));
-    expect(body.endpoints).not.toEqual(expect.arrayContaining([
-      expect.stringContaining('/vertex/'),
-      expect.stringContaining('/vtx/'),
-      expect.stringContaining('/api/images/'),
-    ]));
+    expect(body.endpoints).not.toEqual(expect.arrayContaining([expect.stringContaining('/vertex/')]));
+    expect(body.endpoints).not.toEqual(expect.arrayContaining([expect.stringContaining('/vtx/')]));
+    expect(body.endpoints).not.toEqual(expect.arrayContaining([expect.stringContaining('/api/images/')]));
     expect(generateContent).not.toHaveBeenCalled();
   });
 

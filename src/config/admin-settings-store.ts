@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { readJsonIfExists, writeJsonAtomic } from "../lib/json-file-store.js";
 import type { AdminStoreMode, GatewayConfig } from "./env.js";
 
 const SETTINGS_FILE = "admin-settings.json";
@@ -9,17 +10,6 @@ interface AdminFileStoreSettings {
 }
 
 const settingsPath = (dir: string): string => path.join(dir, SETTINGS_FILE);
-
-const readJsonIfExists = (filePath: string): Record<string, unknown> | null => {
-  if (!fs.existsSync(filePath)) return null;
-  return JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
-};
-
-const writeJsonAtomic = (filePath: string, value: unknown): void => {
-  const tempPath = `${filePath}.tmp`;
-  fs.writeFileSync(tempPath, JSON.stringify(value, null, 2), { mode: 0o600 });
-  fs.renameSync(tempPath, filePath);
-};
 
 export const loadAdminFileStoreSettings = (
   adminStoreMode: AdminStoreMode,

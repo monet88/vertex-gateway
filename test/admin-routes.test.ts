@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
+import { hashGatewayKey } from '../src/admin/gateway-key-store.js';
 import type { GenAiRuntimeLike } from '../src/lib/genai-runtime.js';
 import type { GenAiTargetHealth } from '../src/lib/genai-pool.js';
 import { testConfig } from './test-config.js';
@@ -145,6 +146,33 @@ describe('admin routes', () => {
       body: JSON.stringify({ adminToken: 'another-admin-password' }),
     });
     expect(secondBootstrap.status).toBe(409);
+  });
+
+  it('rejects admin token bootstrap when it overlaps a managed gateway key', async () => {
+    const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-store-'));
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: null,
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: storeDir,
+        managedGatewayKeyHashes: [hashGatewayKey('managed-overlap-token')],
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const bootstrap = await fetch(`${baseUrl}/admin/api/bootstrap/admin-token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ adminToken: 'managed-overlap-token' }),
+    });
+    const body = await bootstrap.json();
+
+    expect(bootstrap.status).toBe(400);
+    expect(body.error.message).toMatch(/managed gateway keys/i);
+    expect(fs.existsSync(path.join(storeDir, 'admin-settings.json'))).toBe(false);
   });
 
   it('accepts trailing slashes on admin API routes', async () => {
@@ -522,6 +550,51 @@ describe('admin routes', () => {
     const revokedBody = await revoked.json();
     expect(revoked.status).toBe(200);
     expect(revokedBody.gatewayKey.status).toBe('revoked');
+  });
+
+  it('keeps managed gateway keys active after unrelated admin config reloads', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+        runtimeMode: 'pool',
+        vertexPools: [],
+        resolvedVertexTargets: [],
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const adminHeaders = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+
+    const created = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      method: 'POST',
+      headers: adminHeaders,
+      body: JSON.stringify({ label: 'Mobile app' }),
+    });
+    const createdBody = await created.json();
+    expect(created.status).toBe(200);
+
+    const target = await fetch(`${baseUrl}/admin/api/vertex-credentials/api-key`, {
+      method: 'POST',
+      headers: adminHeaders,
+      body: JSON.stringify({ label: 'Global key', project: 'project-a', location: 'global', apiKey: 'google-secret' }),
+    });
+    expect(target.status).toBe(200);
+
+    const completion = await fetch(`${baseUrl}/openai/v1/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${createdBody.secret}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gemini-2.5-flash',
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    });
+    expect(completion.status).toBe(200);
   });
 
   it('rolls back managed gateway key persistence when runtime reload fails', async () => {

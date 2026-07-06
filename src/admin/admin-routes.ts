@@ -17,7 +17,7 @@ import {
 } from './credential-store.js';
 import type { GenAiTargetHealth } from '../lib/genai-pool.js';
 import { getProviderModelCatalog } from './model-store.js';
-import { createGatewayKeyStore } from './gateway-key-store.js';
+import { createGatewayKeyStore, verifyManagedGatewayKey } from './gateway-key-store.js';
 import {
   canBootstrapAdminToken,
   persistAdminFileStoreSettings,
@@ -143,6 +143,9 @@ export const maybeHandleAdminRoute = async (
     }
     if (config.gatewayKeys.includes(adminToken)) {
       throw new GatewayError(400, 'VALIDATION_FAILED', 'adminToken must not overlap with gateway keys.');
+    }
+    if (verifyManagedGatewayKey(adminToken, config.managedGatewayKeyHashes)) {
+      throw new GatewayError(400, 'VALIDATION_FAILED', 'adminToken must not overlap with managed gateway keys.');
     }
     persistAdminFileStoreSettings(config, { adminToken });
     const nextConfig = createDerivedConfig(config, { adminToken });

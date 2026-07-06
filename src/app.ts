@@ -82,8 +82,9 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
   const workloads = new ImageWorkloads(ai, activeConfig);
 
   const reloadActiveConfig = (nextConfig: GatewayConfig) => {
-    runtime?.reload(nextConfig);
-    activeConfig = nextConfig;
+    const candidate = hydrateManagedGatewayKeyHashes(nextConfig);
+    runtime?.reload(candidate);
+    activeConfig = candidate;
   };
   const streamAdmission = new StreamAdmission(config.streamPerKeyLimit, config.streamQueueLimit);
   const streamConfig = {

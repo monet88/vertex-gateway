@@ -28,6 +28,9 @@ export function ServiceAccountTargetDialog({ onCreate, disabled }: ServiceAccoun
 
   function handleOpenChange(nextOpen: boolean) {
     if (pending && !nextOpen) return;
+    if (!nextOpen) {
+      setDraft({ label: '', project: '', location: 'global', credentialJson: '' });
+    }
     setError(null);
     setOpen(nextOpen);
   }

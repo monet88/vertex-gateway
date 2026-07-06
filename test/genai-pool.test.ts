@@ -304,6 +304,7 @@ describe('GenAI runtime pool', () => {
       runtimeMode: 'pool',
       vertexPoolSelection: 'bind-first',
       vertexPoolFailoverCooldownMs: 60_000,
+      upstreamRetries: 0,
       vertexPools: [
         { id: 'project-a', project: 'project-a', location: 'global', credentialsFile: null, enabled: true, weight: 3, label: 'Project A', modelAllowlist: [], modelExclusions: [] },
         { id: 'project-b', project: 'project-b', location: 'global', credentialsFile: null, enabled: true, weight: 1, label: 'Project B', modelAllowlist: [], modelExclusions: [] },

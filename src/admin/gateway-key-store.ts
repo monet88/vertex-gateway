@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { GatewayConfig } from '../config/env.js';
 import { createDerivedConfig } from '../config/env.js';
 import { GatewayError } from '../http/error-response.js';
+import { readJsonIfExists, writeJsonAtomic } from '../lib/json-file-store.js';
 
 export type GatewayKeyStatus = 'active' | 'revoked';
 
@@ -74,17 +75,6 @@ export const verifyManagedGatewayKey = (
   return matched;
 };
 
-const readJsonIfExists = <T>(filePath: string): T | null => {
-  if (!fs.existsSync(filePath)) return null;
-  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T;
-};
-
-const writeJsonAtomic = (filePath: string, value: unknown): void => {
-  const tempPath = `${filePath}.tmp`;
-  fs.writeFileSync(tempPath, JSON.stringify(value, null, 2), { mode: 0o600 });
-  fs.renameSync(tempPath, filePath);
-};
-
 const assertWritableMode = (config: GatewayConfig): void => {
   if (config.adminStoreMode === 'static-config') {
     throw new GatewayError(400, 'VALIDATION_FAILED', 'Admin store is read-only in static-config mode.');
@@ -146,6 +136,14 @@ export const createGatewayKeyStore = (
     }
   };
 
+  const tryRestoreRecords = (records: AdminGatewayKeyRecord[] | null): void => {
+    try {
+      restoreRecords(records);
+    } catch {
+      // Rollback is best-effort; keep the original persistence/reload error.
+    }
+  };
+
   const deriveAndNotify = (records: AdminGatewayKeyRecord[]): void => {
     const activeHashes = records
       .filter((r) => r.status === 'active')
@@ -191,7 +189,7 @@ export const createGatewayKeyStore = (
         writeRecords(records);
         deriveAndNotify(records);
       } catch (error) {
-        restoreRecords(previousRecords);
+        tryRestoreRecords(previousRecords);
         throw error;
       }
       return { gatewayKey: sanitize(record), secret };
@@ -211,7 +209,7 @@ export const createGatewayKeyStore = (
         writeRecords(records);
         deriveAndNotify(records);
       } catch (error) {
-        restoreRecords(previousRecords);
+        tryRestoreRecords(previousRecords);
         throw error;
       }
       return { gatewayKey: sanitize(record) };

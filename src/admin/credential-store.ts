@@ -8,6 +8,7 @@ import type {
 import { createDerivedConfig } from '../config/env.js';
 import { loadServiceAccountCredential, type ServiceAccountCredential } from '../auth/google-auth.js';
 import { GatewayError } from '../http/error-response.js';
+import { readJsonIfExists, writeJsonAtomic } from '../lib/json-file-store.js';
 
 export interface AdminVertexCredentialRecord extends VertexPoolConfig {
   email?: string;
@@ -113,11 +114,6 @@ const storeStateToConfig = (
   modelCatalog: cloneModelCatalog(state.modelCatalog),
 });
 
-const readJsonIfExists = <T>(filePath: string): T | null => {
-  if (!fs.existsSync(filePath)) return null;
-  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T;
-};
-
 const ensureStoreDir = (dir: string): void => {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   fs.mkdirSync(path.join(dir, CREDENTIALS_DIR), { recursive: true, mode: 0o700 });
@@ -125,12 +121,6 @@ const ensureStoreDir = (dir: string): void => {
 
 const credentialsFileForId = (dir: string, id: string): string =>
   path.join(dir, CREDENTIALS_DIR, `${id}.json`);
-
-const writeJsonAtomic = (filePath: string, value: unknown): void => {
-  const tempPath = `${filePath}.tmp`;
-  fs.writeFileSync(tempPath, JSON.stringify(value, null, 2), { mode: 0o600 });
-  fs.renameSync(tempPath, filePath);
-};
 
 const readFileStoreSnapshot = (config: GatewayConfig): AdminCredentialStoreSnapshot => {
   const dir = config.adminFileStoreDir!;

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createGatewayKeyStore, verifyManagedGatewayKey } from '../src/admin/gateway-key-store.js';
 import { testConfig } from './test-config.js';
 
@@ -68,5 +68,21 @@ describe('gateway key store', () => {
   it('rejects create in static-config mode', () => {
     const store = createGatewayKeyStore(testConfig());
     expect(() => store.create({ label: 'Blocked' })).toThrow(/read-only/i);
+  });
+
+  it('preserves the original error when rollback also fails', () => {
+    const config = tempStoreConfig();
+    const store = createGatewayKeyStore(config, () => {
+      throw new Error('reload failed');
+    });
+    const rmSpy = vi.spyOn(fs, 'rmSync').mockImplementation(() => {
+      throw new Error('rollback failed');
+    });
+
+    try {
+      expect(() => store.create({ label: 'Mobile app' })).toThrow(/reload failed/);
+    } finally {
+      rmSpy.mockRestore();
+    }
   });
 });
