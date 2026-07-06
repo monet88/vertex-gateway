@@ -68,6 +68,7 @@ export interface GatewayConfig {
   adminAllowMutations: boolean;
   adminStoreMode: AdminStoreMode;
   adminFileStoreDir: string | null;
+  managedGatewayKeyHashes: string[];
 }
 
 const DEFAULTS = {
@@ -924,6 +925,7 @@ export const loadConfig = (): GatewayConfig => {
       process.env.GATEWAY_ADMIN_FILE_STORE_DIR?.trim() ||
       poolOverlay.adminFileStoreDir ||
       null,
+    managedGatewayKeyHashes: [],
   };
 
   config.resolvedVertexTargets = resolveVertexTargets(config);
@@ -936,7 +938,11 @@ export const createDerivedConfig = (
   overrides: Partial<
     Pick<
       GatewayConfig,
-      "vertexPools" | "modelCatalog" | "runtimeMode" | "resolvedVertexTargets"
+      | "vertexPools"
+      | "modelCatalog"
+      | "runtimeMode"
+      | "resolvedVertexTargets"
+      | "managedGatewayKeyHashes"
     >
   >,
 ): GatewayConfig => {
@@ -957,6 +963,9 @@ export const createDerivedConfig = (
         ? "pool"
         : "single"
       : (overrides.runtimeMode ?? config.runtimeMode),
+    ...(overrides.managedGatewayKeyHashes
+      ? { managedGatewayKeyHashes: [...overrides.managedGatewayKeyHashes] }
+      : {}),
     resolvedVertexTargets: [],
   };
   nextConfig.resolvedVertexTargets = overrides.resolvedVertexTargets

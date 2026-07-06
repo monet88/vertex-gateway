@@ -50,5 +50,6 @@ export const testConfig = (overrides: Partial<GatewayConfig> = {}): GatewayConfi
   adminAllowMutations: false,
   adminStoreMode: 'static-config',
   adminFileStoreDir: null,
+  managedGatewayKeyHashes: [],
   ...overrides,
 });
