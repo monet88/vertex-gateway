@@ -9,6 +9,7 @@ import { readJsonBody } from '../lib/read-json.js';
 import { requireAdminAuth } from './admin-auth.js';
 import { renderAdminUi } from './admin-ui.js';
 import {
+  createApiKeyVertexCredential,
   createCredentialStore,
   importServiceAccountCredential,
   type AdminCredentialStoreSnapshot,
@@ -184,6 +185,16 @@ export const maybeHandleAdminRoute = async (
       imported.rollback();
       throw error;
     }
+    return true;
+  }
+  if (req.method === 'POST' && normalizedPathname === '/admin/api/vertex-credentials/api-key') {
+    const body = await parseJsonBody(req, config.maxJsonBytes);
+    const credential = createApiKeyVertexCredential(config, body);
+    const snapshot = credentialStore.updateVertexPools((state) => ({
+      ...state,
+      vertexPools: [...state.vertexPools.filter((entry) => entry.id !== credential.id), credential],
+    }));
+    sendJson(res, 200, { ok: true, credential: findCredentialOrThrow(withRuntimeHealth(snapshot, runtime), credential.id) });
     return true;
   }
 

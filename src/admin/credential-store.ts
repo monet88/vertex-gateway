@@ -283,3 +283,30 @@ export const importServiceAccountCredential = (
     },
   };
 };
+
+export const createApiKeyVertexCredential = (
+  config: GatewayConfig,
+  body: Record<string, unknown>,
+): AdminVertexCredentialRecord => {
+  assertWritableMode(config);
+  const project = typeof body.project === 'string' ? body.project.trim() : '';
+  const location = typeof body.location === 'string' ? body.location.trim() : '';
+  const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
+  if (!project || !location || !apiKey) {
+    throw new GatewayError(400, 'VALIDATION_FAILED', 'project, location, and apiKey are required.');
+  }
+  const id = sanitizeCredentialId(`${project}-${location}-${typeof body.label === 'string' ? body.label.trim() : 'api-key'}`);
+  return {
+    id,
+    label: typeof body.label === 'string' ? body.label.trim() || undefined : undefined,
+    project,
+    location,
+    credentialsFile: null,
+    apiKey,
+    apiKeyMode: 'full',
+    enabled: body.enabled !== false,
+    weight: typeof body.weight === 'number' && body.weight > 0 ? body.weight : 1,
+    modelAllowlist: [],
+    modelExclusions: [],
+  };
+};

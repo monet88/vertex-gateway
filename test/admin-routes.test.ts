@@ -507,4 +507,37 @@ describe('admin routes', () => {
     });
     expect(create.status).toBe(400);
   });
+
+  it('creates API-key Vertex targets without exposing raw upstream keys', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+        runtimeMode: 'pool',
+        vertexPools: [],
+        resolvedVertexTargets: [],
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const response = await fetch(`${baseUrl}/admin/api/vertex-credentials/api-key`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-secret', 'content-type': 'application/json' },
+      body: JSON.stringify({ label: 'Global key', project: 'project-a', location: 'global', apiKey: 'google-secret' }),
+    });
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.credential.hasApiKey).toBe(true);
+    expect(JSON.stringify(body)).not.toContain('google-secret');
+
+    const list = await fetch(`${baseUrl}/admin/api/vertex-credentials`, { headers: { authorization: 'Bearer admin-secret' } });
+    const listBody = await list.json();
+    expect(JSON.stringify(listBody)).not.toContain('google-secret');
+    expect(runtime.reload).toHaveBeenCalled();
+  });
 });
