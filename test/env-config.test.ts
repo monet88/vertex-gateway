@@ -71,7 +71,6 @@ describe('gateway config file', () => {
     ].join('\n'));
 
     process.env.GATEWAY_CONFIG_FILE = configPath;
-    process.env.GATEWAY_ENABLE_ADMIN_ROUTES = 'true';
     process.env.GATEWAY_ADMIN_ALLOW_MUTATIONS = 'true';
     process.env.GATEWAY_ADMIN_STORE_MODE = 'file-store';
     process.env.GATEWAY_ADMIN_FILE_STORE_DIR = storeDir;
@@ -93,6 +92,33 @@ describe('gateway config file', () => {
     expect(config.adminFileStoreDir).toBe(storeDir);
   });
 
+  it('keeps admin routes enabled without the env flag', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const configPath = path.join(dir, 'config.yaml');
+    const poolPath = path.join(dir, 'pool.json');
+    fs.writeFileSync(configPath, [
+      'gatewayKeys:',
+      '  - test-gateway-key',
+      'googleProject: test-project',
+      'googleCredentialsFile: null',
+      'googleLocation: global',
+    ].join('\n'));
+    fs.writeFileSync(poolPath, JSON.stringify({ enableAdminRoutes: false }));
+
+    process.env.GATEWAY_CONFIG_FILE = configPath;
+    process.env.GATEWAY_POOL_CONFIG_FILE = poolPath;
+    process.env.GATEWAY_ENABLE_ADMIN_ROUTES = 'false';
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+
+    const config = loadConfig();
+
+    expect(config.enableAdminRoutes).toBe(true);
+  });
+
   it('loads a bootstrapped admin token from the admin file store', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
     const configPath = path.join(dir, 'config.yaml');
@@ -105,7 +131,6 @@ describe('gateway config file', () => {
     ].join('\n'));
 
     process.env.GATEWAY_CONFIG_FILE = configPath;
-    process.env.GATEWAY_ENABLE_ADMIN_ROUTES = 'true';
     process.env.GATEWAY_ADMIN_ALLOW_MUTATIONS = 'true';
     process.env.GATEWAY_ADMIN_STORE_MODE = 'file-store';
     process.env.GATEWAY_ADMIN_FILE_STORE_DIR = storeDir;

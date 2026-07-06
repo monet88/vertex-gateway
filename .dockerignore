@@ -1,0 +1,13 @@
+.git
+.github
+node_modules
+compiled
+coverage
+frontend/node_modules
+frontend/dist
+.env
+.env.*
+accounts
+gateway-data
+pool-config.local.json
+*.log

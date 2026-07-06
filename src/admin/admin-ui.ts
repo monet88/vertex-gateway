@@ -1160,7 +1160,7 @@ export const renderAdminUi = (): string => {
               </select>
             </div>
           </div>
-          <p>Please enter connection information to access the management interface.</p>
+          <p>Login with the admin account to access the management interface.</p>
 
           <form id="login-form" class="login-shell">
             <div class="login-panel">
@@ -1172,21 +1172,33 @@ export const renderAdminUi = (): string => {
             </div>
 
             <div class="field">
-              <label for="token-input">Management Key</label>
-              <input id="token-input" type="password" autocomplete="off" placeholder="Enter the management key" />
+              <label for="username-input">Username</label>
+              <input id="username-input" type="text" autocomplete="username" value="admin" />
             </div>
 
-            <label class="remember-row">
-              <input id="remember-session" type="checkbox" />
-              <span>Remember password for this tab</span>
-            </label>
+            <div class="field">
+              <label for="password-input">Password</label>
+              <input id="password-input" type="password" autocomplete="current-password" placeholder="Enter admin password" />
+            </div>
+
+            <div id="password-change-panel" class="login-panel hidden">
+              <div class="field">
+                <label for="current-password-input">Current password</label>
+                <input id="current-password-input" type="password" autocomplete="current-password" placeholder="Current admin password" />
+              </div>
+              <div class="field" style="margin-top:12px">
+                <label for="new-password-input">New password</label>
+                <input id="new-password-input" type="password" autocomplete="new-password" placeholder="At least 8 characters, not changeme" />
+              </div>
+              <button id="change-password-btn" type="button" class="btn" style="margin-top:14px;width:100%">Change password</button>
+            </div>
 
             <div class="login-actions">
               <button id="login-btn" type="submit" class="btn">Login</button>
               <button id="login-clear-btn" type="button" class="btn secondary">Clear</button>
             </div>
 
-            <div id="login-status" class="login-status">Enter an admin token to unlock runtime diagnostics and management controls.</div>
+            <div id="login-status" class="login-status">Use admin / changeme on first login, then change the password.</div>
           </form>
         </div>
       </section>
@@ -1596,32 +1608,18 @@ export const renderAdminUi = (): string => {
           'model-management': ['Model Management', 'Default models, aliases, allowlists, and disabled entries.'],
         };
 
-        const STORAGE_KEYS = {
-          persistent: 'gateway_admin_token',
-          session: 'gateway_admin_token_session',
+        const clearStoredTokens = () => {
+          localStorage.removeItem('gateway_admin_token');
+          sessionStorage.removeItem('gateway_admin_token_session');
+          sessionStorage.removeItem('gateway_admin_token');
         };
 
-        const restoreStoredToken = () => {
-          const persistent = localStorage.getItem(STORAGE_KEYS.persistent);
-          if (persistent) {
-            return { token: persistent, remember: true };
-          }
-          const sessionToken = sessionStorage.getItem(STORAGE_KEYS.session);
-          if (sessionToken) {
-            return { token: sessionToken, remember: false };
-          }
-          const legacySession = sessionStorage.getItem(STORAGE_KEYS.persistent);
-          if (legacySession) {
-            return { token: legacySession, remember: false };
-          }
-          return { token: '', remember: true };
-        };
-
-        const persistedAuth = restoreStoredToken();
+        clearStoredTokens();
 
         const state = {
-          token: persistedAuth.token,
-          remember: persistedAuth.remember,
+          token: '',
+          username: 'admin',
+          mustChangePassword: false,
           provider: bootstrap.provider || 'gemini',
           currentView: 'dashboard',
           snapshot: null,
@@ -1642,8 +1640,11 @@ export const renderAdminUi = (): string => {
         const loginForm = $('login-form');
         const loginStatus = $('login-status');
         const globalStatus = $('global-status');
-        const tokenInput = $('token-input');
-        const rememberSession = $('remember-session');
+        const usernameInput = $('username-input');
+        const passwordInput = $('password-input');
+        const passwordChangePanel = $('password-change-panel');
+        const currentPasswordInput = $('current-password-input');
+        const newPasswordInput = $('new-password-input');
         const currentUrl = $('current-url');
         const credentialGrid = $('credential-list');
         const authChipRow = $('auth-chip-row');
@@ -1701,8 +1702,7 @@ export const renderAdminUi = (): string => {
 
         currentUrl.textContent = window.location.origin + '/admin';
         ids.summaryOrigin.textContent = window.location.origin;
-        tokenInput.value = state.token;
-        rememberSession.checked = state.remember;
+        usernameInput.value = state.username;
 
         const setLoginStatus = (message, tone = '') => {
           loginStatus.textContent = message;
@@ -1742,7 +1742,7 @@ export const renderAdminUi = (): string => {
         const toggleShell = (loggedIn) => {
           loginScreen.classList.toggle('hidden', loggedIn);
           adminShell.classList.toggle('hidden', !loggedIn);
-          ids.summaryRemembered.textContent = state.remember ? 'yes' : 'no';
+          ids.summaryRemembered.textContent = loggedIn ? 'memory only' : 'no';
         };
 
         const setView = (viewId) => {
@@ -1758,7 +1758,7 @@ export const renderAdminUi = (): string => {
         };
 
         const fetchJson = async (path, options = {}) => {
-          if (!state.token) throw new Error('Connect with an admin token first.');
+          if (!state.token) throw new Error('Login first.');
           const response = await fetch(path, {
             credentials: 'same-origin',
             ...options,
@@ -1774,22 +1774,55 @@ export const renderAdminUi = (): string => {
           return body;
         };
 
-        const rememberToken = () => {
-          state.token = tokenInput.value.trim();
-          state.remember = rememberSession.checked;
-          localStorage.removeItem(STORAGE_KEYS.persistent);
-          sessionStorage.removeItem(STORAGE_KEYS.session);
-          sessionStorage.removeItem(STORAGE_KEYS.persistent);
-          if (!state.token) {
-            ids.summaryRemembered.textContent = state.remember ? 'yes' : 'no';
-            return;
+        const setPasswordChangeMode = (required) => {
+          state.mustChangePassword = required;
+          passwordChangePanel.classList.toggle('hidden', !required);
+          $('login-btn').classList.toggle('hidden', required);
+          usernameInput.disabled = required;
+          passwordInput.disabled = required;
+          if (required) {
+            currentPasswordInput.focus();
           }
-          if (state.remember) {
-            localStorage.setItem(STORAGE_KEYS.persistent, state.token);
-          } else {
-            sessionStorage.setItem(STORAGE_KEYS.session, state.token);
+        };
+
+        const requestJson = async (path, options = {}) => {
+          const response = await fetch(path, {
+            credentials: 'same-origin',
+            ...options,
+            headers: {
+              'Content-Type': 'application/json',
+              ...(options.headers || {}),
+            },
+          });
+          const text = await response.text();
+          const body = text ? JSON.parse(text) : {};
+          if (!response.ok) {
+            throw new Error(body?.error?.message || response.statusText || 'Request failed');
           }
-          ids.summaryRemembered.textContent = state.remember ? 'yes' : 'no';
+          return body;
+        };
+
+        const loginWithPassword = async () => {
+          const body = await requestJson('/admin/api/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({
+              username: usernameInput.value.trim(),
+              password: passwordInput.value,
+            }),
+          });
+          state.token = body.token || '';
+          state.username = body.username || usernameInput.value.trim();
+          clearStoredTokens();
+          if (!state.token) throw new Error('Admin login did not return a session token.');
+          if (body.mustChangePassword) {
+            setPasswordChangeMode(true);
+            setLoginStatus('Default password must be changed before opening the dashboard.', 'error');
+            setGlobalStatus('Change the default admin password to unlock admin APIs.');
+            return false;
+          }
+          setPasswordChangeMode(false);
+          passwordInput.value = '';
+          return true;
         };
 
         const availableModelsForProvider = (provider) => {
@@ -2233,8 +2266,15 @@ export const renderAdminUi = (): string => {
         };
 
         const submitLogin = async () => {
-          rememberToken();
-          await refreshAll();
+          try {
+            if (await loginWithPassword()) {
+              await refreshAll();
+            }
+          } catch (error) {
+            state.token = '';
+            setPasswordChangeMode(false);
+            setLoginStatus(error.message || String(error), 'error');
+          }
         };
 
         loginForm.addEventListener('submit', async (event) => {
@@ -2243,29 +2283,49 @@ export const renderAdminUi = (): string => {
         });
 
         $('login-clear-btn').addEventListener('click', () => {
-          tokenInput.value = '';
-          rememberSession.checked = false;
+          usernameInput.value = 'admin';
+          passwordInput.value = '';
+          currentPasswordInput.value = '';
+          newPasswordInput.value = '';
           state.token = '';
-          state.remember = false;
-          localStorage.removeItem(STORAGE_KEYS.persistent);
-          sessionStorage.removeItem(STORAGE_KEYS.session);
-          sessionStorage.removeItem(STORAGE_KEYS.persistent);
-          setLoginStatus('Admin token cleared.');
+          state.username = 'admin';
+          setPasswordChangeMode(false);
+          clearStoredTokens();
+          setLoginStatus('Login form cleared.');
+        });
+
+        $('change-password-btn').addEventListener('click', async () => {
+          try {
+            await fetchJson('/admin/api/auth/change-password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                currentPassword: currentPasswordInput.value,
+                newPassword: newPasswordInput.value,
+              }),
+            });
+            currentPasswordInput.value = '';
+            newPasswordInput.value = '';
+            passwordInput.value = '';
+            setPasswordChangeMode(false);
+            await refreshAll();
+          } catch (error) {
+            setLoginStatus(error.message || String(error), 'error');
+          }
         });
 
         $('logout-btn').addEventListener('click', () => {
           state.token = '';
-          state.remember = false;
-          localStorage.removeItem(STORAGE_KEYS.persistent);
-          sessionStorage.removeItem(STORAGE_KEYS.session);
-          sessionStorage.removeItem(STORAGE_KEYS.persistent);
-          tokenInput.value = '';
-          rememberSession.checked = true;
+          clearStoredTokens();
+          passwordInput.value = '';
+          currentPasswordInput.value = '';
+          newPasswordInput.value = '';
           state.snapshot = null;
           state.selectedCredentialId = null;
+          setPasswordChangeMode(false);
           toggleShell(false);
           setLoginStatus('Session locked.');
-          setGlobalStatus('Connect to the admin APIs to load gateway state.');
+          setGlobalStatus('Login to the admin APIs to load gateway state.');
         });
 
         document.querySelectorAll('.nav-btn').forEach((button) => {
@@ -2503,12 +2563,8 @@ export const renderAdminUi = (): string => {
           }
         });
 
-        if (state.token) {
-          refreshAll();
-        } else {
-          toggleShell(false);
-          setView('dashboard');
-        }
+        toggleShell(false);
+        setView('dashboard');
       })();
     </script>
   </body>

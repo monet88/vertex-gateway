@@ -86,6 +86,7 @@ const DEFAULTS = {
   upstreamRetries: 2,
   upstreamRetryDelayMs: 250,
   vertexPoolSelection: "round-robin" as VertexPoolSelection,
+  enableAdminRoutes: true,
   adminStoreMode: "static-config" as AdminStoreMode,
 };
 
@@ -901,10 +902,7 @@ export const loadConfig = (): GatewayConfig => {
     vertexPools,
     resolvedVertexTargets: [],
     modelCatalog: normalizeModelCatalog(poolOverlay.modelCatalog),
-    enableAdminRoutes: boolEnv(
-      process.env.GATEWAY_ENABLE_ADMIN_ROUTES,
-      poolOverlay.enableAdminRoutes ?? false,
-    ),
+    enableAdminRoutes: DEFAULTS.enableAdminRoutes,
     adminToken:
       process.env.GATEWAY_ADMIN_TOKEN?.trim() ||
       poolOverlay.adminToken ||
@@ -972,11 +970,6 @@ export const createDerivedConfig = (
 
 export const validateConfig = (config: GatewayConfig): void => {
   const canLoadManagedKeys = config.adminStoreMode === "file-store" && Boolean(config.adminFileStoreDir);
-  const canBootstrapAdminToken =
-    config.enableAdminRoutes &&
-    config.adminStoreMode === "file-store" &&
-    config.adminAllowMutations &&
-    Boolean(config.adminFileStoreDir);
   if (config.gatewayKeys.length === 0 && config.managedGatewayKeyHashes.length === 0 && !canLoadManagedKeys) {
     throw new Error("GATEWAY_API_KEYS or managed gateway key file-store is required.");
   }
@@ -994,11 +987,6 @@ export const validateConfig = (config: GatewayConfig): void => {
   ) {
     throw new Error(
       'GATEWAY_ADMIN_STORE_MODE must be "static-config" or "file-store".',
-    );
-  }
-  if (config.enableAdminRoutes && !config.adminToken && !canBootstrapAdminToken) {
-    throw new Error(
-      "GATEWAY_ADMIN_TOKEN is required when admin routes are enabled outside file-store bootstrap mode.",
     );
   }
   if (config.adminToken && config.gatewayKeys.includes(config.adminToken)) {

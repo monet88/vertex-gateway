@@ -42,7 +42,7 @@ export const testConfig = (overrides: Partial<GatewayConfig> = {}): GatewayConfi
     source: 'legacy',
   }],
   modelCatalog: {},
-  enableAdminRoutes: false,
+  enableAdminRoutes: true,
   adminToken: null,
   adminAllowMutations: false,
   adminStoreMode: 'static-config',

@@ -201,19 +201,22 @@ library.
 
 ### `src/admin/` (secondary subsystem)
 
-A separate, config-mutating subsystem gated by `enableAdminRoutes` and its
-own bearer-token auth (`admin-auth.ts`, deliberately never the same secret as
-a gateway key -- see `AGENTS.md`). `admin-routes.ts` implements CRUD over
-Vertex pool credentials and the model catalog; `credential-store.ts`
-persists that state either as the static config (read-only) or as a
-JSON file-store with atomic writes and a backup-and-rollback path on write
-failure. Every successful mutation calls `runtime.reload()` so the change
-takes effect without a process restart.
+A separate, config-mutating subsystem with password login backed by file-store
+settings. The default account is `admin` / `changeme`; API access is blocked
+until that default password is changed, and the stored password is a scrypt
+hash. `admin-auth.ts` still enforces the internal bearer session token,
+deliberately separate from gateway keys. The dashboard route is always
+registered; admin API mutations are still governed by auth, store mode, and
+mutation policy. `admin-routes.ts` implements login, password change, CRUD over
+Vertex pool credentials, and the model catalog; `credential-store.ts` persists
+that state either as the static config (read-only) or as a JSON file-store with
+atomic writes and a backup-and-rollback path on write failure. Every successful
+mutation calls `runtime.reload()` so the change takes effect without a process
+restart.
 
 **Architecture Invariant:** file-store admin mutations assume a writable,
-persistent local disk and are documented as unsupported on Cloud Run -- the
-code doesn't detect this itself; it's an operational constraint enforced by
-not enabling `enableAdminRoutes` in that deployment target.
+persistent local disk and are unsupported on Cloud Run; validation rejects that
+deployment combination.
 
 ## Cross-Cutting Concerns
 

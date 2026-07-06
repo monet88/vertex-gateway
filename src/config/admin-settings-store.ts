@@ -5,8 +5,11 @@ import type { AdminStoreMode, GatewayConfig } from "./env.js";
 
 const SETTINGS_FILE = "admin-settings.json";
 
-interface AdminFileStoreSettings {
+export interface AdminFileStoreSettings {
   adminToken?: string | null;
+  adminUsername?: string | null;
+  adminPasswordHash?: string | null;
+  adminPasswordChangedAt?: string | null;
 }
 
 const settingsPath = (dir: string): string => path.join(dir, SETTINGS_FILE);
@@ -16,9 +19,14 @@ export const loadAdminFileStoreSettings = (
   adminFileStoreDir: string | null,
 ): Partial<Pick<GatewayConfig, "adminToken">> => {
   if (adminStoreMode !== "file-store" || !adminFileStoreDir) return {};
-  const settings = readJsonIfExists(settingsPath(adminFileStoreDir)) as AdminFileStoreSettings | null;
+  const settings = readJsonIfExists<AdminFileStoreSettings>(settingsPath(adminFileStoreDir));
   const adminToken = typeof settings?.adminToken === "string" ? settings.adminToken.trim() : "";
   return adminToken ? { adminToken } : {};
+};
+
+export const readAdminFileStoreSettings = (config: GatewayConfig): AdminFileStoreSettings => {
+  if (config.adminStoreMode !== "file-store" || !config.adminFileStoreDir) return {};
+  return readJsonIfExists<AdminFileStoreSettings>(settingsPath(config.adminFileStoreDir)) ?? {};
 };
 
 export const canBootstrapAdminToken = (config: GatewayConfig): boolean =>

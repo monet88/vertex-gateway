@@ -24,6 +24,13 @@ interface VertexCredentialsResponse {
   readonly vertexPools: AdminVertexCredentialRecord[];
 }
 
+export interface AdminLoginResponse {
+  readonly ok: true;
+  readonly username: string;
+  readonly token: string;
+  readonly mustChangePassword: boolean;
+}
+
 const mapHealth = (record: AdminVertexCredentialRecord): VertexTargetRow['health'] => {
   if (record.health?.status === 'healthy') return 'ready';
   if (record.health?.status === 'cooldown') return 'degraded';
@@ -64,10 +71,17 @@ export async function revokeGatewayKey(options: AdminApiOptions, id: string) {
   });
 }
 
-export async function bootstrapAdminToken(options: AdminApiOptions, adminToken: string) {
-  return adminFetch<{ ok: true; hasAdminToken: boolean }>('/admin/api/bootstrap/admin-token', options, {
+export async function loginAdmin(username: string, password: string): Promise<AdminLoginResponse> {
+  return adminFetch<AdminLoginResponse>('/admin/api/auth/login', { token: '' }, {
     method: 'POST',
-    body: JSON.stringify({ adminToken }),
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function changeAdminPassword(options: AdminApiOptions, currentPassword: string, newPassword: string) {
+  return adminFetch<{ ok: true; username: string }>('/admin/api/auth/change-password', options, {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
   });
 }
 

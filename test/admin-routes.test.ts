@@ -83,12 +83,12 @@ describe('admin routes', () => {
     server = undefined;
   });
 
-  it('returns 404 when admin routes are disabled', async () => {
-    server = createApp({ config: testConfig() });
+  it('serves the admin dashboard even when a stale config disables admin routes', async () => {
+    server = createApp({ config: testConfig({ enableAdminRoutes: false }) });
     const baseUrl = await listen(server);
 
-    const response = await fetch(`${baseUrl}/admin/api/health`);
-    expect(response.status).toBe(404);
+    const response = await fetch(`${baseUrl}/admin`);
+    expect(response.status).toBe(200);
   });
 
   it('does not apply public CORS headers to admin routes', async () => {
@@ -138,7 +138,19 @@ describe('admin routes', () => {
     const authenticatedHealth = await fetch(`${baseUrl}/admin/api/health`, {
       headers: { authorization: 'Bearer new-admin-password' },
     });
-    expect(authenticatedHealth.status).toBe(200);
+    expect(authenticatedHealth.status).toBe(403);
+
+    const changedPassword = await fetch(`${baseUrl}/admin/api/auth/change-password`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer new-admin-password', 'content-type': 'application/json' },
+      body: JSON.stringify({ currentPassword: 'changeme', newPassword: 'changed-admin-password' }),
+    });
+    expect(changedPassword.status).toBe(200);
+
+    const healthAfterPasswordChange = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: 'Bearer new-admin-password' },
+    });
+    expect(healthAfterPasswordChange.status).toBe(200);
 
     const secondBootstrap = await fetch(`${baseUrl}/admin/api/bootstrap/admin-token`, {
       method: 'POST',
@@ -146,6 +158,83 @@ describe('admin routes', () => {
       body: JSON.stringify({ adminToken: 'another-admin-password' }),
     });
     expect(secondBootstrap.status).toBe(409);
+  });
+
+  it('logs in with the default admin account and forces a password change', async () => {
+    const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-store-'));
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: null,
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: storeDir,
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const login = await fetch(`${baseUrl}/admin/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'changeme' }),
+    });
+    const loginBody = await login.json();
+    expect(login.status).toBe(200);
+    expect(loginBody.username).toBe('admin');
+    expect(loginBody.token).toMatch(/^adm_/);
+    expect(loginBody.mustChangePassword).toBe(true);
+
+    const settingsBeforeChange = JSON.parse(fs.readFileSync(path.join(storeDir, 'admin-settings.json'), 'utf8'));
+    expect(settingsBeforeChange.adminToken).toBe(loginBody.token);
+    expect(settingsBeforeChange.adminPasswordHash).toBeUndefined();
+
+    const blockedHealth = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: `Bearer ${loginBody.token}` },
+    });
+    expect(blockedHealth.status).toBe(403);
+
+    const weakChange = await fetch(`${baseUrl}/admin/api/auth/change-password`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${loginBody.token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ currentPassword: 'changeme', newPassword: 'changeme' }),
+    });
+    expect(weakChange.status).toBe(400);
+
+    const changed = await fetch(`${baseUrl}/admin/api/auth/change-password`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${loginBody.token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ currentPassword: 'changeme', newPassword: 'changed-admin-password' }),
+    });
+    expect(changed.status).toBe(200);
+
+    const settingsAfterChange = JSON.parse(fs.readFileSync(path.join(storeDir, 'admin-settings.json'), 'utf8'));
+    expect(settingsAfterChange.adminUsername).toBe('admin');
+    expect(settingsAfterChange.adminPasswordHash).toMatch(/^scrypt:v1:/);
+    expect(JSON.stringify(settingsAfterChange)).not.toContain('changed-admin-password');
+    expect(JSON.stringify(settingsAfterChange)).not.toContain('changeme');
+
+    const oldPassword = await fetch(`${baseUrl}/admin/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'changeme' }),
+    });
+    expect(oldPassword.status).toBe(401);
+
+    const newPassword = await fetch(`${baseUrl}/admin/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'changed-admin-password' }),
+    });
+    const newPasswordBody = await newPassword.json();
+    expect(newPassword.status).toBe(200);
+    expect(newPasswordBody.mustChangePassword).toBe(false);
+    expect(newPasswordBody.token).toBe(loginBody.token);
+
+    const health = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: `Bearer ${loginBody.token}` },
+    });
+    expect(health.status).toBe(200);
   });
 
   it('rejects admin token bootstrap when it overlaps a managed gateway key', async () => {
@@ -500,7 +589,9 @@ describe('admin routes', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
     expect(html).toContain('Gateway Admin');
-    expect(html).toContain('id="token-input"');
+    expect(html).toContain('id="username-input"');
+    expect(html).toContain('id="password-input"');
+    expect(html).toContain('id="password-change-panel"');
     expect(html).toContain('id="credential-list"');
   });
 
