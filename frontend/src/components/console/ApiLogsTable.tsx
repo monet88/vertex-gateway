@@ -10,7 +10,7 @@ export interface ApiLogsTableProps {
   readonly rows: readonly ApiLogRow[];
 }
 
-const routeFamilies: Array<RouteFamily | 'all'> = ['all', 'gemini', 'openai', 'vertex', 'vtx', 'custom'];
+const routeFamilies: Array<RouteFamily | 'all'> = ['all', 'gemini', 'openai'];
 const statuses: Array<LogStatus | 'all'> = ['all', '2xx', '4xx', '5xx'];
 const sortableColumns = ['time', 'routeFamily', 'model', 'latencyMs', 'status'] as const;
 

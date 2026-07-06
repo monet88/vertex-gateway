@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
+import { hashGatewayKey } from '../src/admin/gateway-key-store.js';
 import type { GenAiRuntimeLike } from '../src/lib/genai-runtime.js';
 import type { GenAiTargetHealth } from '../src/lib/genai-pool.js';
 import { testConfig } from './test-config.js';
@@ -107,6 +108,71 @@ describe('admin routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('access-control-allow-origin')).toBeNull();
+  });
+
+  it('bootstraps the first admin token in file-store mode', async () => {
+    const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-store-'));
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: null,
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: storeDir,
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const unauthenticatedHealth = await fetch(`${baseUrl}/admin/api/health`);
+    expect(unauthenticatedHealth.status).toBe(401);
+
+    const bootstrap = await fetch(`${baseUrl}/admin/api/bootstrap/admin-token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ adminToken: 'new-admin-password' }),
+    });
+    expect(bootstrap.status).toBe(200);
+    expect(JSON.parse(fs.readFileSync(path.join(storeDir, 'admin-settings.json'), 'utf8')).adminToken).toBe('new-admin-password');
+
+    const authenticatedHealth = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: 'Bearer new-admin-password' },
+    });
+    expect(authenticatedHealth.status).toBe(200);
+
+    const secondBootstrap = await fetch(`${baseUrl}/admin/api/bootstrap/admin-token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ adminToken: 'another-admin-password' }),
+    });
+    expect(secondBootstrap.status).toBe(409);
+  });
+
+  it('rejects admin token bootstrap when it overlaps a managed gateway key', async () => {
+    const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-store-'));
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: null,
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: storeDir,
+        managedGatewayKeyHashes: [hashGatewayKey('managed-overlap-token')],
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const bootstrap = await fetch(`${baseUrl}/admin/api/bootstrap/admin-token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ adminToken: 'managed-overlap-token' }),
+    });
+    const body = await bootstrap.json();
+
+    expect(bootstrap.status).toBe(400);
+    expect(body.error.message).toMatch(/managed gateway keys/i);
+    expect(fs.existsSync(path.join(storeDir, 'admin-settings.json'))).toBe(false);
   });
 
   it('accepts trailing slashes on admin API routes', async () => {
@@ -436,5 +502,271 @@ describe('admin routes', () => {
     expect(html).toContain('Gateway Admin');
     expect(html).toContain('id="token-input"');
     expect(html).toContain('id="credential-list"');
+  });
+
+  it('creates, lists, and revokes managed gateway keys without leaking secrets', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const headers = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+
+    const created = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ label: 'Mobile app' }),
+    });
+    const createdBody = await created.json();
+    expect(created.status).toBe(200);
+    expect(createdBody.secret).toMatch(/^vgw_/);
+    expect(createdBody.gatewayKey.label).toBe('Mobile app');
+    expect(createdBody.gatewayKey.hash).toBeUndefined();
+
+    const secret = createdBody.secret as string;
+    const list = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const listBody = await list.json();
+    expect(list.status).toBe(200);
+    expect(listBody.gatewayKeys).toHaveLength(1);
+    expect(JSON.stringify(listBody)).not.toContain(secret);
+    expect(JSON.stringify(fs.readFileSync(path.join(dir, 'gateway-keys.json'), 'utf8'))).not.toContain(secret);
+    expect(runtime.reload).toHaveBeenCalled();
+
+    const id = listBody.gatewayKeys[0].id as string;
+    const revoked = await fetch(`${baseUrl}/admin/api/gateway-keys/${id}/revoke`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const revokedBody = await revoked.json();
+    expect(revoked.status).toBe(200);
+    expect(revokedBody.gatewayKey.status).toBe('revoked');
+  });
+
+  it('keeps managed gateway keys active after unrelated admin config reloads', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+        runtimeMode: 'pool',
+        vertexPools: [],
+        resolvedVertexTargets: [],
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const adminHeaders = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+
+    const created = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      method: 'POST',
+      headers: adminHeaders,
+      body: JSON.stringify({ label: 'Mobile app' }),
+    });
+    const createdBody = await created.json();
+    expect(created.status).toBe(200);
+
+    const target = await fetch(`${baseUrl}/admin/api/vertex-credentials/api-key`, {
+      method: 'POST',
+      headers: adminHeaders,
+      body: JSON.stringify({ label: 'Global key', project: 'project-a', location: 'global', apiKey: 'google-secret' }),
+    });
+    expect(target.status).toBe(200);
+
+    const completion = await fetch(`${baseUrl}/openai/v1/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${createdBody.secret}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gemini-2.5-flash',
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    });
+    expect(completion.status).toBe(200);
+  });
+
+  it('rolls back managed gateway key persistence when runtime reload fails', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    const runtime = createFakeRuntime();
+    runtime.reload = vi.fn(() => {
+      throw new Error('reload failed');
+    });
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const headers = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+
+    const created = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ label: 'Mobile app' }),
+    });
+    expect(created.status).toBe(500);
+
+    const list = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const listBody = await list.json();
+    expect(listBody.gatewayKeys).toHaveLength(0);
+    expect(fs.existsSync(path.join(dir, 'gateway-keys.json'))).toBe(false);
+  });
+
+  it('lists static config gateway keys but rejects managed key mutations in read-only mode', async () => {
+    server = createApp({
+      config: testConfig({ enableAdminRoutes: true, adminToken: 'admin-secret' }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+    const list = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const listBody = await list.json();
+    expect(list.status).toBe(200);
+    expect(listBody.mutable).toBe(false);
+    expect(JSON.stringify(listBody)).not.toContain('test-key');
+
+    const create = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-secret', 'content-type': 'application/json' },
+      body: JSON.stringify({ label: 'Blocked' }),
+    });
+    expect(create.status).toBe(400);
+  });
+
+  it('creates API-key Vertex targets without exposing raw upstream keys', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+        runtimeMode: 'pool',
+        vertexPools: [],
+        resolvedVertexTargets: [],
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const response = await fetch(`${baseUrl}/admin/api/vertex-credentials/api-key`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-secret', 'content-type': 'application/json' },
+      body: JSON.stringify({ label: 'Global key', project: 'project-a', location: 'global', apiKey: 'google-secret' }),
+    });
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.credential.hasApiKey).toBe(true);
+    expect(JSON.stringify(body)).not.toContain('google-secret');
+
+    const list = await fetch(`${baseUrl}/admin/api/vertex-credentials`, { headers: { authorization: 'Bearer admin-secret' } });
+    const listBody = await list.json();
+    expect(JSON.stringify(listBody)).not.toContain('google-secret');
+    expect(runtime.reload).toHaveBeenCalled();
+  });
+
+  it('rejects duplicate API-key Vertex targets instead of replacing them', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+        runtimeMode: 'pool',
+        vertexPools: [],
+        resolvedVertexTargets: [],
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const headers = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+    const payload = { label: 'Global key', project: 'project-a', location: 'global', apiKey: 'google-secret' };
+
+    const first = await fetch(`${baseUrl}/admin/api/vertex-credentials/api-key`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    expect(first.status).toBe(200);
+
+    const duplicate = await fetch(`${baseUrl}/admin/api/vertex-credentials/api-key`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ...payload, apiKey: 'replacement-secret' }),
+    });
+    const duplicateBody = await duplicate.json();
+    expect(duplicate.status).toBe(400);
+    expect(duplicateBody.error.message).toMatch(/already exists/i);
+
+    const list = await fetch(`${baseUrl}/admin/api/vertex-credentials`, { headers: { authorization: 'Bearer admin-secret' } });
+    const listBody = await list.json();
+    expect(listBody.vertexPools).toHaveLength(1);
+    expect(JSON.stringify(listBody)).not.toContain('replacement-secret');
+  });
+
+  it('applies admin-updated OpenAI model catalog rules without restart', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const adminHeaders = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+
+    const modelPut = await fetch(`${baseUrl}/admin/api/models/openai`, {
+      method: 'PUT',
+      headers: adminHeaders,
+      body: JSON.stringify({
+        aliases: { fast: 'gemini-3.5-flash' },
+        allowlist: ['gemini-3.5-flash'],
+        disabled: [],
+      }),
+    });
+    expect(modelPut.status).toBe(200);
+
+    const completion = await fetch(`${baseUrl}/openai/v1/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer test-key', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'fast',
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    });
+    expect(completion.status).toBe(200);
+    expect(runtime.client.models.generateContent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gemini-3.5-flash' }),
+      expect.any(Object),
+    );
   });
 });

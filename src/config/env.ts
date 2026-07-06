@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import { loadServiceAccountCredential } from "../auth/google-auth.js";
+import { loadAdminFileStoreSettings } from "./admin-settings-store.js";
 
-export type VertexPoolSelection = "round-robin" | "weighted-round-robin";
+export type VertexPoolSelection = "round-robin" | "bind-first";
 export type VertexApiKeyMode = "full" | "express";
 export type AdminStoreMode = "static-config" | "file-store";
 export type GatewayRuntimeMode = "single" | "pool";
@@ -55,9 +56,6 @@ export interface GatewayConfig {
   upstreamRetryDelayMs: number;
   enableGeminiRoutes: boolean;
   enableOpenAiRoutes: boolean;
-  enableVertexRoutes: boolean;
-  enableVtxRoutes: boolean;
-  enableImageRoutes: boolean;
   runtimeMode: GatewayRuntimeMode;
   vertexPoolSelection: VertexPoolSelection;
   vertexPools: VertexPoolConfig[];
@@ -68,6 +66,7 @@ export interface GatewayConfig {
   adminAllowMutations: boolean;
   adminStoreMode: AdminStoreMode;
   adminFileStoreDir: string | null;
+  managedGatewayKeyHashes: string[];
 }
 
 const DEFAULTS = {
@@ -86,7 +85,7 @@ const DEFAULTS = {
   vertexPoolFailoverCooldownMs: 60_000,
   upstreamRetries: 2,
   upstreamRetryDelayMs: 250,
-  vertexPoolSelection: "weighted-round-robin" as VertexPoolSelection,
+  vertexPoolSelection: "round-robin" as VertexPoolSelection,
   adminStoreMode: "static-config" as AdminStoreMode,
 };
 
@@ -120,9 +119,6 @@ type GatewayFileConfig = Partial<{
   upstreamRetryDelayMs: number;
   enableGeminiRoutes: boolean;
   enableOpenAiRoutes: boolean;
-  enableVertexRoutes: boolean;
-  enableVtxRoutes: boolean;
-  enableImageRoutes: boolean;
 }>;
 
 type GatewayPoolOverlayConfig = Partial<{
@@ -484,9 +480,6 @@ const validateFileConfig = (
     "allowWildcardCors",
     "enableGeminiRoutes",
     "enableOpenAiRoutes",
-    "enableVertexRoutes",
-    "enableVtxRoutes",
-    "enableImageRoutes",
   ]) {
     assertBoolean(config, key, filePath);
   }
@@ -517,10 +510,10 @@ const validatePoolOverlayConfig = (
   if (config.vertexPoolSelection !== undefined) {
     if (
       config.vertexPoolSelection !== "round-robin" &&
-      config.vertexPoolSelection !== "weighted-round-robin"
+      config.vertexPoolSelection !== "bind-first"
     ) {
       throw new Error(
-        `Invalid ${filePath}: vertexPoolSelection must be "round-robin" or "weighted-round-robin".`,
+        `Invalid ${filePath}: vertexPoolSelection must be "round-robin" or "bind-first".`,
       );
     }
     normalized.vertexPoolSelection = config.vertexPoolSelection;
@@ -746,6 +739,10 @@ const resolveVertexTargets = (
       .map((entry) => ({ ...entry, source: "pool" as const }));
   }
 
+  if (!config.googleApiKey && !config.googleProject && !config.googleCredentialsFile) {
+    return [];
+  }
+
   return [
     {
       id: "legacy-default",
@@ -788,6 +785,18 @@ export const loadConfig = (): GatewayConfig => {
       ? envPools
       : (poolOverlay.vertexPools ?? [])
   ).map((entry) => normalizeVertexPoolConfig({ ...entry }));
+  const adminStoreMode = (
+    (process.env.GATEWAY_ADMIN_STORE_MODE?.trim() as
+      | AdminStoreMode
+      | undefined) ||
+    poolOverlay.adminStoreMode ||
+    DEFAULTS.adminStoreMode
+  );
+  const adminFileStoreDir =
+    process.env.GATEWAY_ADMIN_FILE_STORE_DIR?.trim() ||
+    poolOverlay.adminFileStoreDir ||
+    null;
+  const adminFileStoreSettings = loadAdminFileStoreSettings(adminStoreMode, adminFileStoreDir);
 
   const config: GatewayConfig = {
     port: numberEnv("PORT", fileConfig.port ?? DEFAULTS.port),
@@ -882,18 +891,6 @@ export const loadConfig = (): GatewayConfig => {
       process.env.GATEWAY_ENABLE_OPENAI_ROUTES,
       fileConfig.enableOpenAiRoutes ?? true,
     ),
-    enableVertexRoutes: boolEnv(
-      process.env.GATEWAY_ENABLE_VERTEX_ROUTES,
-      fileConfig.enableVertexRoutes ?? true,
-    ),
-    enableVtxRoutes: boolEnv(
-      process.env.GATEWAY_ENABLE_VTX_ROUTES,
-      fileConfig.enableVtxRoutes ?? true,
-    ),
-    enableImageRoutes: boolEnv(
-      process.env.GATEWAY_ENABLE_IMAGE_ROUTES,
-      fileConfig.enableImageRoutes ?? true,
-    ),
     runtimeMode: vertexPools.length > 0 ? "pool" : "single",
     vertexPoolSelection:
       (process.env.GATEWAY_VERTEX_POOL_SELECTION?.trim() as
@@ -909,21 +906,17 @@ export const loadConfig = (): GatewayConfig => {
       poolOverlay.enableAdminRoutes ?? false,
     ),
     adminToken:
-      process.env.GATEWAY_ADMIN_TOKEN?.trim() || poolOverlay.adminToken || null,
+      process.env.GATEWAY_ADMIN_TOKEN?.trim() ||
+      poolOverlay.adminToken ||
+      adminFileStoreSettings.adminToken ||
+      null,
     adminAllowMutations: boolEnv(
       process.env.GATEWAY_ADMIN_ALLOW_MUTATIONS,
       poolOverlay.adminAllowMutations ?? false,
     ),
-    adminStoreMode:
-      (process.env.GATEWAY_ADMIN_STORE_MODE?.trim() as
-        | AdminStoreMode
-        | undefined) ||
-      poolOverlay.adminStoreMode ||
-      DEFAULTS.adminStoreMode,
-    adminFileStoreDir:
-      process.env.GATEWAY_ADMIN_FILE_STORE_DIR?.trim() ||
-      poolOverlay.adminFileStoreDir ||
-      null,
+    adminStoreMode,
+    adminFileStoreDir,
+    managedGatewayKeyHashes: [],
   };
 
   config.resolvedVertexTargets = resolveVertexTargets(config);
@@ -936,7 +929,12 @@ export const createDerivedConfig = (
   overrides: Partial<
     Pick<
       GatewayConfig,
-      "vertexPools" | "modelCatalog" | "runtimeMode" | "resolvedVertexTargets"
+      | "vertexPools"
+      | "modelCatalog"
+      | "runtimeMode"
+      | "resolvedVertexTargets"
+      | "managedGatewayKeyHashes"
+      | "adminToken"
     >
   >,
 ): GatewayConfig => {
@@ -957,6 +955,12 @@ export const createDerivedConfig = (
         ? "pool"
         : "single"
       : (overrides.runtimeMode ?? config.runtimeMode),
+    ...(overrides.managedGatewayKeyHashes
+      ? { managedGatewayKeyHashes: [...overrides.managedGatewayKeyHashes] }
+      : {}),
+    ...(overrides.adminToken !== undefined
+      ? { adminToken: overrides.adminToken }
+      : {}),
     resolvedVertexTargets: [],
   };
   nextConfig.resolvedVertexTargets = overrides.resolvedVertexTargets
@@ -967,14 +971,21 @@ export const createDerivedConfig = (
 };
 
 export const validateConfig = (config: GatewayConfig): void => {
-  if (config.gatewayKeys.length === 0)
-    throw new Error("GATEWAY_API_KEYS is required.");
+  const canLoadManagedKeys = config.adminStoreMode === "file-store" && Boolean(config.adminFileStoreDir);
+  const canBootstrapAdminToken =
+    config.enableAdminRoutes &&
+    config.adminStoreMode === "file-store" &&
+    config.adminAllowMutations &&
+    Boolean(config.adminFileStoreDir);
+  if (config.gatewayKeys.length === 0 && config.managedGatewayKeyHashes.length === 0 && !canLoadManagedKeys) {
+    throw new Error("GATEWAY_API_KEYS or managed gateway key file-store is required.");
+  }
   if (
     config.vertexPoolSelection !== "round-robin" &&
-    config.vertexPoolSelection !== "weighted-round-robin"
+    config.vertexPoolSelection !== "bind-first"
   ) {
     throw new Error(
-      'GATEWAY_VERTEX_POOL_SELECTION must be "round-robin" or "weighted-round-robin".',
+      'GATEWAY_VERTEX_POOL_SELECTION must be "round-robin" or "bind-first".',
     );
   }
   if (
@@ -985,9 +996,9 @@ export const validateConfig = (config: GatewayConfig): void => {
       'GATEWAY_ADMIN_STORE_MODE must be "static-config" or "file-store".',
     );
   }
-  if (config.enableAdminRoutes && !config.adminToken) {
+  if (config.enableAdminRoutes && !config.adminToken && !canBootstrapAdminToken) {
     throw new Error(
-      "GATEWAY_ADMIN_TOKEN is required when admin routes are enabled.",
+      "GATEWAY_ADMIN_TOKEN is required when admin routes are enabled outside file-store bootstrap mode.",
     );
   }
   if (config.adminToken && config.gatewayKeys.includes(config.adminToken)) {
@@ -1079,6 +1090,7 @@ export const validateConfig = (config: GatewayConfig): void => {
     !config.googleProject &&
     !serviceAccount?.project_id
   ) {
+    if (canLoadManagedKeys) return;
     throw new Error(
       "GOOGLE_VERTEX_PROJECT, GOOGLE_CLOUD_PROJECT, or service account project_id is required (or set GOOGLE_GENAI_API_KEY for express mode).",
     );

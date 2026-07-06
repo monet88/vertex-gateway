@@ -57,19 +57,12 @@ export interface GenAiTarget {
   health: GenAiTargetHealth;
 }
 
-interface WeightedTargetState {
-  targetId: string;
-  currentWeight: number;
-}
-
 export interface GenAiPoolSnapshot {
   version: number;
   selection: VertexPoolSelection;
   targets: readonly GenAiTarget[];
   refCount: number;
   nextIndex: number;
-  totalWeight: number;
-  weightedStates: WeightedTargetState[];
 }
 
 export interface GenAiPoolSnapshotView {
@@ -126,17 +119,12 @@ export const createGenAiPoolSnapshot = (
   version: number,
 ): GenAiPoolSnapshot => {
   const targets = config.resolvedVertexTargets.map((target) => createSnapshotTarget(config, target, factory));
-  if (targets.length === 0) {
-    throw new Error('GenAI pool requires at least one resolved target.');
-  }
   return {
     version,
     selection: config.vertexPoolSelection,
     targets,
     refCount: 0,
     nextIndex: 0,
-    totalWeight: targets.reduce((sum, target) => sum + target.weight, 0),
-    weightedStates: targets.map((target) => ({ targetId: target.id, currentWeight: 0 })),
   };
 };
 
@@ -235,31 +223,6 @@ const selectRoundRobinTarget = (
   return candidates[0];
 };
 
-const selectWeightedRoundRobinTarget = (
-  snapshot: GenAiPoolSnapshot,
-  candidates: readonly GenAiTarget[],
-): GenAiTarget => {
-  const candidateIds = new Set(candidates.map((target) => target.id));
-  const totalCandidateWeight = candidates.reduce((sum, target) => sum + target.weight, 0);
-  let winner: { target: GenAiTarget; currentWeight: number } | null = null;
-  for (const state of snapshot.weightedStates) {
-    const target = snapshot.targets.find((entry) => entry.id === state.targetId);
-    if (!target || !candidateIds.has(target.id)) {
-      continue;
-    }
-    state.currentWeight += target.weight;
-    if (!winner || state.currentWeight > winner.currentWeight) {
-      winner = { target, currentWeight: state.currentWeight };
-    }
-  }
-  if (!winner) return candidates[0];
-  const winningState = snapshot.weightedStates.find((state) => state.targetId === winner.target.id);
-  if (winningState) {
-    winningState.currentWeight -= totalCandidateWeight;
-  }
-  return winner.target;
-};
-
 const allowsModel = (target: GenAiTarget, requestedModel: string | null): boolean => {
   if (!requestedModel) return true;
   if (target.modelAllowlist.length > 0 && !target.modelAllowlist.includes(requestedModel)) {
@@ -275,11 +238,14 @@ const selectTargetFromCandidates = (
   snapshot: GenAiPoolSnapshot,
   candidates: readonly GenAiTarget[],
 ): GenAiTarget =>
-  snapshot.selection === 'round-robin'
-    ? selectRoundRobinTarget(snapshot, candidates)
-    : selectWeightedRoundRobinTarget(snapshot, candidates);
+  snapshot.selection === 'bind-first'
+    ? candidates[0]
+    : selectRoundRobinTarget(snapshot, candidates);
 
 export const selectGenAiTarget = (snapshot: GenAiPoolSnapshot): GenAiTarget => {
+  if (snapshot.targets.length === 0) {
+    throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'No GenAI targets are available.', true);
+  }
   const healthyTargets = snapshot.targets.filter((target) => resolveTargetStatus(target.health) === 'healthy');
   if (healthyTargets.length > 0) {
     return selectTargetFromCandidates(snapshot, healthyTargets);
@@ -405,7 +371,11 @@ export class GenAiPoolClient implements GenAiClient {
         let lastError: unknown;
         const requestedModel = this.extractRequestedModel(request);
 
-        while (attempted.size < snapshot.targets.length) {
+        if (snapshot.targets.length === 0) {
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'No GenAI targets are available.', true);
+    }
+
+    while (attempted.size < snapshot.targets.length) {
           let target;
           try {
             target = this.selectAvailableTarget(snapshot, attempted, requestedModel, metadata.requestId);
@@ -589,6 +559,10 @@ export class GenAiPoolClient implements GenAiClient {
   ): Promise<Record<string, unknown>> {
     const attempted = new Set<string>();
     let lastError: unknown;
+
+    if (snapshot.targets.length === 0) {
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'No GenAI targets are available.', true);
+    }
 
     while (attempted.size < snapshot.targets.length) {
       let target;

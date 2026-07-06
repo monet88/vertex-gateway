@@ -67,7 +67,7 @@ describe('streaming compatibility routes', () => {
     }
   });
 
-  it('streams Vertex-compatible streamGenerateContent responses as SSE chunks', async () => {
+  it('rejects native Vertex stream routes', async () => {
     const generateContent = vi.fn();
     const generateContentStream = vi.fn(async () => streamChunks());
     const server = createApp({
@@ -82,18 +82,11 @@ describe('streaming compatibility routes', () => {
         headers: { authorization: 'Bearer test-key', 'content-type': 'application/json' },
         body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'hi' }] }] }),
       });
-      const body = await response.text();
+      const body = await response.json();
 
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toContain('text/event-stream');
-      expect(body).not.toContain('data: [DONE]');
-      expect(generateContentStream).toHaveBeenCalledWith(
-        expect.objectContaining({
-          model: 'gemini-2.5-flash',
-          contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
-        }),
-        expect.objectContaining({ routeFamily: 'vertex', signal: expect.any(AbortSignal) }),
-      );
+      expect(response.status).toBe(404);
+      expect(body.error.code).toBe('NOT_FOUND');
+      expect(generateContentStream).not.toHaveBeenCalled();
       expect(generateContent).not.toHaveBeenCalled();
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -150,7 +143,7 @@ describe('streaming compatibility routes', () => {
     }
   });
 
-  it('is consumable by the Google Gemini SDK against the local vertex stream route', async () => {
+  it('rejects the local vertex stream route', async () => {
     const generateContent = vi.fn();
     const generateContentStream = vi.fn(async () => streamChunks());
     const server = createApp({
@@ -160,23 +153,17 @@ describe('streaming compatibility routes', () => {
     const baseUrl = await listen(server);
 
     try {
-      const client = new GoogleGenAI({
-        apiKey: 'test-key',
-        httpOptions: {
-          baseUrl: `${baseUrl}/vertex/v1/projects/p/locations/us-central1/publishers/google`,
-          apiVersion: '',
-        },
+      const response = await fetch(`${baseUrl}/vertex/v1/projects/p/locations/us-central1/publishers/google/models/gemini-2.5-flash:streamGenerateContent`, {
+        method: 'POST',
+        headers: { authorization: 'Bearer test-key', 'content-type': 'application/json' },
+        body: JSON.stringify({ contents: 'hi' }),
       });
-      const stream = await client.models.generateContentStream({
-        model: 'gemini-2.5-flash',
-        contents: 'hi',
-      });
-      let text = '';
-      for await (const chunk of stream) {
-        text += chunk.text ?? '';
-      }
+      const body = await response.json();
 
-      expect(text).toBe('hello');
+      expect(response.status).toBe(404);
+      expect(body.error.code).toBe('NOT_FOUND');
+      expect(generateContentStream).not.toHaveBeenCalled();
+      expect(generateContent).not.toHaveBeenCalled();
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

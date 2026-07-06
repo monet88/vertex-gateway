@@ -8,9 +8,8 @@ SDK usage examples, see `README.md`. For agent-facing conventions, see
 ## Bird's Eye View
 
 `vertex-gateway` is a `node:http` proxy that sits between client applications
-and Google's Vertex AI / Gemini API. It accepts a request in one of five
-shapes (native Gemini, OpenAI-compatible, native Vertex, a `vtx` shorthand, or
-a custom image API), authenticates the caller with a gateway-issued key,
+and Google's Vertex AI / Gemini API. It accepts a request in one of two
+shapes (native Gemini or OpenAI-compatible), authenticates the caller with a gateway-issued key,
 translates the request into the gateway's SDK-compatible `GenAiClient` request
 shape, and returns either a JSON body or a re-emitted Server-Sent-Events stream.
 
@@ -108,8 +107,8 @@ lets tests inject a fake `generateContent`/`generateContentStream` pair.
 
 ### `src/lib/genai-pool.ts` and `src/lib/genai-runtime.ts`
 
-`genai-pool.ts` holds the pool selection algorithm (round-robin or weighted
-round-robin), per-target health tracking (success/failure counters, cooldown
+`genai-pool.ts` holds the pool selection algorithm (round-robin by default, or
+bind-first), per-target health tracking (success/failure counters, cooldown
 timestamps, a bounded recent-event ring buffer), and the failover loop that
 walks eligible targets on error. `GenAiRuntime` wraps a pool snapshot behind
 the same `GenAiClient` shape so `single` mode and `pool` mode are
@@ -124,14 +123,12 @@ the pool out from under a request already in `withFailover`.
 
 ### `src/strategies/compatibility-strategy.ts` and `src/routes/`
 
-`compatibility-strategy.ts` handles the three route families (`gemini`,
-`vertex`, `vtx`) that are near-passthroughs to the gateway's `GenAiClient`
-request shape -- it only translates Vertex's `predict` instance format into
-`contents`. `src/routes/`
+`compatibility-strategy.ts` handles the Gemini route family, which is a
+near-passthrough to the gateway's `GenAiClient` request shape. `src/routes/`
 holds the families that need real translation: `openai-compatible-routes.ts`
 (Chat Completions), `openai-responses-routes.ts` (Responses API),
-`openai-images-routes.ts` and `custom-image-routes.ts` (image generation/edit/
-upscale/describe, delegating to `src/workloads/`), and `openai-content.ts`
+`openai-images-routes.ts` (image generation/edit, delegating to `src/workloads/`),
+and `openai-content.ts`
 (the shared OpenAI-content-to-Gemini-parts translator both OpenAI route files
 call through a small policy object rather than duplicating the loop).
 
@@ -141,8 +138,8 @@ these are explicit `400` validations, not missing features silently ignored.
 
 ### `src/workloads/image-workloads.ts` and `image-normalizer.ts`
 
-`ImageWorkloads` is the per-request-scoped facade for the four image
-operations (generate/edit/upscale/describe/validateSession), each building a
+`ImageWorkloads` is the per-request-scoped facade for image
+operations, each building a
 Gemini `generateContent` call and running it through a `Semaphore` (bounded
 by `upstreamConcurrency`) plus a timeout and a single retry-with-jitter for
 transient errors. `image-normalizer.ts` pulls inline image/text parts back

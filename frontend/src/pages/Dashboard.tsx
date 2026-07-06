@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { StitchConsoleShell } from '@/components/stitch/StitchConsoleShell';
 import { StitchKpiStrip } from '@/components/stitch/StitchKpiStrip';
 import { StitchSecurityRail } from '@/components/stitch/StitchSecurityRail';
@@ -5,13 +6,29 @@ import { ApiLogsTable } from '@/components/console/ApiLogsTable';
 import { GatewayKeysTable } from '@/components/console/GatewayKeysTable';
 import { VertexTargetsTable } from '@/components/console/VertexTargetsTable';
 import { GatewayKeyDialog } from '@/components/console/GatewayKeyDialog';
+import { ServiceAccountTargetDialog } from '@/components/console/ServiceAccountTargetDialog';
 import { VertexTargetDialog } from '@/components/console/VertexTargetDialog';
 import { SecretInput } from '@/components/console/SecretInput';
+import { Button } from '@/components/ui/button';
 import { useAdminToken } from '@/hooks/useAdminToken';
-import { kpiMetrics, securityNotices, apiLogs, gatewayKeys, vertexTargets } from '@/data/mockData';
+import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
+import { kpiMetrics, securityNotices, apiLogs } from '@/data/mockData';
 
 export function Dashboard() {
   const { token, setToken } = useAdminToken();
+  const adminData = useAdminDashboardData(token);
+  const [bootstrapping, setBootstrapping] = useState(false);
+
+  async function bootstrapAdminPassword() {
+    setBootstrapping(true);
+    try {
+      await adminData.bootstrapAdmin();
+    } catch {
+      // Error is already surfaced through adminData.error.
+    } finally {
+      setBootstrapping(false);
+    }
+  }
 
   return (
     <StitchConsoleShell rail={<StitchSecurityRail notices={securityNotices} />}>
@@ -25,8 +42,12 @@ export function Dashboard() {
             <div className="min-w-72">
               <SecretInput id="admin-token" label="Admin token" value={token} onChange={setToken} placeholder="Bearer token" />
             </div>
-            <GatewayKeyDialog onCreate={(label) => console.info('create gateway key', label)} />
-            <VertexTargetDialog onCreate={(target) => console.info('create vertex target', target.project)} />
+            <Button variant="secondary" disabled={token.trim().length < 12 || bootstrapping} onClick={bootstrapAdminPassword}>
+              {bootstrapping ? 'Đang lưu...' : 'Set admin password'}
+            </Button>
+            <GatewayKeyDialog onCreate={(label) => adminData.createKey(label)} disabled={!adminData.mutable} />
+            <VertexTargetDialog onCreate={(target) => adminData.createTarget(target)} disabled={!adminData.mutable} />
+            <ServiceAccountTargetDialog onCreate={(target) => adminData.importServiceAccount(target)} disabled={!adminData.mutable} />
           </div>
         </section>
 
@@ -39,13 +60,21 @@ export function Dashboard() {
         </section>
 
         <section id="keys" className="scroll-mt-6">
-          <h2 className="mb-4 text-xl font-semibold tracking-tight text-foreground">Gateway keys</h2>
-          <GatewayKeysTable rows={gatewayKeys} />
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xl font-semibold tracking-tight text-foreground">Gateway keys</h2>
+            {adminData.loading && <span className="text-sm text-muted-foreground">Đang tải dữ liệu admin...</span>}
+          </div>
+          {adminData.error && (
+            <p className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {adminData.error}
+            </p>
+          )}
+          <GatewayKeysTable rows={adminData.gatewayKeys} onRevoke={(id) => adminData.revokeKey(id)} mutable={adminData.mutable} />
         </section>
 
         <section id="targets" className="scroll-mt-6">
           <h2 className="mb-4 text-xl font-semibold tracking-tight text-foreground">Vertex targets</h2>
-          <VertexTargetsTable rows={vertexTargets} />
+          <VertexTargetsTable rows={adminData.vertexTargets} />
         </section>
       </div>
     </StitchConsoleShell>

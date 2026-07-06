@@ -7,7 +7,6 @@ import { sendSseStream } from './sse-response.js';
 import type { GenAiClient } from '../lib/google-genai-client.js';
 import type { ImageWorkloads } from '../workloads/image-workloads.js';
 import { runCompatibilityRoute, runCompatibilityStreamRoute } from '../strategies/compatibility-strategy.js';
-import { runCustomImageRoute } from '../routes/custom-image-routes.js';
 import { runOpenAiImageEditRoute, runOpenAiImageGenerationRoute } from '../routes/openai-images-routes.js';
 import { runOpenAiCompatibleRoute, runOpenAiCompatibleStreamRoute } from '../routes/openai-compatible-routes.js';
 import { runOpenAiResponsesRoute, runOpenAiResponsesStreamRoute } from '../routes/openai-responses-routes.js';
@@ -68,8 +67,6 @@ const runCompatibilitySync = (ctx: RouteContext) =>
 
 const runGeminiFamily = runCompatibilityFamily(runCompatibilitySync);
 
-const runVertexFamily = runCompatibilityFamily(runCompatibilitySync);
-
 const runOpenAiFamily = async (ctx: RouteContext): Promise<void> => {
   const {
     req,
@@ -115,14 +112,6 @@ const runOpenAiFamily = async (ctx: RouteContext): Promise<void> => {
   sendJson(res, 200, await runOpenAiCompatibleRoute(route, body, ai, requestId, ctx.abortSignal));
 };
 
-const runCustomFamily = async (ctx: RouteContext): Promise<void> => {
-  sendJson(
-    ctx.res,
-    200,
-    await runCustomImageRoute(ctx.route.operation, ctx.body, ctx.workloads, ctx.requestId, ctx.abortSignal),
-  );
-};
-
 /**
  * The single source of truth for which handler serves a route family, whether
  * it is enabled, and the message shown when it is not. `app.ts` looks up an
@@ -139,21 +128,6 @@ const ROUTE_DISPATCH: Record<Exclude<RouteFamily, 'health'>, RouteDispatchEntry>
     disabledMessage: 'OpenAI-compatible routes are disabled.',
     run: runOpenAiFamily,
   },
-  vertex: {
-    isEnabled: (config) => config.enableVertexRoutes,
-    disabledMessage: 'Vertex-compatible routes are disabled.',
-    run: runVertexFamily,
-  },
-  vtx: {
-    isEnabled: (config) => config.enableVtxRoutes,
-    disabledMessage: 'Vertex-compatible routes are disabled.',
-    run: runVertexFamily,
-  },
-  custom: {
-    isEnabled: (config) => config.enableImageRoutes,
-    disabledMessage: 'Custom image routes are disabled.',
-    run: runCustomFamily,
-  },
 };
 
 export const resolveRouteDispatch = (family: RouteFamily): RouteDispatchEntry | undefined =>
@@ -167,7 +141,7 @@ export const isStreamingRequest = (
   route: ClassifiedRoute,
   body: Record<string, unknown>,
 ): boolean =>
-  ((route.family === 'gemini' || route.family === 'vertex' || route.family === 'vtx') && route.stream)
+  (route.family === 'gemini' && route.stream)
   || (route.family === 'openai'
     && (route.operation === 'chatCompletions' || route.operation === 'responses')
     && body.stream === true);

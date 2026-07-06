@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -6,6 +7,8 @@ import type { GatewayKeyRow } from '@/data/mockData';
 
 export interface GatewayKeysTableProps {
   readonly rows: readonly GatewayKeyRow[];
+  readonly onRevoke?: (id: string) => Promise<void>;
+  readonly mutable?: boolean;
 }
 
 const columns: Array<{ key: keyof GatewayKeyRow; label: string }> = [
@@ -21,8 +24,19 @@ const getStatusColor = (status: string) => {
   return 'bg-gray-500 hover:bg-gray-600';
 };
 
-export function GatewayKeysTable({ rows }: GatewayKeysTableProps) {
+export function GatewayKeysTable({ rows, onRevoke, mutable }: GatewayKeysTableProps) {
   const { sortKey, direction, handleSort, ariaSort, sortedRows } = useSortableTable(rows, 'createdAt', 'desc');
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const showActions = mutable && onRevoke;
+
+  async function handleRevoke(id: string) {
+    setRevokingId(id);
+    try {
+      await onRevoke?.(id);
+    } finally {
+      setRevokingId(null);
+    }
+  }
 
   return (
     <div className="rounded-md border">
@@ -41,6 +55,7 @@ export function GatewayKeysTable({ rows }: GatewayKeysTableProps) {
                 </Button>
               </TableHead>
             ))}
+            {showActions && <TableHead>Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -53,11 +68,20 @@ export function GatewayKeysTable({ rows }: GatewayKeysTableProps) {
                   <Badge className={getStatusColor(key.status)}>{key.status}</Badge>
                 </TableCell>
                 <TableCell>{key.createdAt}</TableCell>
+                {showActions && (
+                  <TableCell>
+                    {key.status === 'active' && (
+                      <Button variant="destructive" size="sm" disabled={revokingId === key.id} onClick={() => handleRevoke(key.id)}>
+                        {revokingId === key.id ? 'Đang revoke…' : 'Revoke'}
+                      </Button>
+                    )}
+                  </TableCell>
+                )}
               </TableRow>
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={4} className="h-24 text-center">
+              <TableCell colSpan={showActions ? 5 : 4} className="h-24 text-center">
                 No keys found.
               </TableCell>
             </TableRow>

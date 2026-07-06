@@ -1,7 +1,7 @@
 import { GatewayError } from './error-response.js';
 
-export type RouteFamily = 'health' | 'gemini' | 'openai' | 'vertex' | 'vtx' | 'custom';
-export type RouteOperation = 'models' | 'generateContent' | 'streamGenerateContent' | 'predict' | 'chatCompletions' | 'responses' | 'openaiImageGenerations' | 'openaiImageEdits' | 'imageGenerate' | 'imageEdit' | 'imageUpscale' | 'imageDescribe' | 'sessionValidate';
+export type RouteFamily = 'health' | 'gemini' | 'openai';
+export type RouteOperation = 'models' | 'generateContent' | 'streamGenerateContent' | 'chatCompletions' | 'responses' | 'openaiImageGenerations' | 'openaiImageEdits';
 
 export interface ClassifiedRoute {
   family: RouteFamily;
@@ -48,36 +48,6 @@ export const classifyRoute = (method: string, pathname: string): ClassifiedRoute
   }
   if (method === 'POST' && pathname === '/openai/v1/images/edits') {
     return { family: 'openai', operation: 'openaiImageEdits', stateful: true, stream: false };
-  }
-
-  const vertex = pathname.match(/^\/vertex\/v1\/projects\/([^/]+)\/locations\/([^/]+)\/publishers\/google\/models\/(.+):(generateContent|streamGenerateContent|predict)$/);
-  if (method === 'POST' && vertex) {
-    return {
-      family: 'vertex',
-      operation: vertex[4] as RouteOperation,
-      project: decodeURIComponent(vertex[1]),
-      location: decodeURIComponent(vertex[2]),
-      model: decodeModel(vertex[3]),
-      stateful: true,
-      stream: vertex[4] === 'streamGenerateContent',
-    };
-  }
-
-  const vtx = pathname.match(/^\/vtx\/v1\/models\/(.+):(generateContent|predict)$/);
-  if (method === 'POST' && vtx) {
-    return { family: 'vtx', operation: vtx[2] as RouteOperation, model: decodeModel(vtx[1]), stateful: true, stream: false };
-  }
-
-  const customRoutes: Record<string, RouteOperation> = {
-    '/api/images/generate': 'imageGenerate',
-    '/api/images/edit': 'imageEdit',
-    '/api/images/upscale': 'imageUpscale',
-    '/api/images/describe': 'imageDescribe',
-    '/api/session/validate': 'sessionValidate',
-  };
-  const customOperation = customRoutes[pathname];
-  if (method === 'POST' && customOperation) {
-    return { family: 'custom', operation: customOperation, stateful: customOperation !== 'imageGenerate' && customOperation !== 'sessionValidate', stream: false };
   }
 
   throw new GatewayError(404, 'NOT_FOUND', 'Route is not enabled by the gateway allowlist.');

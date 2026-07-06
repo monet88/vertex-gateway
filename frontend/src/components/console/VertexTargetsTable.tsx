@@ -21,6 +21,7 @@ const getHealthColor = (health: string) => {
   if (health === 'ready') return 'bg-emerald-500 hover:bg-emerald-600';
   if (health === 'degraded') return 'bg-amber-500 hover:bg-amber-600 text-amber-950';
   if (health === 'failed') return 'bg-red-500 hover:bg-red-600';
+  if (health === 'disabled') return 'bg-slate-500 hover:bg-slate-600';
   return 'bg-gray-500 hover:bg-gray-600';
 };
 

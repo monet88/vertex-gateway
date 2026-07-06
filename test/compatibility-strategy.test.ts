@@ -30,33 +30,6 @@ describe('compatibility strategy', () => {
     );
   });
 
-  it('uses the URL route model for predict requests with instances', async () => {
-    const generateContent = vi.fn(async () => ({}));
-
-    await runCompatibilityRoute(
-      {
-        family: 'vertex',
-        operation: 'predict',
-        model: 'url-predict-model',
-        stateful: true,
-        stream: false,
-      } satisfies ClassifiedRoute,
-      {
-        model: 'body-predict-model',
-        instances: [{ prompt: 'hello' }],
-      },
-      { models: { generateContent } },
-    );
-
-    expect(generateContent).toHaveBeenCalledWith(
-      {
-        model: 'url-predict-model',
-        contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
-      },
-      expect.objectContaining({ routeFamily: 'vertex' }),
-    );
-  });
-
   it('passes abortSignal metadata to compatibility sync calls', async () => {
     const generateContent = vi.fn(async () => ({}));
     const abortController = new AbortController();
@@ -117,7 +90,7 @@ describe('compatibility strategy', () => {
     const { runCompatibilityStreamRoute } = await import('../src/strategies/compatibility-strategy.js');
 
     await runCompatibilityStreamRoute(
-      { family: 'vertex', operation: 'streamGenerateContent', model: 'gemini-2.5-flash', stateful: true, stream: true } satisfies ClassifiedRoute,
+      { family: 'gemini', operation: 'streamGenerateContent', model: 'gemini-2.5-flash', stateful: true, stream: true } satisfies ClassifiedRoute,
       { contents: [{ role: 'user', parts: [{ text: 'hi' }] }] },
       { models: { generateContentStream } },
       'req-123',
@@ -128,7 +101,7 @@ describe('compatibility strategy', () => {
     expect(generateContentStream).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'gemini-2.5-flash' }),
       expect.objectContaining({
-        routeFamily: 'vertex',
+        routeFamily: 'gemini',
         requestId: 'req-123',
         streamGuard: { idleTimeoutMs: 5000, maxDurationMs: 60000 },
         signal: abortController.signal,
@@ -142,13 +115,13 @@ describe('compatibility strategy', () => {
     const { runCompatibilityStreamRoute } = await import('../src/strategies/compatibility-strategy.js');
 
     await runCompatibilityStreamRoute(
-      { family: 'vertex', operation: 'streamGenerateContent', model: 'gemini-2.5-flash', stateful: true, stream: true } satisfies ClassifiedRoute,
+      { family: 'gemini', operation: 'streamGenerateContent', model: 'gemini-2.5-flash', stateful: true, stream: true } satisfies ClassifiedRoute,
       { contents: [{ role: 'user', parts: [{ text: 'hi' }] }] },
       { models: { generateContentStream } },
     );
 
     const [, metadata] = generateContentStream.mock.calls[0];
     expect(metadata.streamGuard).toBeUndefined();
-    expect(metadata.routeFamily).toBe('vertex');
+    expect(metadata.routeFamily).toBe('gemini');
   });
 });

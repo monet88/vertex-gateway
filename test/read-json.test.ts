@@ -56,7 +56,7 @@ describe('readJsonBody', () => {
     const baseUrl = await listen(server);
 
     try {
-      const response = await fetch(`${baseUrl}/api/images/generate`, {
+      const response = await fetch(`${baseUrl}/gemini/v1beta/models/gemini-2.5-flash:generateContent`, {
         method: 'POST',
         headers: { authorization: 'Bearer test-key', 'content-type': 'application/json' },
         body: JSON.stringify({ prompt: 'oversized' }),

@@ -24,11 +24,8 @@ export const testConfig = (overrides: Partial<GatewayConfig> = {}): GatewayConfi
   upstreamRetryDelayMs: 250,
   enableGeminiRoutes: true,
   enableOpenAiRoutes: true,
-  enableVertexRoutes: true,
-  enableVtxRoutes: true,
-  enableImageRoutes: true,
   runtimeMode: 'single',
-  vertexPoolSelection: 'weighted-round-robin',
+  vertexPoolSelection: 'round-robin',
   vertexPools: [],
   resolvedVertexTargets: [{
     id: 'legacy-default',
@@ -50,5 +47,6 @@ export const testConfig = (overrides: Partial<GatewayConfig> = {}): GatewayConfi
   adminAllowMutations: false,
   adminStoreMode: 'static-config',
   adminFileStoreDir: null,
+  managedGatewayKeyHashes: [],
   ...overrides,
 });

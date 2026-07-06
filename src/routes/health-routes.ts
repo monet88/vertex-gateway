@@ -14,8 +14,6 @@ export const rootResponse = () => ({
     'POST /openai/v1/responses',
     'POST /openai/v1/images/generations',
     'POST /openai/v1/images/edits',
-    'POST /vertex/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent',
-    'POST /vertex/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:streamGenerateContent',
   ],
   message: 'Chang Store Vertex Gateway',
 });
@@ -55,8 +53,5 @@ export const readyResponse = (config: GatewayConfig, runtimeSnapshot?: GenAiRunt
     wildcardCors: config.allowWildcardCors,
     gemini: config.enableGeminiRoutes,
     openai: config.enableOpenAiRoutes,
-    vertex: config.enableVertexRoutes,
-    vtx: config.enableVtxRoutes,
-    images: config.enableImageRoutes,
   },
 });

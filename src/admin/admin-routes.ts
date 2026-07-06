@@ -9,6 +9,7 @@ import { readJsonBody } from '../lib/read-json.js';
 import { requireAdminAuth } from './admin-auth.js';
 import { renderAdminUi } from './admin-ui.js';
 import {
+  createApiKeyVertexCredential,
   createCredentialStore,
   importServiceAccountCredential,
   type AdminCredentialStoreSnapshot,
@@ -16,6 +17,11 @@ import {
 } from './credential-store.js';
 import type { GenAiTargetHealth } from '../lib/genai-pool.js';
 import { getProviderModelCatalog } from './model-store.js';
+import { createGatewayKeyStore, verifyManagedGatewayKey } from './gateway-key-store.js';
+import {
+  canBootstrapAdminToken,
+  persistAdminFileStoreSettings,
+} from '../config/admin-settings-store.js';
 
 // Response-only shape: the raw express-mode `apiKey` is stripped and replaced
 // with a boolean presence flag. Runtime health is attached for the admin UI.
@@ -99,6 +105,7 @@ export const maybeHandleAdminRoute = async (
   url: URL,
   config: GatewayConfig,
   runtime?: GenAiRuntimeLike,
+  onConfigReload?: (nextConfig: GatewayConfig) => void,
 ): Promise<boolean> => {
   const normalizedPathname = url.pathname === '/' ? '/' : (url.pathname.replace(/\/+$/, '') || '/');
   if (!normalizedPathname.startsWith('/admin')) {
@@ -124,13 +131,42 @@ export const maybeHandleAdminRoute = async (
   if (!normalizedPathname.startsWith('/admin/api/')) {
     throw new GatewayError(404, 'NOT_FOUND', 'Admin route is not implemented.');
   }
+
+  if (req.method === 'POST' && normalizedPathname === '/admin/api/bootstrap/admin-token') {
+    if (!canBootstrapAdminToken(config)) {
+      throw new GatewayError(409, 'VALIDATION_FAILED', 'Admin token bootstrap is not available.');
+    }
+    const body = await parseJsonBody(req, config.maxJsonBytes);
+    const adminToken = typeof body.adminToken === 'string' ? body.adminToken.trim() : '';
+    if (adminToken.length < 12) {
+      throw new GatewayError(400, 'VALIDATION_FAILED', 'adminToken must be at least 12 characters.');
+    }
+    if (config.gatewayKeys.includes(adminToken)) {
+      throw new GatewayError(400, 'VALIDATION_FAILED', 'adminToken must not overlap with gateway keys.');
+    }
+    if (verifyManagedGatewayKey(adminToken, config.managedGatewayKeyHashes)) {
+      throw new GatewayError(400, 'VALIDATION_FAILED', 'adminToken must not overlap with managed gateway keys.');
+    }
+    persistAdminFileStoreSettings(config, { adminToken });
+    const nextConfig = createDerivedConfig(config, { adminToken });
+    onConfigReload?.(nextConfig);
+    if (!onConfigReload) runtime?.reload(nextConfig);
+    sendJson(res, 200, { ok: true, hasAdminToken: true });
+    return true;
+  }
+
   requireAdminAuth(req.headers, config);
   if (!runtime) {
     throw new GatewayError(500, 'INTERNAL', 'Admin runtime is unavailable.');
   }
 
-  const store = createCredentialStore(config, (nextConfig) => {
-    runtime.reload(nextConfig);
+  const credentialStore = createCredentialStore(config, (nextConfig) => {
+    onConfigReload?.(nextConfig);
+    if (!onConfigReload) runtime.reload(nextConfig);
+  });
+  const gatewayKeyStore = createGatewayKeyStore(config, (nextConfig) => {
+    onConfigReload?.(nextConfig);
+    if (!onConfigReload) runtime.reload(nextConfig);
   });
 
   if (req.method === 'GET' && normalizedPathname === '/admin/api/health') {
@@ -141,15 +177,32 @@ export const maybeHandleAdminRoute = async (
     sendJson(res, 200, buildHealthResponse(runtime, config));
     return true;
   }
+  if (req.method === 'GET' && normalizedPathname === '/admin/api/gateway-keys') {
+    sendJson(res, 200, gatewayKeyStore.getSnapshot());
+    return true;
+  }
+  if (req.method === 'POST' && normalizedPathname === '/admin/api/gateway-keys') {
+    const body = await parseJsonBody(req, config.maxJsonBytes);
+    const created = gatewayKeyStore.create({ label: typeof body.label === 'string' ? body.label : undefined });
+    sendJson(res, 200, { ok: true, ...created });
+    return true;
+  }
+  const gatewayKeyRevokeMatch = normalizedPathname.match(/^\/admin\/api\/gateway-keys\/([^/]+)\/revoke$/);
+  if (gatewayKeyRevokeMatch && req.method === 'POST') {
+    const id = decodeURIComponent(gatewayKeyRevokeMatch[1]);
+    const revoked = gatewayKeyStore.revoke(id);
+    sendJson(res, 200, { ok: true, ...revoked });
+    return true;
+  }
   if (req.method === 'GET' && normalizedPathname === '/admin/api/vertex-credentials') {
-    sendJson(res, 200, withRuntimeHealth(store.getSnapshot(), runtime));
+    sendJson(res, 200, withRuntimeHealth(credentialStore.getSnapshot(), runtime));
     return true;
   }
   if (req.method === 'POST' && normalizedPathname === '/admin/api/vertex-credentials/import') {
     const body = await parseJsonBody(req, config.maxJsonBytes);
     const imported = importServiceAccountCredential(config, body);
     try {
-      const snapshot = store.updateVertexPools((state) => ({
+      const snapshot = credentialStore.updateVertexPools((state) => ({
         ...state,
         vertexPools: [...state.vertexPools.filter((entry) => entry.id !== imported.credential.id), imported.credential],
       }));
@@ -163,18 +216,33 @@ export const maybeHandleAdminRoute = async (
     }
     return true;
   }
+  if (req.method === 'POST' && normalizedPathname === '/admin/api/vertex-credentials/api-key') {
+    const body = await parseJsonBody(req, config.maxJsonBytes);
+    const credential = createApiKeyVertexCredential(config, body);
+    const snapshot = credentialStore.updateVertexPools((state) => {
+      if (state.vertexPools.some((entry) => entry.id === credential.id)) {
+        throw new GatewayError(400, 'VALIDATION_FAILED', `Credential ${credential.id} already exists.`);
+      }
+      return {
+        ...state,
+        vertexPools: [...state.vertexPools, credential],
+      };
+    });
+    sendJson(res, 200, { ok: true, credential: findCredentialOrThrow(withRuntimeHealth(snapshot, runtime), credential.id) });
+    return true;
+  }
 
   const credentialMatch = normalizedPathname.match(/^\/admin\/api\/vertex-credentials\/([^/]+)$/);
   const credentialTestMatch = normalizedPathname.match(/^\/admin\/api\/vertex-credentials\/([^/]+)\/test$/);
   if (credentialMatch) {
     const id = decodeURIComponent(credentialMatch[1]);
     if (req.method === 'GET') {
-      sendJson(res, 200, findCredentialOrThrow(withRuntimeHealth(store.getSnapshot(), runtime), id));
+      sendJson(res, 200, findCredentialOrThrow(withRuntimeHealth(credentialStore.getSnapshot(), runtime), id));
       return true;
     }
     if (req.method === 'PATCH') {
       const body = await parseJsonBody(req, config.maxJsonBytes);
-      const snapshot = store.updateVertexPools((state) => ({
+      const snapshot = credentialStore.updateVertexPools((state) => ({
         ...state,
         vertexPools: state.vertexPools.map((entry) => entry.id === id ? {
           ...toPoolPatch(entry, body),
@@ -185,8 +253,8 @@ export const maybeHandleAdminRoute = async (
       return true;
     }
     if (req.method === 'DELETE') {
-      const current = findCredentialOrThrow(store.getSnapshot(), id);
-      const snapshot = store.updateVertexPools((state) => ({
+      const current = findCredentialOrThrow(credentialStore.getSnapshot(), id);
+      const snapshot = credentialStore.updateVertexPools((state) => ({
         ...state,
         vertexPools: state.vertexPools.filter((entry) => entry.id !== id),
       }));
@@ -205,7 +273,7 @@ export const maybeHandleAdminRoute = async (
   }
   if (credentialTestMatch && req.method === 'POST') {
     const id = decodeURIComponent(credentialTestMatch[1]);
-    const entry = findCredentialOrThrow(store.getSnapshot(), id);
+    const entry = findCredentialOrThrow(credentialStore.getSnapshot(), id);
     const response = await runtime.probeTarget({ ...entry, source: 'pool' });
     sendJson(res, 200, { ok: true, id, response });
     return true;
@@ -215,7 +283,7 @@ export const maybeHandleAdminRoute = async (
     if (!provider) {
       throw new GatewayError(400, 'VALIDATION_FAILED', 'provider query param is required.');
     }
-    sendJson(res, 200, getProviderModelCatalog(store.getSnapshot().modelCatalog, provider));
+    sendJson(res, 200, getProviderModelCatalog(credentialStore.getSnapshot().modelCatalog, provider));
     return true;
   }
 
@@ -223,7 +291,7 @@ export const maybeHandleAdminRoute = async (
   if (modelMatch && req.method === 'PUT') {
     const provider = decodeURIComponent(modelMatch[1]);
     const body = await parseJsonBody(req, config.maxJsonBytes);
-    const snapshot = store.updateVertexPools((state) => ({
+    const snapshot = credentialStore.updateVertexPools((state) => ({
       ...state,
       modelCatalog: {
         ...state.modelCatalog,
@@ -246,7 +314,7 @@ export const maybeHandleAdminRoute = async (
   }
 
   if (req.method === 'POST' && normalizedPathname === '/admin/api/runtime/reload') {
-    const snapshot = store.getSnapshot();
+    const snapshot = credentialStore.getSnapshot();
     runtime.reload(createDerivedConfig(config, {
       vertexPools: snapshot.vertexPools.map(({ email: _email, ...entry }) => entry),
       modelCatalog: snapshot.modelCatalog,

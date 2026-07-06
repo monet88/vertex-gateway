@@ -1,4 +1,4 @@
-export type RouteFamily = 'gemini' | 'openai' | 'vertex' | 'vtx' | 'custom';
+export type RouteFamily = 'gemini' | 'openai';
 export type LogStatus = '2xx' | '4xx' | '5xx';
 
 export interface ApiLogRow {
@@ -28,7 +28,7 @@ export interface VertexTargetRow {
   location: string;
   authType: 'Google Cloud API key' | 'Service Account JSON';
   apiKeyMode: 'full' | 'express';
-  health: 'ready' | 'degraded' | 'failed';
+  health: 'ready' | 'degraded' | 'failed' | 'disabled' | 'unknown';
 }
 
 export const apiLogs: ApiLogRow[] = [
@@ -57,8 +57,8 @@ export const apiLogs: ApiLogRow[] = [
   {
     id: 'req-01jz7w9n7c',
     time: '14:30:12',
-    routeFamily: 'vertex',
-    operation: 'predict',
+    routeFamily: 'openai',
+    operation: 'images/generations',
     model: 'gemini-3.1-flash-image-preview',
     gatewayKey: 'vgw_...p7m',
     upstreamTarget: 'image-global',

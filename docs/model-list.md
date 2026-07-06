@@ -54,7 +54,7 @@ Models not in this set → `400 VALIDATION_FAILED`.
 
 ### Custom Image Routes Default
 
-`/api/images/*` routes default to `gemini-3.1-flash-image-preview` when no
+`/openai/v1/images/*` routes default to `gemini-3.1-flash-image-preview` when no
 model is specified (see `image-workloads.ts`).
 
 ---
