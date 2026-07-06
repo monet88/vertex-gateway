@@ -8,10 +8,12 @@ import { GatewayKeyDialog } from '@/components/console/GatewayKeyDialog';
 import { VertexTargetDialog } from '@/components/console/VertexTargetDialog';
 import { SecretInput } from '@/components/console/SecretInput';
 import { useAdminToken } from '@/hooks/useAdminToken';
-import { kpiMetrics, securityNotices, apiLogs, gatewayKeys, vertexTargets } from '@/data/mockData';
+import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
+import { kpiMetrics, securityNotices, apiLogs } from '@/data/mockData';
 
 export function Dashboard() {
   const { token, setToken } = useAdminToken();
+  const adminData = useAdminDashboardData(token);
 
   return (
     <StitchConsoleShell rail={<StitchSecurityRail notices={securityNotices} />}>
@@ -25,8 +27,8 @@ export function Dashboard() {
             <div className="min-w-72">
               <SecretInput id="admin-token" label="Admin token" value={token} onChange={setToken} placeholder="Bearer token" />
             </div>
-            <GatewayKeyDialog onCreate={(label) => console.info('create gateway key', label)} />
-            <VertexTargetDialog onCreate={(target) => console.info('create vertex target', target.project)} />
+            <GatewayKeyDialog onCreate={(label) => adminData.createKey(label)} disabled={!adminData.mutable} />
+            <VertexTargetDialog onCreate={(target) => adminData.createTarget(target)} disabled={!adminData.mutable} />
           </div>
         </section>
 
@@ -40,12 +42,12 @@ export function Dashboard() {
 
         <section id="keys" className="scroll-mt-6">
           <h2 className="mb-4 text-xl font-semibold tracking-tight text-foreground">Gateway keys</h2>
-          <GatewayKeysTable rows={gatewayKeys} />
+          <GatewayKeysTable rows={adminData.gatewayKeys} onRevoke={(id) => adminData.revokeKey(id)} mutable={adminData.mutable} />
         </section>
 
         <section id="targets" className="scroll-mt-6">
           <h2 className="mb-4 text-xl font-semibold tracking-tight text-foreground">Vertex targets</h2>
-          <VertexTargetsTable rows={vertexTargets} />
+          <VertexTargetsTable rows={adminData.vertexTargets} />
         </section>
       </div>
     </StitchConsoleShell>
