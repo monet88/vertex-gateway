@@ -437,4 +437,74 @@ describe('admin routes', () => {
     expect(html).toContain('id="token-input"');
     expect(html).toContain('id="credential-list"');
   });
+
+  it('creates, lists, and revokes managed gateway keys without leaking secrets', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const headers = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+
+    const created = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ label: 'Mobile app' }),
+    });
+    const createdBody = await created.json();
+    expect(created.status).toBe(200);
+    expect(createdBody.secret).toMatch(/^vgw_/);
+    expect(createdBody.gatewayKey.label).toBe('Mobile app');
+    expect(createdBody.gatewayKey.hash).toBeUndefined();
+
+    const secret = createdBody.secret as string;
+    const list = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const listBody = await list.json();
+    expect(list.status).toBe(200);
+    expect(listBody.gatewayKeys).toHaveLength(1);
+    expect(JSON.stringify(listBody)).not.toContain(secret);
+    expect(JSON.stringify(fs.readFileSync(path.join(dir, 'gateway-keys.json'), 'utf8'))).not.toContain(secret);
+    expect(runtime.reload).toHaveBeenCalled();
+
+    const id = listBody.gatewayKeys[0].id as string;
+    const revoked = await fetch(`${baseUrl}/admin/api/gateway-keys/${id}/revoke`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const revokedBody = await revoked.json();
+    expect(revoked.status).toBe(200);
+    expect(revokedBody.gatewayKey.status).toBe('revoked');
+  });
+
+  it('lists static config gateway keys but rejects managed key mutations in read-only mode', async () => {
+    server = createApp({
+      config: testConfig({ enableAdminRoutes: true, adminToken: 'admin-secret' }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+    const list = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const listBody = await list.json();
+    expect(list.status).toBe(200);
+    expect(listBody.mutable).toBe(false);
+    expect(JSON.stringify(listBody)).not.toContain('test-key');
+
+    const create = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-secret', 'content-type': 'application/json' },
+      body: JSON.stringify({ label: 'Blocked' }),
+    });
+    expect(create.status).toBe(400);
+  });
 });

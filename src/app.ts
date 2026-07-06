@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { URL } from 'node:url';
 import type { GatewayConfig } from './config/env.js';
+import { hydrateManagedGatewayKeyHashes } from './admin/gateway-key-store.js';
 import { extractGatewayKey, requireGatewayAuth } from './auth/gateway-auth.js';
 import { sendError, sendJson, GatewayError } from './http/error-response.js';
 import { createRequestContext } from './http/request-context.js';
@@ -73,11 +74,18 @@ const resolvePublicDocsOrigin = (req: IncomingMessage): string => {
 };
 
 export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runtimeFactory }: AppOptions) => {
+  let activeConfig = hydrateManagedGatewayKeyHashes(config);
   const runtime = runtimeFactory
-    ? runtimeFactory(config)
-    : (genAiFactory === createGoogleGenAiClient ? createGenAiRuntime(config) : null);
-  const ai = runtime?.client ?? genAiFactory(config);
-  const workloads = new ImageWorkloads(ai, config);
+    ? runtimeFactory(activeConfig)
+    : (genAiFactory === createGoogleGenAiClient ? createGenAiRuntime(activeConfig) : null);
+  const ai = runtime?.client ?? genAiFactory(activeConfig);
+  const workloads = new ImageWorkloads(ai, activeConfig);
+
+  const reloadActiveConfig = (nextConfig: GatewayConfig) => {
+    const candidate = hydrateManagedGatewayKeyHashes(nextConfig);
+    runtime?.reload(candidate);
+    activeConfig = candidate;
+  };
   const streamAdmission = new StreamAdmission(config.streamPerKeyLimit, config.streamQueueLimit);
   const streamConfig = {
     idleTimeoutMs: config.streamIdleTimeoutMs,
@@ -89,11 +97,11 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
     let errorFormat: 'gateway' | 'openai' = 'gateway';
     try {
       const url = new URL(req.url ?? '/', 'http://gateway.local');
-      if (await maybeHandleAdminRoute(req, res, url, config, runtime ?? undefined)) {
+      if (await maybeHandleAdminRoute(req, res, url, activeConfig, runtime ?? undefined, reloadActiveConfig)) {
         return;
       }
 
-      applyCors(req, res, config);
+      applyCors(req, res, activeConfig);
       if (req.method === 'OPTIONS') {
         res.statusCode = 204;
         res.end();
@@ -129,7 +137,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
 
       const route = classifyRoute(req.method ?? 'GET', url.pathname);
       errorFormat = errorFormatForFamily(route.family);
-      requireGatewayAuth(req, config);
+      requireGatewayAuth(req, activeConfig);
       const gatewayKey = extractGatewayKey(req);
       const expectsMultipartOpenAiEdit = route.family === 'openai'
         && route.operation === 'openaiImageEdits'
@@ -140,9 +148,9 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
         : await readJsonBody<Record<string, unknown>>(req, config.maxJsonBytes);
       const resolvedRoute = { ...route };
       const resolvedBody = { ...body };
-      const geminiModel = (value: unknown) => resolveProviderModel(config.modelCatalog, 'gemini', value);
+      const geminiModel = (value: unknown) => resolveProviderModel(activeConfig.modelCatalog, 'gemini', value);
       const openAiModel = (value: unknown) => {
-        const catalog = getProviderModelCatalog(config.modelCatalog, 'openai');
+        const catalog = getProviderModelCatalog(activeConfig.modelCatalog, 'openai');
         const hasOpenAiRules = Boolean(
           catalog.defaultModel
           || Object.keys(catalog.aliases).length > 0
@@ -203,7 +211,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
             maxJsonBytes: config.maxJsonBytes,
             expectsMultipartOpenAiEdit,
             resolveImageEditModel: (value) => openAiModel(value) || geminiModel(value),
-            listGeminiModels: () => listProviderRouteModels(config.modelCatalog, 'gemini'),
+            listGeminiModels: () => listProviderRouteModels(activeConfig.modelCatalog, 'gemini'),
           });
           return;
         }

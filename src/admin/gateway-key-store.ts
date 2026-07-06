@@ -50,7 +50,9 @@ const createSecret = (): string =>
   `vgw_${randomBytes(24).toString('base64url')}`;
 
 const previewSecret = (secret: string): string =>
-  `${secret.slice(0, 8)}...${secret.slice(-4)}`;
+  secret.length >= 16
+    ? `${secret.slice(0, 8)}...${secret.slice(-4)}`
+    : `${secret.slice(0, 4)}...`;
 
 const sanitize = ({ hash: _hash, ...record }: AdminGatewayKeyRecord): SanitizedGatewayKeyRecord =>
   record;
