@@ -398,7 +398,7 @@ describe('admin routes', () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain('Gateway Admin');
+    expect(html).toContain('<div id="root"></div>');
   });
 
   it('supports file-store import, list, detail, patch, test, model update, reload, and delete', async () => {
@@ -640,7 +640,7 @@ describe('admin routes', () => {
     expect(fs.readdirSync(path.join(dir, 'credentials'))).toEqual([]);
   });
 
-  it('serves the admin dashboard shell from the gateway', async () => {
+  it('serves the React admin SPA shell from the gateway', async () => {
     server = createApp({
       config: testConfig({
         enableAdminRoutes: true,
@@ -655,11 +655,8 @@ describe('admin routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
-    expect(html).toContain('Gateway Admin');
-    expect(html).toContain('id="username-input"');
-    expect(html).toContain('id="password-input"');
-    expect(html).toContain('id="password-change-panel"');
-    expect(html).toContain('id="credential-list"');
+    expect(html).toContain('<div id="root"></div>');
+    expect(html).toContain('/admin/assets/');
   });
 
   it('creates, lists, and revokes managed gateway keys without leaking secrets', async () => {
@@ -932,5 +929,40 @@ describe('admin routes', () => {
       expect.objectContaining({ model: 'gemini-3.5-flash' }),
       expect.any(Object),
     );
+  });
+
+  it('serves the React admin shell at /admin without exposing the old static admin UI', async () => {
+    server = createApp({
+      config: testConfig({ enableAdminRoutes: true, adminToken: 'admin-secret' }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/admin`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(html).toContain('<div id="root"></div>');
+    expect(html).toContain('/admin/assets/');
+    expect(html).not.toContain('Vertex JSON Login');
+    expect(html).not.toContain('id="log-search"');
+  });
+
+  it('keeps /admin/api routes JSON-backed after the SPA replacement', async () => {
+    server = createApp({
+      config: testConfig({ enableAdminRoutes: true, adminToken: 'admin-secret' }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.runtime).toBeDefined();
   });
 });

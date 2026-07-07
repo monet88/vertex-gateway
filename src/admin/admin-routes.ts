@@ -8,7 +8,7 @@ import { GatewayError, sendJson } from '../http/error-response.js';
 import type { GenAiRuntimeLike } from '../lib/genai-runtime.js';
 import { readJsonBody } from '../lib/read-json.js';
 import { requireAdminAuth } from './admin-auth.js';
-import { renderAdminUi } from './admin-ui.js';
+import { renderAdminSpa, serveAdminAsset } from './admin-spa.js';
 import {
   createApiKeyVertexCredential,
   createCredentialStore,
@@ -214,10 +214,15 @@ export const maybeHandleAdminRoute = async (
     return true;
   }
 
+  if (req.method === 'GET' && serveAdminAsset(normalizedPathname, res)) {
+    return true;
+  }
+
   if (req.method === 'GET' && normalizedPathname === '/admin') {
     res.statusCode = 200;
     res.setHeader('content-type', 'text/html; charset=utf-8');
-    res.end(renderAdminUi());
+    res.setHeader('cache-control', 'no-store');
+    res.end(await renderAdminSpa());
     return true;
   }
 
