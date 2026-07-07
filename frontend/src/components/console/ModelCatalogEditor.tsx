@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { AdminError } from '@/components/console/AdminState';
 import type { ProviderModelCatalog } from '@/types/admin';
 
@@ -13,11 +14,18 @@ interface ModelCatalogEditorProps {
 
 export function ModelCatalogEditor({ catalog, onSave, provider }: ModelCatalogEditorProps) {
   const [defaultModel, setDefaultModel] = useState(catalog.defaultModel ?? '');
-  const [aliasesJson, setAliasesJson] = useState(JSON.stringify(catalog.aliases, null, 2));
+  const [aliasesJson, setAliasesJson] = useState(JSON.stringify(catalog.aliases ?? {}, null, 2));
   const [allowlistCsv, setAllowlistCsv] = useState((catalog.allowlist ?? []).join(', '));
   const [disabledCsv, setDisabledCsv] = useState((catalog.disabled ?? []).join(', '));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDefaultModel(catalog.defaultModel ?? '');
+    setAliasesJson(JSON.stringify(catalog.aliases ?? {}, null, 2));
+    setAllowlistCsv((catalog.allowlist ?? []).join(', '));
+    setDisabledCsv((catalog.disabled ?? []).join(', '));
+  }, [catalog]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -25,7 +33,13 @@ export function ModelCatalogEditor({ catalog, onSave, provider }: ModelCatalogEd
     try {
       let aliases: Record<string, string>;
       try {
-        aliases = JSON.parse(aliasesJson);
+        const parsed = JSON.parse(aliasesJson) as unknown;
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new Error('Invalid aliases JSON');
+        }
+        aliases = Object.fromEntries(
+          Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+        );
       } catch {
         throw new Error('Invalid aliases JSON');
       }
@@ -62,8 +76,8 @@ export function ModelCatalogEditor({ catalog, onSave, provider }: ModelCatalogEd
         </div>
         <div className="sm:col-span-2">
           <Label>Aliases (JSON)</Label>
-          <textarea
-            className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+          <Textarea
+            className="mt-1.5 font-mono"
             rows={4}
             value={aliasesJson}
             onChange={(e) => setAliasesJson(e.target.value)}

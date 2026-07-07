@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ModelCatalogEditor } from '@/components/console/ModelCatalogEditor';
 import { AdminError, TableSkeleton } from '@/components/console/AdminState';
-import { useAdminToken } from '@/hooks/useAdminToken';
 import { fetchModelCatalog, saveModelCatalog } from '@/lib/admin-dashboard-api';
 import type { ProviderModelCatalog } from '@/types/admin';
 
 const PROVIDERS = ['gemini', 'openai'] as const;
 
-export function ModelManagementView() {
-  const { token } = useAdminToken();
+interface ModelManagementViewProps {
+  readonly token: string;
+}
+
+export function ModelManagementView({ token }: ModelManagementViewProps) {
   const [catalogs, setCatalogs] = useState<Record<string, ProviderModelCatalog>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export function ModelManagementView() {
 
       {loading ? (
         <TableSkeleton rows={4} columns={2} />
-      ) : (
+      ) : error ? null : (
         PROVIDERS.map((provider) => (
           <ModelCatalogEditor
             key={provider}
