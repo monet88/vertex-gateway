@@ -15,6 +15,7 @@ import { AuthFilesView } from '@/pages/AuthFilesView';
 import { AvailableModelsView } from '@/pages/AvailableModelsView';
 import { LogsViewerView } from '@/pages/LogsViewerView';
 import { ModelManagementView } from '@/pages/ModelManagementView';
+import { logoutAdminSession } from '@/pages/admin-session';
 import type { AdminViewId } from '@/types/admin';
 
 const securityNotices = adminSecurityNotices.map((message, index) => ({
@@ -92,15 +93,16 @@ export function AdminApp() {
   };
 
   const handleLogout = async () => {
-    if (token) {
-      try {
-        await logoutAdmin({ token });
-      } catch {
-        // Local logout should still complete if the token was already expired server-side.
-      }
-    }
-    setToken('');
-    setMustChangePassword(false);
+    const tokenToInvalidate = token;
+    await logoutAdminSession(tokenToInvalidate, {
+      clearLocalAuth: () => {
+        setToken('');
+        setMustChangePassword(false);
+      },
+      revokeServerSession: async (activeToken) => {
+        await logoutAdmin({ token: activeToken });
+      },
+    });
   };
 
   const isAuthenticated = Boolean(token) && !mustChangePassword;

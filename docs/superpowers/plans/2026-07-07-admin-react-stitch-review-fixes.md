@@ -330,6 +330,8 @@ git commit -m "fix: harden admin spa serving and docker bundle"
 
 ### Task 2: Harden Admin Auth Sessions And Credential Responses
 
+> Note: this plan originally proposed keeping a sanitized `fileName` in admin credential responses. The implemented repo state now removes `fileName` from the backend contract entirely, so the frontend type-mapping steps below should be skipped and any remaining `fileName` references should be deleted instead.
+
 **Files:**
 - Modify: `src/http/error-response.ts`
 - Modify: `src/config/admin-settings-store.ts`
@@ -423,7 +425,7 @@ const credentialsResponse = await fetch(`${baseUrl}/admin/api/vertex-credentials
 });
 const credentialsBody = await credentialsResponse.json();
 expect(credentialsBody.vertexPools[0].credentialsFile).toBeNull();
-expect(credentialsBody.vertexPools[0].fileName).toMatch(/\.json$/);
+expect(credentialsBody.vertexPools[0].fileName).toBeUndefined();
 expect(JSON.stringify(credentialsBody)).not.toContain(dir);
 ```
 
@@ -623,7 +625,6 @@ Then change `SanitizedCredentialRecord`:
 type SanitizedCredentialRecord = Omit<AdminVertexCredentialRecord, 'apiKey' | 'credentialsFile'> & {
   credentialsFile: null;
   hasApiKey: boolean;
-  fileName?: string;
   health?: GenAiTargetHealth;
 };
 ```
@@ -631,15 +632,14 @@ type SanitizedCredentialRecord = Omit<AdminVertexCredentialRecord, 'apiKey' | 'c
 Replace `redactApiKey` with:
 
 ```ts
-const redactCredentialForAdmin = <T extends { apiKey?: string | null; credentialsFile?: string | null; fileName?: string }>(
+const redactCredentialForAdmin = <T extends { apiKey?: string | null; credentialsFile?: string | null }>(
   entry: T,
-): Omit<T, 'apiKey' | 'credentialsFile'> & { credentialsFile: null; hasApiKey: boolean; fileName?: string } => {
-  const { apiKey: _apiKey, credentialsFile, fileName, ...rest } = entry;
+): Omit<T, 'apiKey' | 'credentialsFile'> & { credentialsFile: null; hasApiKey: boolean } => {
+  const { apiKey: _apiKey, credentialsFile: _credentialsFile, ...rest } = entry;
   return {
     ...rest,
     credentialsFile: null,
     hasApiKey: Boolean(_apiKey),
-    ...(fileName ? { fileName } : credentialsFile ? { fileName: path.basename(credentialsFile) } : {}),
   };
 };
 ```
@@ -655,26 +655,9 @@ vertexPools: snapshot.vertexPools.map((entry) => redactCredentialForAdmin({
 
 For file-store deletion, do not depend on the sanitized response. The route already uses `findCredentialOrThrow(credentialStore.getSnapshot(), id)` before deleting, so keep that behavior.
 
-- [ ] **Step 9: Update frontend credential type**
+- [ ] **Step 9: Keep frontend credential type aligned with the sanitized backend contract**
 
-In `frontend/src/types/admin.ts`, add `fileName` to `VertexTargetRow`:
-
-```ts
-readonly credentialsFile: string | null;
-readonly fileName?: string;
-readonly hasApiKey: boolean;
-```
-
-In `frontend/src/lib/admin-dashboard-api.ts`, add `fileName` to `AdminVertexCredentialRecord` and `mapVertexTarget`:
-
-```ts
-readonly fileName?: string;
-```
-
-```ts
-credentialsFile: record.credentialsFile,
-fileName: record.fileName,
-```
+Ensure `frontend/src/types/admin.ts` and `frontend/src/lib/admin-dashboard-api.ts` do **not** include `fileName` in `VertexTargetRow`, `AdminVertexCredentialRecord`, or `mapVertexTarget`.
 
 - [ ] **Step 10: Verify task**
 
@@ -1313,7 +1296,7 @@ Resolved by code:
 - Admin login is throttled after repeated failures.
 - File-store admin logout invalidates bootstrapped session tokens and session tokens have a TTL.
 - The React logout action calls the server logout endpoint before clearing client state.
-- Admin credential responses expose only file names, not absolute service-account paths.
+- Admin credential responses expose neither absolute service-account paths nor derived file names.
 
 Intentionally not changed:
 - Full-page refresh during forced password change still returns to login because the admin token is intentionally memory-only.

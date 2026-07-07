@@ -2157,7 +2157,7 @@ export const renderAdminUi = (): string => {
                 '</div>' +
               '</div>' +
               '<div class="auth-meta-grid">' +
-                '<div class="metric-item"><strong>File</strong><span class="mono">' + escapeHtml(entry.fileName || '-') + '</span></div>' +
+                '<div class="metric-item"><strong>Credential</strong><span class="mono">' + escapeHtml(entry.id || '-') + '</span></div>' +
                 '<div class="metric-item"><strong>Project</strong><span class="mono">' + escapeHtml(entry.project || '-') + '</span></div>' +
                 '<div class="metric-item"><strong>Email</strong><span class="mono">' + escapeHtml(entry.email || '-') + '</span></div>' +
                 '<div class="metric-item"><strong>Size</strong><span>' + escapeHtml(sizeLabel) + '</span></div>' +
@@ -2189,11 +2189,10 @@ export const renderAdminUi = (): string => {
           ids.detailEnabled.value = String(entry?.enabled !== false);
           ids.detailAllowlist.value = (entry?.modelAllowlist || []).join('\\n');
           ids.detailExclusions.value = (entry?.modelExclusions || []).join('\\n');
-          ids.modalTitle.textContent = 'Auth File Details / Edit - ' + (entry?.fileName || entry?.id || 'credential');
+          ids.modalTitle.textContent = 'Auth File Details / Edit - ' + (entry?.id || 'credential');
           ids.modalSubtitle.textContent = 'Inspect and update this managed vertex credential.';
           ids.modalInfoJson.textContent = JSON.stringify({
             id: entry?.id || '',
-            fileName: entry?.fileName || '',
             email: entry?.email || '',
             project: entry?.project || '',
             location: entry?.location || '',
@@ -2205,7 +2204,7 @@ export const renderAdminUi = (): string => {
             sizeBytes: entry?.sizeBytes || 0,
           }, null, 2);
           ids.modalCredentialJson.textContent = JSON.stringify(entry?.credential || entry || {}, null, 2);
-          ids.modelModalTitle.textContent = 'Vertex Model Rules - ' + (entry?.fileName || entry?.id || 'credential');
+          ids.modelModalTitle.textContent = 'Vertex Model Rules - ' + (entry?.id || 'credential');
           ids.modelModalSubtitle.textContent = 'Manage allowlist and exclusions for this vertex credential.';
           ids.modelModalCredential.textContent = entry?.id || '-';
           ids.modelModalProject.textContent = entry?.project || '-';

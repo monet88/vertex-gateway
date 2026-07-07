@@ -144,7 +144,9 @@ describe('admin routes', () => {
 
   afterEach(async () => {
     restoreAdminSpaFixture();
-    await new Promise<void>((resolve) => server?.close(() => resolve()));
+    if (server) {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
     server = undefined;
   });
 
@@ -451,6 +453,58 @@ describe('admin routes', () => {
     expect(healthResponse.status).toBe(401);
   });
 
+  it('rejects expired admin session tokens on authenticated requests', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'admin-expired-session-'));
+    const expiredAt = new Date(Date.now() - (13 * 60 * 60 * 1000)).toISOString();
+    await seedChangedAdminPassword(dir);
+    fs.writeFileSync(path.join(dir, 'admin-settings.json'), JSON.stringify({
+      ...JSON.parse(fs.readFileSync(path.join(dir, 'admin-settings.json'), 'utf8')),
+      adminSessionToken: 'expired-session-token',
+      adminSessionTokenCreatedAt: expiredAt,
+    }));
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'expired-session-token',
+        adminStoreMode: 'file-store',
+        adminAllowMutations: true,
+        adminFileStoreDir: dir,
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: 'Bearer expired-session-token' },
+    });
+
+    expect(response.status).toBe(401);
+    const settings = JSON.parse(fs.readFileSync(path.join(dir, 'admin-settings.json'), 'utf8'));
+    expect(settings.adminSessionToken).toBeNull();
+    expect(settings.adminSessionTokenCreatedAt).toBeNull();
+  });
+
+  it('prunes stale admin login failure windows before recording new usernames', async () => {
+    const { createAdminLoginRateLimiter } = await import('../src/admin/admin-login-rate-limit.js');
+    const limiter = createAdminLoginRateLimiter({
+      now: () => currentTime,
+      windowMs: 60_000,
+      maxFailures: 5,
+    });
+    const req = { socket: { remoteAddress: '127.0.0.1' } } as Pick<Parameters<typeof limiter.assertAllowed>[0], 'socket'>;
+    let currentTime = 0;
+
+    limiter.recordFailure(req, 'stale-user-1');
+    limiter.recordFailure(req, 'stale-user-2');
+    limiter.recordFailure(req, 'stale-user-3');
+    expect(limiter.size()).toBe(3);
+
+    currentTime = 61_000;
+    limiter.recordFailure(req, 'fresh-user');
+
+    expect(limiter.size()).toBe(1);
+  });
+
   it('accepts trailing slashes on admin API routes', async () => {
     server = createApp({
       config: testConfig({
@@ -575,7 +629,7 @@ describe('admin routes', () => {
     });
     const credentialsBody = await credentialsResponse.json();
     expect(credentialsBody.vertexPools[0].credentialsFile).toBeNull();
-    expect(credentialsBody.vertexPools[0].fileName).toMatch(/\.json$/);
+    expect(credentialsBody.vertexPools[0].fileName).toBeUndefined();
     expect(JSON.stringify(credentialsBody)).not.toContain(dir);
 
     const list = await fetch(`${baseUrl}/admin/api/vertex-credentials`, {
@@ -667,6 +721,18 @@ describe('admin routes', () => {
     const invalidJsonBody = await invalidJson.json();
     expect(invalidJson.status).toBe(400);
     expect(invalidJsonBody.error.code).toBe('VALIDATION_FAILED');
+
+    const invalidAliases = await fetch(`${baseUrl}/admin/api/models/gemini`, {
+      method: 'PUT',
+      headers: {
+        authorization: 'Bearer admin-secret',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ aliases: { fast: 123 } }),
+    });
+    const invalidAliasesBody = await invalidAliases.json();
+    expect(invalidAliases.status).toBe(400);
+    expect(invalidAliasesBody.error.message).toMatch(/invalid aliases json/i);
 
     const tooLarge = await fetch(`${baseUrl}/admin/api/models/gemini`, {
       method: 'PUT',

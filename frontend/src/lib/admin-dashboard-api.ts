@@ -16,7 +16,6 @@ interface AdminVertexCredentialRecord {
   readonly project: string;
   readonly location: string;
   readonly credentialsFile: string | null;
-  readonly fileName?: string;
   readonly hasApiKey: boolean;
   readonly apiKeyMode: 'full' | 'express';
   readonly enabled?: boolean;
@@ -57,7 +56,6 @@ export const mapVertexTarget = (record: AdminVertexCredentialRecord): VertexTarg
   modelAllowlist: record.modelAllowlist ?? [],
   modelExclusions: record.modelExclusions ?? [],
   credentialsFile: record.credentialsFile,
-  fileName: record.fileName,
   hasApiKey: record.hasApiKey,
   email: record.email,
   health: mapHealth(record),

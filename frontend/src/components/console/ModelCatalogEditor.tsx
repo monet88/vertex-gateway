@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AdminError } from '@/components/console/AdminState';
+import { parseModelCatalogAliases } from '@/components/console/model-catalog-form';
 import type { ProviderModelCatalog } from '@/types/admin';
 
 interface ModelCatalogEditorProps {
@@ -31,18 +32,7 @@ export function ModelCatalogEditor({ catalog, onSave, provider }: ModelCatalogEd
     setSaving(true);
     setError(null);
     try {
-      let aliases: Record<string, string>;
-      try {
-        const parsed = JSON.parse(aliasesJson) as unknown;
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-          throw new Error('Invalid aliases JSON');
-        }
-        aliases = Object.fromEntries(
-          Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
-        );
-      } catch {
-        throw new Error('Invalid aliases JSON');
-      }
+      const aliases = parseModelCatalogAliases(aliasesJson);
       const updated: ProviderModelCatalog = {
         defaultModel: defaultModel || undefined,
         aliases,

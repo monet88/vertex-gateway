@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { GatewayConfig } from '../config/env.js';
 import { GatewayError } from '../http/error-response.js';
+import { persistAdminFileStoreSettings, readAdminFileStoreSettings } from '../config/admin-settings-store.js';
 
 export const extractAdminBearerToken = (authorization: string | undefined): string | null => {
   if (!authorization) return null;
@@ -14,6 +15,35 @@ const safeCompare = (left: string, right: string): boolean => {
   return timingSafeEqual(leftHash, rightHash);
 };
 
+const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+
+const isFreshAdminSessionToken = (createdAt: string | null | undefined): boolean => {
+  if (!createdAt) return false;
+  const createdMs = Date.parse(createdAt);
+  return Number.isFinite(createdMs) && Date.now() - createdMs <= ADMIN_SESSION_TTL_MS;
+};
+
+const clearExpiredAdminSessionIfNeeded = (token: string, config: GatewayConfig): void => {
+  if (config.adminStoreMode !== 'file-store' || !config.adminFileStoreDir) {
+    return;
+  }
+  const settings = readAdminFileStoreSettings(config);
+  const sessionToken = typeof settings.adminSessionToken === 'string'
+    ? settings.adminSessionToken.trim()
+    : '';
+  if (!sessionToken || !safeCompare(token, sessionToken)) {
+    return;
+  }
+  if (isFreshAdminSessionToken(settings.adminSessionTokenCreatedAt)) {
+    return;
+  }
+  persistAdminFileStoreSettings(config, {
+    adminSessionToken: null,
+    adminSessionTokenCreatedAt: null,
+  });
+  throw new GatewayError(401, 'AUTH_INVALID', 'Admin authorization failed.');
+};
+
 export const requireAdminAuth = (
   headers: Record<string, string | string[] | undefined>,
   config: GatewayConfig,
@@ -25,4 +55,5 @@ export const requireAdminAuth = (
   if (!token || !config.adminToken || !safeCompare(token, config.adminToken)) {
     throw new GatewayError(401, 'AUTH_INVALID', 'Admin authorization failed.');
   }
+  clearExpiredAdminSessionIfNeeded(token, config);
 };

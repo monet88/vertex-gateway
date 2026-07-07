@@ -9,6 +9,7 @@ import { GatewayError, sendJson } from '../http/error-response.js';
 import type { GenAiRuntimeLike } from '../lib/genai-runtime.js';
 import { readJsonBody } from '../lib/read-json.js';
 import { requireAdminAuth } from './admin-auth.js';
+import { createAdminLoginRateLimiter } from './admin-login-rate-limit.js';
 import { renderAdminSpa, serveAdminAsset } from './admin-spa.js';
 import {
   createApiKeyVertexCredential,
@@ -39,7 +40,6 @@ import {
 type SanitizedCredentialRecord = Omit<AdminVertexCredentialRecord, 'apiKey' | 'credentialsFile'> & {
   credentialsFile: null;
   hasApiKey: boolean;
-  fileName?: string;
   health?: GenAiTargetHealth;
 };
 
@@ -58,41 +58,21 @@ const ADMIN_LOGIN_WINDOW_MS = 60_000;
 const ADMIN_LOGIN_MAX_FAILURES = 5;
 const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
-interface LoginAttemptState {
-  readonly firstFailureAt: number;
-  readonly failures: number;
-}
-
-const loginAttempts = new Map<string, LoginAttemptState>();
-
-const loginRateLimitKey = (req: IncomingMessage, username: string): string =>
-  `${req.socket.remoteAddress ?? 'unknown'}:${username}`;
+const adminLoginRateLimiter = createAdminLoginRateLimiter({
+  windowMs: ADMIN_LOGIN_WINDOW_MS,
+  maxFailures: ADMIN_LOGIN_MAX_FAILURES,
+});
 
 const assertAdminLoginAllowed = (req: IncomingMessage, username: string): void => {
-  const now = Date.now();
-  const key = loginRateLimitKey(req, username);
-  const current = loginAttempts.get(key);
-  if (!current || now - current.firstFailureAt > ADMIN_LOGIN_WINDOW_MS) {
-    return;
-  }
-  if (current.failures >= ADMIN_LOGIN_MAX_FAILURES) {
-    throw new GatewayError(429, 'RATE_LIMITED', 'Too many failed admin login attempts. Try again later.');
-  }
+  adminLoginRateLimiter.assertAllowed(req, username);
 };
 
 const recordAdminLoginFailure = (req: IncomingMessage, username: string): void => {
-  const now = Date.now();
-  const key = loginRateLimitKey(req, username);
-  const current = loginAttempts.get(key);
-  if (!current || now - current.firstFailureAt > ADMIN_LOGIN_WINDOW_MS) {
-    loginAttempts.set(key, { firstFailureAt: now, failures: 1 });
-    return;
-  }
-  loginAttempts.set(key, { firstFailureAt: current.firstFailureAt, failures: current.failures + 1 });
+  adminLoginRateLimiter.recordFailure(req, username);
 };
 
 const clearAdminLoginFailures = (req: IncomingMessage, username: string): void => {
-  loginAttempts.delete(loginRateLimitKey(req, username));
+  adminLoginRateLimiter.clearFailures(req, username);
 };
 
 const configuredAdminUsername = (config: GatewayConfig): string => {
@@ -213,20 +193,14 @@ const findCredentialOrThrow = <T extends { id: string }>(
 // Never expose the raw express-mode API key in admin responses. Mirror how
 // service-account private keys are withheld (only client_email surfaces); expose
 // a boolean presence flag so the UI can still show that express mode is active.
-const redactCredentialForAdmin = <T extends { apiKey?: string | null; credentialsFile?: string | null; fileName?: string }>(
+const redactCredentialForAdmin = <T extends { apiKey?: string | null; credentialsFile?: string | null }>(
   entry: T,
-): Omit<T, 'apiKey' | 'credentialsFile'> & { credentialsFile: null; hasApiKey: boolean; fileName?: string } => {
-  const { apiKey: _apiKey, credentialsFile, ...rest } = entry;
-  const fileName = typeof entry.fileName === 'string' && entry.fileName
-    ? entry.fileName
-    : credentialsFile
-      ? path.basename(credentialsFile)
-      : undefined;
+): Omit<T, 'apiKey' | 'credentialsFile'> & { credentialsFile: null; hasApiKey: boolean } => {
+  const { apiKey: _apiKey, credentialsFile: _credentialsFile, ...rest } = entry;
   return {
     ...rest,
     credentialsFile: null,
     hasApiKey: Boolean(_apiKey),
-    ...(fileName ? { fileName } : {}),
   };
 };
 
@@ -547,15 +521,25 @@ export const maybeHandleAdminRoute = async (
   if (modelMatch && req.method === 'PUT') {
     const provider = decodeURIComponent(modelMatch[1]);
     const body = await parseJsonBody(req, config.maxJsonBytes);
+    let aliases: Record<string, string> = {};
+    if (body.aliases !== undefined) {
+      if (!body.aliases || typeof body.aliases !== 'object' || Array.isArray(body.aliases)) {
+        throw new GatewayError(400, 'VALIDATION_FAILED', 'Invalid aliases JSON');
+      }
+      for (const [alias, value] of Object.entries(body.aliases)) {
+        if (typeof value !== 'string') {
+          throw new GatewayError(400, 'VALIDATION_FAILED', 'Invalid aliases JSON');
+        }
+        aliases[alias] = value;
+      }
+    }
     const snapshot = credentialStore.updateVertexPools((state) => ({
       ...state,
       modelCatalog: {
         ...state.modelCatalog,
         [provider]: {
           ...(typeof body.defaultModel === 'string' ? { defaultModel: body.defaultModel } : {}),
-          aliases: body.aliases && typeof body.aliases === 'object' && !Array.isArray(body.aliases)
-            ? Object.fromEntries(Object.entries(body.aliases).filter(([, value]) => typeof value === 'string'))
-            : {},
+          aliases,
           allowlist: Array.isArray(body.allowlist)
             ? body.allowlist.filter((value): value is string => typeof value === 'string')
             : [],

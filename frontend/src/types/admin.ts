@@ -30,7 +30,6 @@ export interface VertexTargetRow {
   readonly modelAllowlist: readonly string[];
   readonly modelExclusions: readonly string[];
   readonly credentialsFile: string | null;
-  readonly fileName?: string;
   readonly hasApiKey: boolean;
   readonly email?: string;
   readonly health: VertexHealth;
