@@ -10,6 +10,7 @@ const safeJsonScript = (value: unknown): string => JSON.stringify(value)
   .replace(/>/g, '\\u003e')
   .replace(/&/g, '\\u0026');
 
+// Legacy rollback renderer. The live /admin route serves the React SPA from frontend/dist.
 export const renderAdminUi = (): string => {
   const bootstrapState = {
     provider: 'gemini',
