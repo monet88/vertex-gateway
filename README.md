@@ -17,9 +17,15 @@ npm run dev                      # http://localhost:8080
 
 ```bash
 cp .env.example .env && cp /path/to/sa.json accounts/active.json
-docker compose up -d --build     # http://localhost:19089
+docker compose pull
+docker compose up -d             # http://localhost:19089
 curl -s http://localhost:19089/readyz
 ```
+
+The default Compose file pulls `ghcr.io/monet88/vertex-gateway:latest`.
+Merges to `main` build and publish that image through GitHub Actions. If the
+GHCR package is private, log in on the VPS first with a token that can read
+packages.
 
 Compose mounts a boot-safe [`pool-config.example.json`](pool-config.example.json)
 (single mode, no pools) by default, so a fresh checkout starts without extra
@@ -127,10 +133,12 @@ when browser access should be restricted to specific domains.
 
 ## Admin API
 
-Enable with `GATEWAY_ENABLE_ADMIN_ROUTES=true` + `GATEWAY_ADMIN_TOKEN`. UI at
-`/admin`, API at `/admin/api/*`. Supports credential import, pool health,
-model catalog management, and hot-reload. File-store mode for persistence
-(Docker/VPS only — Cloud Run rejects).
+The admin dashboard is always available at `/admin`; authenticated APIs live at
+`/admin/api/*`. File-store admin login defaults to username `admin` and password
+`changeme`; the dashboard requires changing that default password before loading
+management data. Supports credential import, pool health, model catalog
+management, and hot-reload. File-store mode for persistence is for Docker/VPS
+only; Cloud Run rejects file-store mutations.
 
 ## Models
 

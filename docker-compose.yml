@@ -1,9 +1,6 @@
 services:
   vertex-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: chang-store-vertex-gateway:local
+    image: ghcr.io/monet88/vertex-gateway:latest
     container_name: vertex-gateway
     restart: unless-stopped
     env_file:
