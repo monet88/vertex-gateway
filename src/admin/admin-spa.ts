@@ -1,4 +1,4 @@
-import { createReadStream, existsSync } from 'node:fs';
+import { createReadStream, existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ServerResponse } from 'node:http';
@@ -22,13 +22,26 @@ const contentTypes: Record<string, string> = {
 };
 
 const resolveAdminAssetPath = (pathname: string): string => {
-  const relative = decodeURIComponent(pathname.slice(ADMIN_ASSET_PREFIX.length));
+  let relative: string;
+  try {
+    relative = decodeURIComponent(pathname.slice(ADMIN_ASSET_PREFIX.length));
+  } catch {
+    throw new GatewayError(400, 'VALIDATION_FAILED', 'Invalid admin asset path.');
+  }
   const resolved = path.resolve(FRONTEND_DIST, 'assets', relative);
   const assetRoot = path.resolve(FRONTEND_DIST, 'assets');
   if (!resolved.startsWith(`${assetRoot}${path.sep}`)) {
     throw new GatewayError(400, 'VALIDATION_FAILED', 'Invalid admin asset path.');
   }
   return resolved;
+};
+
+const isReadableFile = (assetPath: string): boolean => {
+  try {
+    return existsSync(assetPath) && statSync(assetPath).isFile();
+  } catch {
+    return false;
+  }
 };
 
 export const renderAdminSpa = async (): Promise<string> => {
@@ -41,12 +54,21 @@ export const renderAdminSpa = async (): Promise<string> => {
 export const serveAdminAsset = (pathname: string, res: ServerResponse): boolean => {
   if (!pathname.startsWith(ADMIN_ASSET_PREFIX)) return false;
   const assetPath = resolveAdminAssetPath(pathname);
-  if (!existsSync(assetPath)) {
+  if (!isReadableFile(assetPath)) {
     throw new GatewayError(404, 'NOT_FOUND', 'Admin asset is not found.');
   }
   res.statusCode = 200;
   res.setHeader('content-type', contentTypes[path.extname(assetPath)] ?? 'application/octet-stream');
   res.setHeader('cache-control', 'public, max-age=31536000, immutable');
-  createReadStream(assetPath).pipe(res);
+  const stream = createReadStream(assetPath);
+  stream.on('error', () => {
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.end('Internal Server Error');
+      return;
+    }
+    res.destroy();
+  });
+  stream.pipe(res);
   return true;
 };
