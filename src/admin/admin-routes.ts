@@ -69,11 +69,22 @@ const assertPasswordStoreWritable = (config: GatewayConfig): void => {
   }
 };
 
-const verifyAdminPasswordLogin = (
+const activateAdminToken = (
+  config: GatewayConfig,
+  adminToken: string,
+  runtime?: GenAiRuntimeLike,
+  onConfigReload?: (nextConfig: GatewayConfig) => void,
+): void => {
+  const nextConfig = createDerivedConfig(config, { adminToken });
+  onConfigReload?.(nextConfig);
+  if (!onConfigReload) runtime?.reload(nextConfig);
+};
+
+const verifyAdminPasswordLogin = async (
   config: GatewayConfig,
   username: string,
   password: string,
-): { username: string; mustChangePassword: boolean } | null => {
+): Promise<{ username: string; mustChangePassword: boolean } | null> => {
   const settings = readAdminFileStoreSettings(config);
   const expectedUsername = typeof settings.adminUsername === 'string' && settings.adminUsername.trim()
     ? settings.adminUsername.trim()
@@ -82,7 +93,7 @@ const verifyAdminPasswordLogin = (
 
   const passwordHash = typeof settings.adminPasswordHash === 'string' ? settings.adminPasswordHash : '';
   if (passwordHash) {
-    return verifyAdminPassword(password, passwordHash)
+    return await verifyAdminPassword(password, passwordHash)
       ? { username: expectedUsername, mustChangePassword: false }
       : null;
   }
@@ -95,7 +106,10 @@ const verifyAdminPasswordLogin = (
 const isAdminPasswordChangeRequired = (config: GatewayConfig): boolean => {
   if (config.adminStoreMode !== 'file-store' || !config.adminFileStoreDir) return false;
   const settings = readAdminFileStoreSettings(config);
-  return Boolean(settings.adminToken) && !settings.adminPasswordHash;
+  const configuredToken = typeof config.adminToken === 'string' && config.adminToken.trim();
+  const staticToken = typeof settings.adminToken === 'string' && settings.adminToken.trim();
+  const sessionToken = typeof settings.adminSessionToken === 'string' && settings.adminSessionToken.trim();
+  return Boolean(configuredToken || staticToken || sessionToken) && !settings.adminPasswordHash;
 };
 
 const ensureAdminSessionToken = (
@@ -104,15 +118,21 @@ const ensureAdminSessionToken = (
   onConfigReload?: (nextConfig: GatewayConfig) => void,
 ): string => {
   if (config.adminToken) return config.adminToken;
+  const settings = readAdminFileStoreSettings(config);
+  const existingSessionToken = typeof settings.adminSessionToken === 'string'
+    ? settings.adminSessionToken.trim()
+    : '';
+  if (existingSessionToken) {
+    activateAdminToken(config, existingSessionToken, runtime, onConfigReload);
+    return existingSessionToken;
+  }
   if (!canBootstrapAdminToken(config)) {
     throw new GatewayError(409, 'VALIDATION_FAILED', 'Admin session token bootstrap is not available.');
   }
-  const adminToken = createAdminSessionToken();
-  persistAdminFileStoreSettings(config, { adminToken });
-  const nextConfig = createDerivedConfig(config, { adminToken });
-  onConfigReload?.(nextConfig);
-  if (!onConfigReload) runtime?.reload(nextConfig);
-  return adminToken;
+  const adminSessionToken = createAdminSessionToken();
+  persistAdminFileStoreSettings(config, { adminSessionToken });
+  activateAdminToken(config, adminSessionToken, runtime, onConfigReload);
+  return adminSessionToken;
 };
 
 const findCredentialOrThrow = <T extends { id: string }>(
@@ -233,7 +253,7 @@ export const maybeHandleAdminRoute = async (
     const body = await parseJsonBody(req, config.maxJsonBytes);
     const username = typeof body.username === 'string' ? body.username.trim() : '';
     const password = typeof body.password === 'string' ? body.password : '';
-    const login = verifyAdminPasswordLogin(config, username, password);
+    const login = await verifyAdminPasswordLogin(config, username, password);
     if (!login) {
       throw new GatewayError(401, 'AUTH_INVALID', 'Admin login failed.');
     }
@@ -255,7 +275,7 @@ export const maybeHandleAdminRoute = async (
     const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
     const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
     const username = configuredAdminUsername(config);
-    if (!verifyAdminPasswordLogin(config, username, currentPassword)) {
+    if (!await verifyAdminPasswordLogin(config, username, currentPassword)) {
       throw new GatewayError(401, 'AUTH_INVALID', 'Current admin password is invalid.');
     }
     if (!isValidNewAdminPassword(newPassword)) {
@@ -265,12 +285,22 @@ export const maybeHandleAdminRoute = async (
         `newPassword must be at least ${MIN_ADMIN_PASSWORD_LENGTH} characters and must not be the default password.`,
       );
     }
+    const settings = readAdminFileStoreSettings(config);
+    const sessionToken = typeof settings.adminSessionToken === 'string'
+      ? settings.adminSessionToken.trim()
+      : '';
+    const shouldRotateSessionToken = !config.adminToken || (sessionToken && config.adminToken === sessionToken);
+    const nextToken = shouldRotateSessionToken ? createAdminSessionToken() : config.adminToken;
     persistAdminFileStoreSettings(config, {
       adminUsername: username,
-      adminPasswordHash: hashAdminPassword(newPassword),
+      adminPasswordHash: await hashAdminPassword(newPassword),
       adminPasswordChangedAt: new Date().toISOString(),
+      ...(shouldRotateSessionToken ? { adminSessionToken: nextToken } : {}),
     });
-    sendJson(res, 200, { ok: true, username });
+    if (nextToken && nextToken !== config.adminToken) {
+      activateAdminToken(config, nextToken, runtime, onConfigReload);
+    }
+    sendJson(res, 200, { ok: true, username, token: nextToken });
     return true;
   }
 

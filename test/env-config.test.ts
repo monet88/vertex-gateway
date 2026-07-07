@@ -92,7 +92,7 @@ describe('gateway config file', () => {
     expect(config.adminFileStoreDir).toBe(storeDir);
   });
 
-  it('keeps admin routes enabled without the env flag', () => {
+  it('keeps admin routes enabled when GATEWAY_ENABLE_ADMIN_ROUTES is false', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
     const configPath = path.join(dir, 'config.yaml');
     const poolPath = path.join(dir, 'pool.json');
@@ -146,6 +146,35 @@ describe('gateway config file', () => {
     const config = loadConfig();
 
     expect(config.adminToken).toBe('bootstrapped-admin-token');
+  });
+
+  it('does not load dashboard session tokens from the admin file store', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
+    const configPath = path.join(dir, 'config.yaml');
+    const storeDir = path.join(dir, 'store');
+    fs.mkdirSync(storeDir, { recursive: true });
+    fs.writeFileSync(path.join(storeDir, 'admin-settings.json'), JSON.stringify({ adminSessionToken: 'session-admin-token' }));
+    fs.writeFileSync(configPath, [
+      'googleCredentialsFile: null',
+      'googleLocation: global',
+    ].join('\n'));
+
+    process.env.GATEWAY_CONFIG_FILE = configPath;
+    process.env.GATEWAY_ADMIN_ALLOW_MUTATIONS = 'true';
+    process.env.GATEWAY_ADMIN_STORE_MODE = 'file-store';
+    process.env.GATEWAY_ADMIN_FILE_STORE_DIR = storeDir;
+    delete process.env.GATEWAY_ADMIN_TOKEN;
+    delete process.env.GATEWAY_API_KEYS;
+    delete process.env.GOOGLE_GENAI_API_KEY;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    delete process.env.GCLOUD_PROJECT;
+
+    const config = loadConfig();
+
+    expect(config.adminToken).toBeNull();
   });
 
   it('defaults CORS to unrestricted browser origins when no allowlist is configured', () => {

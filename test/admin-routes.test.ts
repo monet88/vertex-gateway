@@ -5,6 +5,7 @@ import type { Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
 import { hashGatewayKey } from '../src/admin/gateway-key-store.js';
+import { hashAdminPassword } from '../src/admin/admin-password.js';
 import type { GenAiRuntimeLike } from '../src/lib/genai-runtime.js';
 import type { GenAiTargetHealth } from '../src/lib/genai-pool.js';
 import { testConfig } from './test-config.js';
@@ -15,6 +16,15 @@ const listen = async (server: Server): Promise<string> => new Promise((resolve) 
     if (typeof address === 'object' && address) resolve(`http://127.0.0.1:${address.port}`);
   });
 });
+
+const seedChangedAdminPassword = async (storeDir: string): Promise<void> => {
+  fs.mkdirSync(storeDir, { recursive: true });
+  fs.writeFileSync(path.join(storeDir, 'admin-settings.json'), JSON.stringify({
+    adminUsername: 'admin',
+    adminPasswordHash: await hashAdminPassword('changed-admin-password'),
+    adminPasswordChangedAt: new Date(0).toISOString(),
+  }));
+};
 
 const createFakeRuntime = (): GenAiRuntimeLike => {
   const emptyHealth = (): GenAiTargetHealth => ({
@@ -186,7 +196,8 @@ describe('admin routes', () => {
     expect(loginBody.mustChangePassword).toBe(true);
 
     const settingsBeforeChange = JSON.parse(fs.readFileSync(path.join(storeDir, 'admin-settings.json'), 'utf8'));
-    expect(settingsBeforeChange.adminToken).toBe(loginBody.token);
+    expect(settingsBeforeChange.adminSessionToken).toBe(loginBody.token);
+    expect(settingsBeforeChange.adminToken).toBeUndefined();
     expect(settingsBeforeChange.adminPasswordHash).toBeUndefined();
 
     const blockedHealth = await fetch(`${baseUrl}/admin/api/health`, {
@@ -206,13 +217,22 @@ describe('admin routes', () => {
       headers: { authorization: `Bearer ${loginBody.token}`, 'content-type': 'application/json' },
       body: JSON.stringify({ currentPassword: 'changeme', newPassword: 'changed-admin-password' }),
     });
+    const changedBody = await changed.json();
     expect(changed.status).toBe(200);
+    expect(changedBody.token).toMatch(/^adm_/);
+    expect(changedBody.token).not.toBe(loginBody.token);
 
     const settingsAfterChange = JSON.parse(fs.readFileSync(path.join(storeDir, 'admin-settings.json'), 'utf8'));
     expect(settingsAfterChange.adminUsername).toBe('admin');
+    expect(settingsAfterChange.adminSessionToken).toBe(changedBody.token);
     expect(settingsAfterChange.adminPasswordHash).toMatch(/^scrypt:v1:/);
     expect(JSON.stringify(settingsAfterChange)).not.toContain('changed-admin-password');
     expect(JSON.stringify(settingsAfterChange)).not.toContain('changeme');
+
+    const oldTokenHealth = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: `Bearer ${loginBody.token}` },
+    });
+    expect(oldTokenHealth.status).toBe(401);
 
     const oldPassword = await fetch(`${baseUrl}/admin/api/auth/login`, {
       method: 'POST',
@@ -229,10 +249,54 @@ describe('admin routes', () => {
     const newPasswordBody = await newPassword.json();
     expect(newPassword.status).toBe(200);
     expect(newPasswordBody.mustChangePassword).toBe(false);
-    expect(newPasswordBody.token).toBe(loginBody.token);
+    expect(newPasswordBody.token).toBe(changedBody.token);
 
     const health = await fetch(`${baseUrl}/admin/api/health`, {
-      headers: { authorization: `Bearer ${loginBody.token}` },
+      headers: { authorization: `Bearer ${changedBody.token}` },
+    });
+    expect(health.status).toBe(200);
+  });
+
+  it('requires changing the default password before using a configured admin token', async () => {
+    const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-store-'));
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'configured-admin-token',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: storeDir,
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const blockedHealth = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: 'Bearer configured-admin-token' },
+    });
+    expect(blockedHealth.status).toBe(403);
+
+    const login = await fetch(`${baseUrl}/admin/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'changeme' }),
+    });
+    const loginBody = await login.json();
+    expect(login.status).toBe(200);
+    expect(loginBody.token).toBe('configured-admin-token');
+    expect(loginBody.mustChangePassword).toBe(true);
+
+    const changed = await fetch(`${baseUrl}/admin/api/auth/change-password`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer configured-admin-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ currentPassword: 'changeme', newPassword: 'changed-admin-password' }),
+    });
+    const changedBody = await changed.json();
+    expect(changed.status).toBe(200);
+    expect(changedBody.token).toBe('configured-admin-token');
+
+    const health = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: 'Bearer configured-admin-token' },
     });
     expect(health.status).toBe(200);
   });
@@ -339,6 +403,7 @@ describe('admin routes', () => {
 
   it('supports file-store import, list, detail, patch, test, model update, reload, and delete', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
     const runtime = createFakeRuntime();
     server = createApp({
       config: testConfig({
@@ -486,6 +551,7 @@ describe('admin routes', () => {
 
   it('rejects malformed imported credentials before persisting them', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
     const runtime = createFakeRuntime();
     server = createApp({
       config: testConfig({
@@ -526,6 +592,7 @@ describe('admin routes', () => {
 
   it('rolls back admin store changes when runtime reload fails', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
     const runtime = createFakeRuntime();
     runtime.reload = vi.fn(() => {
       throw new Error('reload failed');
@@ -597,6 +664,7 @@ describe('admin routes', () => {
 
   it('creates, lists, and revokes managed gateway keys without leaking secrets', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
     const runtime = createFakeRuntime();
     server = createApp({
       config: testConfig({
@@ -645,6 +713,7 @@ describe('admin routes', () => {
 
   it('keeps managed gateway keys active after unrelated admin config reloads', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
     const runtime = createFakeRuntime();
     server = createApp({
       config: testConfig({
@@ -690,6 +759,7 @@ describe('admin routes', () => {
 
   it('rolls back managed gateway key persistence when runtime reload fails', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
     const runtime = createFakeRuntime();
     runtime.reload = vi.fn(() => {
       throw new Error('reload failed');
@@ -746,6 +816,7 @@ describe('admin routes', () => {
 
   it('creates API-key Vertex targets without exposing raw upstream keys', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
     const runtime = createFakeRuntime();
     server = createApp({
       config: testConfig({
@@ -779,6 +850,7 @@ describe('admin routes', () => {
 
   it('rejects duplicate API-key Vertex targets instead of replacing them', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
     const runtime = createFakeRuntime();
     server = createApp({
       config: testConfig({
@@ -821,6 +893,7 @@ describe('admin routes', () => {
 
   it('applies admin-updated OpenAI model catalog rules without restart', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
     const runtime = createFakeRuntime();
     server = createApp({
       config: testConfig({

@@ -47,7 +47,8 @@ export function Dashboard() {
     setAuthLoading(true);
     setAuthError(null);
     try {
-      await changeAdminPassword({ token }, currentPassword, newPassword);
+      const response = await changeAdminPassword({ token }, currentPassword, newPassword);
+      setToken(response.token);
       setCurrentPassword('');
       setNewPassword('');
       setPassword('');
@@ -87,19 +88,21 @@ export function Dashboard() {
                   <h2 className="text-lg font-semibold tracking-tight">Change admin password</h2>
                   <p className="mt-1 text-sm text-muted-foreground">Default password must be changed before the dashboard loads.</p>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label htmlFor="current-password">Current password</Label>
-                    <Input id="current-password" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+                <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void submitPasswordChange(); }}>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="current-password">Current password</Label>
+                      <Input id="current-password" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="new-password">New password</Label>
+                      <Input id="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                    </div>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="new-password">New password</Label>
-                    <Input id="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
-                  </div>
-                </div>
-                <Button className="w-fit" disabled={authLoading || !token || currentPassword.length === 0 || newPassword.length < 8} onClick={submitPasswordChange}>
-                  {authLoading ? 'Đang lưu...' : 'Change password'}
-                </Button>
+                  <Button type="submit" className="w-fit" disabled={authLoading || !token || currentPassword.length === 0 || newPassword.length < 8}>
+                    {authLoading ? 'Đang lưu...' : 'Change password'}
+                  </Button>
+                </form>
               </>
             ) : (
               <>
@@ -107,19 +110,21 @@ export function Dashboard() {
                   <h2 className="text-lg font-semibold tracking-tight">Admin login</h2>
                   <p className="mt-1 text-sm text-muted-foreground">Use admin / changeme on first login.</p>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label htmlFor="admin-username">Username</Label>
-                    <Input id="admin-username" value={username} onChange={(event) => setUsername(event.target.value)} />
+                <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void submitLogin(); }}>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="admin-username">Username</Label>
+                      <Input id="admin-username" value={username} onChange={(event) => setUsername(event.target.value)} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="admin-password">Password</Label>
+                      <Input id="admin-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+                    </div>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="admin-password">Password</Label>
-                    <Input id="admin-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-                  </div>
-                </div>
-                <Button className="w-fit" disabled={authLoading || username.trim().length === 0 || password.length === 0} onClick={submitLogin}>
-                  {authLoading ? 'Đang đăng nhập...' : 'Login'}
-                </Button>
+                  <Button type="submit" className="w-fit" disabled={authLoading || username.trim().length === 0 || password.length === 0}>
+                    {authLoading ? 'Đang đăng nhập...' : 'Login'}
+                  </Button>
+                </form>
               </>
             )}
             {authError && (

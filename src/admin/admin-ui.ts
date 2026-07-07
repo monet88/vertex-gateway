@@ -1795,7 +1795,12 @@ export const renderAdminUi = (): string => {
             },
           });
           const text = await response.text();
-          const body = text ? JSON.parse(text) : {};
+          let body = {};
+          try {
+            body = text ? JSON.parse(text) : {};
+          } catch {
+            body = {};
+          }
           if (!response.ok) {
             throw new Error(body?.error?.message || response.statusText || 'Request failed');
           }
@@ -2296,7 +2301,7 @@ export const renderAdminUi = (): string => {
 
         $('change-password-btn').addEventListener('click', async () => {
           try {
-            await fetchJson('/admin/api/auth/change-password', {
+            const body = await fetchJson('/admin/api/auth/change-password', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -2304,6 +2309,7 @@ export const renderAdminUi = (): string => {
                 newPassword: newPasswordInput.value,
               }),
             });
+            if (body.token) state.token = body.token;
             currentPasswordInput.value = '';
             newPasswordInput.value = '';
             passwordInput.value = '';

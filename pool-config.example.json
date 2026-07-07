@@ -2,7 +2,7 @@
   "vertexPoolSelection": "round-robin",
   "adminAllowMutations": true,
   "adminStoreMode": "file-store",
-  "adminFileStoreDir": "./gateway-data/auths",
+  "adminFileStoreDir": "/data/auths",
   "modelCatalog": {
     "gemini": {
       "aliases": {

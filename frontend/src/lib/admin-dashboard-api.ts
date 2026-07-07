@@ -79,7 +79,7 @@ export async function loginAdmin(username: string, password: string): Promise<Ad
 }
 
 export async function changeAdminPassword(options: AdminApiOptions, currentPassword: string, newPassword: string) {
-  return adminFetch<{ ok: true; username: string }>('/admin/api/auth/change-password', options, {
+  return adminFetch<{ ok: true; username: string; token: string }>('/admin/api/auth/change-password', options, {
     method: 'POST',
     body: JSON.stringify({ currentPassword, newPassword }),
   });
