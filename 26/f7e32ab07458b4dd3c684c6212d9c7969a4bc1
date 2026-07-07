@@ -1,0 +1,53 @@
+Dockerfile
+  s_350e22a90b4abf::t_453d1c5d120135 10-11,16
+  s_350e22a90b4abf::t_89e9b30fbf8bd3 12-15
+  s_350e22a90b4abf::t_5a8734bbdbe0f5 17-19
+test/admin-routes.test.ts
+  s_350e22a90b4abf::t_9157ed130da54d 34-54
+  s_350e22a90b4abf::t_cb5815dff636c0 5,21-33,55-56
+  s_350e22a90b4abf::t_3a6249e4c0f2c0 57-73,239,255,260,430,437,445,450,452,575,800,810,817,825,832,840,847,855
+  s_350e22a90b4abf::t_0ada2ff2973c2b 146,152,511,776,796,813,828,843
+  s_350e22a90b4abf::t_7eb80880397978 236-238
+  s_350e22a90b4abf::t_bcc53b66cfde0e 240-242,252-254
+  s_350e22a90b4abf::t_cdd42ea52b21ad 256-259
+  s_350e22a90b4abf::t_b76d642cd9aad0 261
+  s_350e22a90b4abf::t_f2cd62313e794a 427-429
+  s_350e22a90b4abf::t_79778e8a90b117 431-436
+  s_350e22a90b4abf::t_d91159f49f4c82 438-440,442-444
+  s_350e22a90b4abf::t_795cc8208aeef4 446-449
+  s_350e22a90b4abf::t_14f9750b8873b3 451
+  s_350e22a90b4abf::t_c169c8d125e73d 453
+  s_350e22a90b4abf::t_8f65f02d79d5d6 573-574
+  s_350e22a90b4abf::t_101207f3aef5d0 576-578
+  s_350e22a90b4abf::t_ef6013e25fc9d9 795
+  s_350e22a90b4abf::t_1e880b22579111 797-799
+  s_350e22a90b4abf::t_dbec43b91d7dd9 801-803,807-809
+  s_350e22a90b4abf::t_1bf54137110eef 811-812
+  s_350e22a90b4abf::t_57645559137e42 814-816
+  s_350e22a90b4abf::t_12fd08b2af8c1d 818-820,822-824
+  s_350e22a90b4abf::t_29ffa72d0a0196 826-827
+  s_350e22a90b4abf::t_a9fbcfcea568c6 829-831
+  s_350e22a90b4abf::t_2a35d5d956e02a 833-835,837-839
+  s_350e22a90b4abf::t_ccacd5deee2c9f 841-842
+  s_350e22a90b4abf::t_702dcbed08223d 844-846
+  s_350e22a90b4abf::t_1df93e94704907 848-850,852-854
+  s_350e22a90b4abf::t_6596409c3dad88 856
+src/admin/admin-spa.ts
+  s_350e22a90b4abf::t_377260c762b39e 1,25-30,39-46,57,63-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "26f7e32ab07458b4dd3c684c6212d9c7969a4bc1",
+  "prompts": {},
+  "sessions": {
+    "s_350e22a90b4abf": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3cda-f822-7e6b-972a-a5b228bbd978",
+        "model": "gpt-5.4"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
