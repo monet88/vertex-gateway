@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { GatewayKeyRow, VertexTargetRow } from '@/data/mockData';
+import type { GatewayKeyRow, VertexTargetRow } from '@/types/admin';
 import {
   createGatewayKey,
   createVertexTarget,

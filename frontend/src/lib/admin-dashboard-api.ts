@@ -1,5 +1,5 @@
 import { adminFetch, type AdminApiOptions } from './admin-api';
-import type { GatewayKeyRow, VertexTargetRow } from '@/data/mockData';
+import type { GatewayKeyRow, VertexTargetRow } from '@/types/admin';
 
 export interface AdminGatewayKeyRecord extends GatewayKeyRow {
   readonly revokedAt?: string;
@@ -18,7 +18,12 @@ interface AdminVertexCredentialRecord {
   readonly credentialsFile: string | null;
   readonly hasApiKey: boolean;
   readonly apiKeyMode: 'full' | 'express';
-  readonly health?: { status?: string };
+  readonly enabled?: boolean;
+  readonly weight?: number;
+  readonly modelAllowlist?: readonly string[];
+  readonly modelExclusions?: readonly string[];
+  readonly email?: string;
+  readonly health?: { readonly status?: string };
 }
 interface VertexCredentialsResponse {
   readonly vertexPools: AdminVertexCredentialRecord[];
@@ -46,6 +51,13 @@ export const mapVertexTarget = (record: AdminVertexCredentialRecord): VertexTarg
   location: record.location,
   authType: record.hasApiKey ? 'Google Cloud API key' : 'Service Account JSON',
   apiKeyMode: record.apiKeyMode,
+  enabled: record.enabled !== false,
+  weight: record.weight ?? 1,
+  modelAllowlist: record.modelAllowlist ?? [],
+  modelExclusions: record.modelExclusions ?? [],
+  credentialsFile: record.credentialsFile,
+  hasApiKey: record.hasApiKey,
+  email: record.email,
   health: mapHealth(record),
 });
 

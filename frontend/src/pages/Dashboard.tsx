@@ -14,7 +14,20 @@ import { Label } from '@/components/ui/label';
 import { useAdminToken } from '@/hooks/useAdminToken';
 import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
 import { changeAdminPassword, loginAdmin } from '@/lib/admin-dashboard-api';
-import { kpiMetrics, securityNotices, apiLogs } from '@/data/mockData';
+import { apiLogs } from '@/data/mockData';
+import { securityNotices as adminSecurityNotices } from '@/data/admin-static';
+
+const kpiMetrics = [
+  { id: 'kpi-keys', label: 'Active Gateway Keys', value: '–', colorScheme: 'primary' as const },
+  { id: 'kpi-targets', label: 'Vertex Targets', value: '–', colorScheme: 'secondary' as const },
+];
+
+const securityNotices = adminSecurityNotices.map((message, index) => ({
+  id: `notice-${index}`,
+  message,
+  type: 'info' as const,
+  icon: 'info',
+}));
 
 export function Dashboard() {
   const { token, setToken } = useAdminToken();

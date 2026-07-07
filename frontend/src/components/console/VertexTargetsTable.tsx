@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useSortableTable } from '@/hooks/useSortableTable';
-import type { VertexTargetRow } from '@/data/mockData';
+import type { VertexTargetRow } from '@/types/admin';
 
 export interface VertexTargetsTableProps {
   readonly rows: readonly VertexTargetRow[];

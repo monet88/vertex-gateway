@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useSortableTable } from '@/hooks/useSortableTable';
-import type { GatewayKeyRow } from '@/data/mockData';
+import type { GatewayKeyRow } from '@/types/admin';
 
 export interface GatewayKeysTableProps {
   readonly rows: readonly GatewayKeyRow[];
