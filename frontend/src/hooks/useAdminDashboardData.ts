@@ -35,7 +35,13 @@ export function useAdminDashboardData(token: string) {
     mutable: false,
   });
   const refreshSequence = useRef(0);
+  const tokenRef = useRef(token);
   const options = useMemo(() => ({ token }), [token]);
+
+  useEffect(() => {
+    tokenRef.current = token;
+    refreshSequence.current += 1;
+  }, [token]);
 
   const refresh = useCallback(async () => {
     const sequence = refreshSequence.current + 1;
@@ -109,14 +115,20 @@ export function useAdminDashboardData(token: string) {
   }, [options, refresh]);
 
   const reload = useCallback(async () => {
+    if (!token) return;
+    const sequence = refreshSequence.current + 1;
+    const tokenAtStart = token;
+    refreshSequence.current = sequence;
     try {
       const health = await reloadRuntime(options);
+      if (refreshSequence.current !== sequence || tokenRef.current !== tokenAtStart) return;
       setState((current) => ({ ...current, health }));
       await refresh();
     } catch (error) {
+      if (refreshSequence.current !== sequence || tokenRef.current !== tokenAtStart) return;
       setState((current) => ({ ...current, error: errorMessage(error, 'Failed to reload runtime') }));
     }
-  }, [options, refresh]);
+  }, [options, refresh, token]);
 
   return {
     ...state,
