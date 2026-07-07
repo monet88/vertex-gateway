@@ -1,0 +1,28 @@
+src/admin/admin-routes.ts
+  s_350e22a90b4abf::t_2a1be9902fa852 71-76,81
+  s_350e22a90b4abf::t_e47462001ba6de 61-62,84-89
+  s_350e22a90b4abf::t_08e74258e2d871 4,39-40,42,57-60,63-70,77-80,82-83,90-97,163,174,371
+  s_350e22a90b4abf::t_59656b71fda340 160-162
+  s_350e22a90b4abf::t_bcc9f74847a97f 164-166,171-173
+  s_350e22a90b4abf::t_eabd568d827c89 175
+  s_350e22a90b4abf::t_f7db7eab1f1780 368-370
+  s_350e22a90b4abf::t_9d28bff31c1b32 372
+frontend/src/types/admin.ts
+  s_350e22a90b4abf::t_2deeb44bdd8043 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e5106d2daebf489f7318eebf96d3097629559521",
+  "prompts": {},
+  "sessions": {
+    "s_350e22a90b4abf": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3cda-f822-7e6b-972a-a5b228bbd978",
+        "model": "gpt-5.4"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
