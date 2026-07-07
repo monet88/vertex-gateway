@@ -16,6 +16,7 @@ interface AdminVertexCredentialRecord {
   readonly project: string;
   readonly location: string;
   readonly credentialsFile: string | null;
+  readonly fileName?: string;
   readonly hasApiKey: boolean;
   readonly apiKeyMode: 'full' | 'express';
   readonly enabled?: boolean;
@@ -56,6 +57,7 @@ export const mapVertexTarget = (record: AdminVertexCredentialRecord): VertexTarg
   modelAllowlist: record.modelAllowlist ?? [],
   modelExclusions: record.modelExclusions ?? [],
   credentialsFile: record.credentialsFile,
+  fileName: record.fileName,
   hasApiKey: record.hasApiKey,
   email: record.email,
   health: mapHealth(record),
@@ -97,6 +99,10 @@ export async function changeAdminPassword(options: AdminApiOptions, currentPassw
   });
 }
 
+export async function logoutAdmin(options: AdminApiOptions): Promise<void> {
+  await adminFetch<{ ok: true }>('/admin/api/auth/logout', options, { method: 'POST' });
+}
+
 export interface VertexTargetDraftPayload { readonly label: string; readonly project: string; readonly location: string; readonly apiKey: string; }
 export interface ServiceAccountTargetDraftPayload { readonly label: string; readonly project: string; readonly location: string; readonly credential: Record<string, unknown>; }
 
@@ -116,6 +122,9 @@ export async function importServiceAccountTarget(options: AdminApiOptions, draft
   return mapVertexTarget(response.credential);
 }
 
+const isActionableDegradedStatus = (status: string | undefined): boolean =>
+  status === 'cooldown' || status === 'failed';
+
 export async function fetchAdminHealth(options: AdminApiOptions): Promise<RuntimeHealthSummary> {
   const response = await adminFetch<{
     ok: true;
@@ -131,7 +140,7 @@ export async function fetchAdminHealth(options: AdminApiOptions): Promise<Runtim
     runtimeMode: response.runtime.mode ?? 'unknown',
     targetCount: targets.length,
     healthyTargets: targets.filter((target) => target.health?.status === 'healthy').length,
-    degradedTargets: targets.filter((target) => target.health?.status && target.health.status !== 'healthy').length,
+    degradedTargets: targets.filter((target) => isActionableDegradedStatus(target.health?.status)).length,
   };
 }
 

@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import path from 'node:path';
 import type { URL } from 'node:url';
 import type { GatewayConfig, VertexPoolConfig } from '../config/env.js';
 import { createDerivedConfig } from '../config/env.js';
@@ -35,8 +36,10 @@ import {
 
 // Response-only shape: the raw express-mode `apiKey` is stripped and replaced
 // with a boolean presence flag. Runtime health is attached for the admin UI.
-type SanitizedCredentialRecord = Omit<AdminVertexCredentialRecord, 'apiKey'> & {
+type SanitizedCredentialRecord = Omit<AdminVertexCredentialRecord, 'apiKey' | 'credentialsFile'> & {
+  credentialsFile: null;
   hasApiKey: boolean;
+  fileName?: string;
   health?: GenAiTargetHealth;
 };
 
@@ -50,6 +53,47 @@ const parseJsonBody = async (
 ): Promise<Record<string, unknown>> => readJsonBody<Record<string, unknown>>(req, maxBytes);
 
 const createAdminSessionToken = (): string => `adm_${randomBytes(32).toString('base64url')}`;
+
+const ADMIN_LOGIN_WINDOW_MS = 60_000;
+const ADMIN_LOGIN_MAX_FAILURES = 5;
+const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+
+interface LoginAttemptState {
+  readonly firstFailureAt: number;
+  readonly failures: number;
+}
+
+const loginAttempts = new Map<string, LoginAttemptState>();
+
+const loginRateLimitKey = (req: IncomingMessage, username: string): string =>
+  `${req.socket.remoteAddress ?? 'unknown'}:${username}`;
+
+const assertAdminLoginAllowed = (req: IncomingMessage, username: string): void => {
+  const now = Date.now();
+  const key = loginRateLimitKey(req, username);
+  const current = loginAttempts.get(key);
+  if (!current || now - current.firstFailureAt > ADMIN_LOGIN_WINDOW_MS) {
+    return;
+  }
+  if (current.failures >= ADMIN_LOGIN_MAX_FAILURES) {
+    throw new GatewayError(429, 'RATE_LIMITED', 'Too many failed admin login attempts. Try again later.');
+  }
+};
+
+const recordAdminLoginFailure = (req: IncomingMessage, username: string): void => {
+  const now = Date.now();
+  const key = loginRateLimitKey(req, username);
+  const current = loginAttempts.get(key);
+  if (!current || now - current.firstFailureAt > ADMIN_LOGIN_WINDOW_MS) {
+    loginAttempts.set(key, { firstFailureAt: now, failures: 1 });
+    return;
+  }
+  loginAttempts.set(key, { firstFailureAt: current.firstFailureAt, failures: current.failures + 1 });
+};
+
+const clearAdminLoginFailures = (req: IncomingMessage, username: string): void => {
+  loginAttempts.delete(loginRateLimitKey(req, username));
+};
 
 const configuredAdminUsername = (config: GatewayConfig): string => {
   const settings = readAdminFileStoreSettings(config);
@@ -112,6 +156,23 @@ const isAdminPasswordChangeRequired = (config: GatewayConfig): boolean => {
   return Boolean(configuredToken || staticToken || sessionToken) && !settings.adminPasswordHash;
 };
 
+const isFreshAdminSessionToken = (createdAt: string | null | undefined): boolean => {
+  if (!createdAt) return false;
+  const createdMs = Date.parse(createdAt);
+  return Number.isFinite(createdMs) && Date.now() - createdMs <= ADMIN_SESSION_TTL_MS;
+};
+
+const activateNullableAdminToken = (
+  config: GatewayConfig,
+  adminToken: string | null,
+  runtime?: GenAiRuntimeLike,
+  onConfigReload?: (nextConfig: GatewayConfig) => void,
+): void => {
+  const nextConfig = createDerivedConfig(config, { adminToken });
+  onConfigReload?.(nextConfig);
+  if (!onConfigReload) runtime?.reload(nextConfig);
+};
+
 const ensureAdminSessionToken = (
   config: GatewayConfig,
   runtime?: GenAiRuntimeLike,
@@ -122,7 +183,7 @@ const ensureAdminSessionToken = (
   const existingSessionToken = typeof settings.adminSessionToken === 'string'
     ? settings.adminSessionToken.trim()
     : '';
-  if (existingSessionToken) {
+  if (existingSessionToken && isFreshAdminSessionToken(settings.adminSessionTokenCreatedAt)) {
     activateAdminToken(config, existingSessionToken, runtime, onConfigReload);
     return existingSessionToken;
   }
@@ -130,7 +191,10 @@ const ensureAdminSessionToken = (
     throw new GatewayError(409, 'VALIDATION_FAILED', 'Admin session token bootstrap is not available.');
   }
   const adminSessionToken = createAdminSessionToken();
-  persistAdminFileStoreSettings(config, { adminSessionToken });
+  persistAdminFileStoreSettings(config, {
+    adminSessionToken,
+    adminSessionTokenCreatedAt: new Date().toISOString(),
+  });
   activateAdminToken(config, adminSessionToken, runtime, onConfigReload);
   return adminSessionToken;
 };
@@ -149,9 +213,21 @@ const findCredentialOrThrow = <T extends { id: string }>(
 // Never expose the raw express-mode API key in admin responses. Mirror how
 // service-account private keys are withheld (only client_email surfaces); expose
 // a boolean presence flag so the UI can still show that express mode is active.
-const redactApiKey = <T extends { apiKey?: string | null }>(entry: T): Omit<T, 'apiKey'> & { hasApiKey: boolean } => {
-  const { apiKey: _apiKey, ...rest } = entry;
-  return { ...rest, hasApiKey: Boolean(_apiKey) };
+const redactCredentialForAdmin = <T extends { apiKey?: string | null; credentialsFile?: string | null; fileName?: string }>(
+  entry: T,
+): Omit<T, 'apiKey' | 'credentialsFile'> & { credentialsFile: null; hasApiKey: boolean; fileName?: string } => {
+  const { apiKey: _apiKey, credentialsFile, ...rest } = entry;
+  const fileName = typeof entry.fileName === 'string' && entry.fileName
+    ? entry.fileName
+    : credentialsFile
+      ? path.basename(credentialsFile)
+      : undefined;
+  return {
+    ...rest,
+    credentialsFile: null,
+    hasApiKey: Boolean(_apiKey),
+    ...(fileName ? { fileName } : {}),
+  };
 };
 
 const withRuntimeHealth = (
@@ -163,7 +239,7 @@ const withRuntimeHealth = (
   );
   return {
     ...snapshot,
-    vertexPools: snapshot.vertexPools.map((entry) => redactApiKey({
+    vertexPools: snapshot.vertexPools.map((entry) => redactCredentialForAdmin({
       ...entry,
       ...(healthById.get(entry.id) ? { health: healthById.get(entry.id) } : {}),
     })),
@@ -203,18 +279,19 @@ export const maybeHandleAdminRoute = async (
   runtime?: GenAiRuntimeLike,
   onConfigReload?: (nextConfig: GatewayConfig) => void,
 ): Promise<boolean> => {
+  const rawPathname = (req.url ?? '/').split('?', 1)[0] || '/';
   const normalizedPathname = url.pathname === '/' ? '/' : (url.pathname.replace(/\/+$/, '') || '/');
-  if (!normalizedPathname.startsWith('/admin')) {
+  if (!normalizedPathname.startsWith('/admin') && !rawPathname.startsWith('/admin')) {
     return false;
+  }
+
+  if (req.method === 'GET' && serveAdminAsset(rawPathname, res)) {
+    return true;
   }
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     res.end();
-    return true;
-  }
-
-  if (req.method === 'GET' && serveAdminAsset(normalizedPathname, res)) {
     return true;
   }
 
@@ -258,10 +335,13 @@ export const maybeHandleAdminRoute = async (
     const body = await parseJsonBody(req, config.maxJsonBytes);
     const username = typeof body.username === 'string' ? body.username.trim() : '';
     const password = typeof body.password === 'string' ? body.password : '';
+    assertAdminLoginAllowed(req, username);
     const login = await verifyAdminPasswordLogin(config, username, password);
     if (!login) {
+      recordAdminLoginFailure(req, username);
       throw new GatewayError(401, 'AUTH_INVALID', 'Admin login failed.');
     }
+    clearAdminLoginFailures(req, username);
     const token = ensureAdminSessionToken(config, runtime, onConfigReload);
     sendJson(res, 200, {
       ok: true,
@@ -273,6 +353,22 @@ export const maybeHandleAdminRoute = async (
   }
 
   requireAdminAuth(req.headers, config);
+
+  if (req.method === 'POST' && normalizedPathname === '/admin/api/auth/logout') {
+    const settings = readAdminFileStoreSettings(config);
+    const sessionToken = typeof settings.adminSessionToken === 'string'
+      ? settings.adminSessionToken.trim()
+      : '';
+    if (config.adminToken && sessionToken && config.adminToken === sessionToken) {
+      persistAdminFileStoreSettings(config, {
+        adminSessionToken: null,
+        adminSessionTokenCreatedAt: null,
+      });
+      activateNullableAdminToken(config, null, runtime, onConfigReload);
+    }
+    sendJson(res, 200, { ok: true });
+    return true;
+  }
 
   if (req.method === 'POST' && normalizedPathname === '/admin/api/auth/change-password') {
     assertPasswordStoreWritable(config);
@@ -300,7 +396,10 @@ export const maybeHandleAdminRoute = async (
       adminUsername: username,
       adminPasswordHash: await hashAdminPassword(newPassword),
       adminPasswordChangedAt: new Date().toISOString(),
-      ...(shouldRotateSessionToken ? { adminSessionToken: nextToken } : {}),
+      ...(shouldRotateSessionToken ? {
+        adminSessionToken: nextToken,
+        adminSessionTokenCreatedAt: new Date().toISOString(),
+      } : {}),
     });
     if (nextToken && nextToken !== config.adminToken) {
       activateAdminToken(config, nextToken, runtime, onConfigReload);
