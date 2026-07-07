@@ -29,9 +29,9 @@ function renderView(view: AdminViewId, adminData: ReturnType<typeof useAdminDash
     case 'dashboard':
       return <Dashboard adminData={adminData} />;
     case 'ai-providers':
-      return <AIProvidersView />;
+      return <AIProvidersView adminData={adminData} />;
     case 'auth-files':
-      return <AuthFilesView />;
+      return <AuthFilesView adminData={adminData} />;
     case 'available-models':
       return <AvailableModelsView />;
     case 'logs-viewer':
