@@ -1,5 +1,5 @@
 import { adminFetch, type AdminApiOptions } from './admin-api';
-import type { GatewayKeyRow, VertexTargetRow } from '@/types/admin';
+import type { GatewayKeyRow, ProviderModelCatalog, RuntimeHealthSummary, VertexTargetRow } from '@/types/admin';
 
 export interface AdminGatewayKeyRecord extends GatewayKeyRow {
   readonly revokedAt?: string;
@@ -114,4 +114,71 @@ export async function importServiceAccountTarget(options: AdminApiOptions, draft
     body: JSON.stringify(draft),
   });
   return mapVertexTarget(response.credential);
+}
+
+export async function fetchAdminHealth(options: AdminApiOptions): Promise<RuntimeHealthSummary> {
+  const response = await adminFetch<{
+    ok: true;
+    service: string;
+    mode: RuntimeHealthSummary['mode'];
+    runtime: { mode?: string; active?: { targets?: Array<{ health?: { status?: string } }> } };
+  }>('/admin/api/health', options);
+  const targets = response.runtime.active?.targets ?? [];
+  return {
+    ok: response.ok,
+    service: response.service,
+    mode: response.mode,
+    runtimeMode: response.runtime.mode ?? 'unknown',
+    targetCount: targets.length,
+    healthyTargets: targets.filter((target) => target.health?.status === 'healthy').length,
+    degradedTargets: targets.filter((target) => target.health?.status && target.health.status !== 'healthy').length,
+  };
+}
+
+export async function fetchVertexCredential(options: AdminApiOptions, id: string): Promise<VertexTargetRow> {
+  const response = await adminFetch<AdminVertexCredentialRecord>(`/admin/api/vertex-credentials/${encodeURIComponent(id)}`, options);
+  return mapVertexTarget(response);
+}
+
+export interface VertexTargetPatchPayload {
+  readonly label?: string;
+  readonly project?: string;
+  readonly location?: string;
+  readonly enabled?: boolean;
+  readonly weight?: number;
+  readonly modelAllowlist?: readonly string[];
+  readonly modelExclusions?: readonly string[];
+}
+
+export async function updateVertexCredential(options: AdminApiOptions, id: string, patch: VertexTargetPatchPayload): Promise<VertexTargetRow> {
+  const response = await adminFetch<{ ok: true; credential: AdminVertexCredentialRecord }>(`/admin/api/vertex-credentials/${encodeURIComponent(id)}`, options, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return mapVertexTarget(response.credential);
+}
+
+export async function deleteVertexCredential(options: AdminApiOptions, id: string): Promise<void> {
+  await adminFetch<{ ok: true; remaining: number }>(`/admin/api/vertex-credentials/${encodeURIComponent(id)}`, options, { method: 'DELETE' });
+}
+
+export async function testVertexCredential(options: AdminApiOptions, id: string) {
+  return adminFetch<{ ok: true; id: string; response: unknown }>(`/admin/api/vertex-credentials/${encodeURIComponent(id)}/test`, options, { method: 'POST' });
+}
+
+export async function fetchModelCatalog(options: AdminApiOptions, provider = 'gemini'): Promise<ProviderModelCatalog> {
+  return adminFetch<ProviderModelCatalog>(`/admin/api/models?provider=${encodeURIComponent(provider)}`, options);
+}
+
+export async function saveModelCatalog(options: AdminApiOptions, provider: string, catalog: ProviderModelCatalog): Promise<ProviderModelCatalog> {
+  const response = await adminFetch<{ ok: true; modelCatalog: ProviderModelCatalog }>(`/admin/api/models/${encodeURIComponent(provider)}`, options, {
+    method: 'PUT',
+    body: JSON.stringify(catalog),
+  });
+  return response.modelCatalog;
+}
+
+export async function reloadRuntime(options: AdminApiOptions): Promise<RuntimeHealthSummary> {
+  await adminFetch<{ ok: true; runtime: unknown }>('/admin/api/runtime/reload', options, { method: 'POST' });
+  return fetchAdminHealth(options);
 }
