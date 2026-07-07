@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useAdminToken } from '@/hooks/useAdminToken';
 import { useAdminView } from '@/hooks/useAdminView';
 import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
-import { changeAdminPassword, loginAdmin } from '@/lib/admin-dashboard-api';
+import { changeAdminPassword, loginAdmin, logoutAdmin } from '@/lib/admin-dashboard-api';
 import { securityNotices as adminSecurityNotices } from '@/data/admin-static';
 import { Dashboard } from '@/pages/Dashboard';
 import { AIProvidersView } from '@/pages/AIProvidersView';
@@ -24,20 +24,20 @@ const securityNotices = adminSecurityNotices.map((message, index) => ({
   icon: 'info',
 }));
 
-function renderView(view: AdminViewId, adminData: ReturnType<typeof useAdminDashboardData>) {
+function renderView(view: AdminViewId, adminData: ReturnType<typeof useAdminDashboardData>, token: string) {
   switch (view) {
     case 'dashboard':
       return <Dashboard adminData={adminData} />;
     case 'ai-providers':
-      return <AIProvidersView adminData={adminData} />;
+      return <AIProvidersView adminData={adminData} token={token} />;
     case 'auth-files':
-      return <AuthFilesView adminData={adminData} />;
+      return <AuthFilesView adminData={adminData} token={token} />;
     case 'available-models':
-      return <AvailableModelsView />;
+      return <AvailableModelsView token={token} />;
     case 'logs-viewer':
       return <LogsViewerView />;
     case 'model-management':
-      return <ModelManagementView />;
+      return <ModelManagementView token={token} />;
     default:
       return <Dashboard adminData={adminData} />;
   }
@@ -89,6 +89,18 @@ export function AdminApp() {
     } finally {
       setAuthLoading(false);
     }
+  };
+
+  const handleLogout = async () => {
+    if (token) {
+      try {
+        await logoutAdmin({ token });
+      } catch {
+        // Local logout should still complete if the token was already expired server-side.
+      }
+    }
+    setToken('');
+    setMustChangePassword(false);
   };
 
   const isAuthenticated = Boolean(token) && !mustChangePassword;
@@ -146,11 +158,11 @@ export function AdminApp() {
 
         {isAuthenticated && (
           <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
-            <Button variant="secondary" size="sm" onClick={() => { setToken(''); setMustChangePassword(false); }}>Logout</Button>
+            <Button variant="secondary" size="sm" onClick={() => { void handleLogout(); }}>Logout</Button>
           </div>
         )}
 
-        {isAuthenticated && renderView(view, adminData)}
+        {isAuthenticated && renderView(view, adminData, token)}
       </div>
     </StitchConsoleShell>
   );

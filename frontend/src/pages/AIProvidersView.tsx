@@ -5,7 +5,6 @@ import { GatewayKeyDialog } from '@/components/console/GatewayKeyDialog';
 import { VertexTargetDialog } from '@/components/console/VertexTargetDialog';
 import { ServiceAccountTargetDialog } from '@/components/console/ServiceAccountTargetDialog';
 import { AdminError, TableSkeleton } from '@/components/console/AdminState';
-import { useAdminToken } from '@/hooks/useAdminToken';
 import type { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
 import {
   deleteVertexCredential,
@@ -16,16 +15,17 @@ import {
 
 interface AIProvidersViewProps {
   readonly adminData: ReturnType<typeof useAdminDashboardData>;
+  readonly token: string;
 }
 
-export function AIProvidersView({ adminData }: AIProvidersViewProps) {
-  const { token } = useAdminToken();
+export function AIProvidersView({ adminData, token }: AIProvidersViewProps) {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const handleTest = async (id: string) => {
     setActionError(null);
     try {
       await testVertexCredential({ token }, id);
+      await adminData.refetch();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Test failed');
     }
