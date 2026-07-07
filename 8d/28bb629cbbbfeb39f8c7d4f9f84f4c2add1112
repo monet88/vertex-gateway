@@ -1,0 +1,19 @@
+.gitignore
+  s_aef3267f315afe::t_3b74051392fb9d 22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8d28bb629cbbbfeb39f8c7d4f9f84f4c2add1112",
+  "prompts": {},
+  "sessions": {
+    "s_aef3267f315afe": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3d0a-3686-7537-8847-b9897b4c8c2a",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
