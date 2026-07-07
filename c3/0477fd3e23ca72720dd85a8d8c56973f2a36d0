@@ -1,0 +1,45 @@
+src/admin/admin-login-rate-limit.ts
+  s_aef3267f315afe::t_06caaec3a59029 1-73
+frontend/src/components/console/ModelCatalogEditor.tsx
+  s_aef3267f315afe::t_0564bfb7d9cae3 7,35
+src/admin/admin-routes.ts
+  s_aef3267f315afe::t_d8f8a941f6d33a 12
+  s_aef3267f315afe::t_c2fd620560fa61 61-64,67,71,75,196,198-199,524-535,542
+frontend/src/pages/AdminApp.tsx
+  s_aef3267f315afe::t_dd9106847eb764 18,96-105
+frontend/src/components/console/model-catalog-form.ts
+  s_aef3267f315afe::t_91d943cad05e28 1-20
+frontend/src/pages/admin-session.ts
+  s_aef3267f315afe::t_1af32e388523d2 1-20
+test/admin-frontend-helpers.test.ts
+  s_aef3267f315afe::t_195e5c493b4f1d 1-59
+docs/superpowers/plans/2026-07-07-admin-react-stitch-review-fixes.md
+  s_aef3267f315afe::t_e486009c2d30a3 333-334,428,635,637-638,658,660,1299
+src/admin/admin-auth.ts
+  s_aef3267f315afe::t_25c07ab75e0130 4,18-31,35-36,38-39,45
+  s_aef3267f315afe::t_c981699a5f824a 32-34
+  s_aef3267f315afe::t_808925bcd77f66 37
+  s_aef3267f315afe::t_d9bb948c083c6c 40-44
+  s_aef3267f315afe::t_6a5bf715a777ea 46
+  s_aef3267f315afe::t_0a9bb908a819a6 58
+src/admin/admin-ui.ts
+  s_aef3267f315afe::t_4622436e40b254 2160,2192,2207
+test/admin-routes.test.ts
+  s_aef3267f315afe::t_3932697a9db956 147-149,456-507,632,725-736
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c30477fd3e23ca72720dd85a8d8c56973f2a36d0",
+  "prompts": {},
+  "sessions": {
+    "s_aef3267f315afe": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3d0a-3686-7537-8847-b9897b4c8c2a",
+        "model": "gpt-5.4"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
