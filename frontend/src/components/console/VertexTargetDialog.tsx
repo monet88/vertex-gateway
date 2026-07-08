@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -33,7 +33,7 @@ export function VertexTargetDialog({ onCreate, disabled }: VertexTargetDialogPro
     setOpen(nextOpen);
   }
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
     setError(null);
@@ -71,7 +71,7 @@ export function VertexTargetDialog({ onCreate, disabled }: VertexTargetDialogPro
               <Input id="target-location" value={draft.location} onChange={(event) => patch({ location: event.target.value })} required disabled={pending} />
             </div>
           </div>
-          <SecretInput id="target-api-key" label="Google Cloud API key" value={draft.apiKey} onChange={(apiKey) => patch({ apiKey })} disabled={pending} />
+          <SecretInput id="target-api-key" label="Google Cloud API key" value={draft.apiKey} onChange={(apiKey) => patch({ apiKey })} disabled={pending} required />
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" disabled={pending}>{pending ? 'Đang tạo…' : 'Thêm target'}</Button>
         </form>

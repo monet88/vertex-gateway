@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Server } from 'node:http';
+import net from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
 import { hashGatewayKey } from '../src/admin/gateway-key-store.js';
@@ -16,6 +17,59 @@ const listen = async (server: Server): Promise<string> => new Promise((resolve) 
     if (typeof address === 'object' && address) resolve(`http://127.0.0.1:${address.port}`);
   });
 });
+
+const adminDistDir = path.join(process.cwd(), 'frontend', 'dist');
+const adminAssetsDir = path.join(adminDistDir, 'assets');
+const adminIndexPath = path.join(adminDistDir, 'index.html');
+const adminFixtureAssetPath = path.join(adminAssetsDir, 'admin-fixture.js');
+const adminFixtureDirPath = path.join(adminAssetsDir, 'directory-fixture');
+
+let previousAdminIndex: string | null | undefined;
+
+const writeAdminSpaFixture = (): void => {
+  previousAdminIndex = fs.existsSync(adminIndexPath)
+    ? fs.readFileSync(adminIndexPath, 'utf8')
+    : null;
+  fs.mkdirSync(adminAssetsDir, { recursive: true });
+  fs.mkdirSync(adminFixtureDirPath, { recursive: true });
+  fs.writeFileSync(
+    adminIndexPath,
+    '<!doctype html><html><body><div id="root"></div><script type="module" src="/admin/assets/admin-fixture.js"></script></body></html>',
+  );
+  fs.writeFileSync(adminFixtureAssetPath, 'console.log("admin fixture");');
+};
+
+const restoreAdminSpaFixture = (): void => {
+  if (fs.existsSync(adminFixtureAssetPath)) fs.unlinkSync(adminFixtureAssetPath);
+  if (fs.existsSync(adminFixtureDirPath)) fs.rmSync(adminFixtureDirPath, { recursive: true, force: true });
+  if (previousAdminIndex === null) {
+    if (fs.existsSync(adminIndexPath)) fs.unlinkSync(adminIndexPath);
+  } else if (typeof previousAdminIndex === 'string') {
+    fs.writeFileSync(adminIndexPath, previousAdminIndex);
+  }
+  previousAdminIndex = undefined;
+};
+
+const rawHttpGet = async (baseUrl: string, rawPath: string): Promise<{ status: number; body: string }> => {
+  const { port, hostname } = new URL(baseUrl);
+  return await new Promise((resolve, reject) => {
+    const socket = net.createConnection({ host: hostname, port: Number(port) }, () => {
+      socket.write(`GET ${rawPath} HTTP/1.1\r\nHost: ${hostname}:${port}\r\nConnection: close\r\n\r\n`);
+    });
+    let data = '';
+    socket.setEncoding('utf8');
+    socket.on('data', (chunk) => {
+      data += chunk;
+    });
+    socket.on('error', reject);
+    socket.on('end', () => {
+      const [head, body = ''] = data.split('\r\n\r\n');
+      const statusLine = head.split('\r\n')[0] ?? '';
+      const status = Number(statusLine.split(' ')[1] ?? '0');
+      resolve({ status, body });
+    });
+  });
+};
 
 const seedChangedAdminPassword = async (storeDir: string): Promise<void> => {
   fs.mkdirSync(storeDir, { recursive: true });
@@ -89,11 +143,15 @@ describe('admin routes', () => {
   let server: Server | undefined;
 
   afterEach(async () => {
-    await new Promise<void>((resolve) => server?.close(() => resolve()));
+    restoreAdminSpaFixture();
+    if (server) {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
     server = undefined;
   });
 
   it('serves the admin dashboard even when a stale config disables admin routes', async () => {
+    writeAdminSpaFixture();
     server = createApp({ config: testConfig({ enableAdminRoutes: false }) });
     const baseUrl = await listen(server);
 
@@ -168,6 +226,39 @@ describe('admin routes', () => {
       body: JSON.stringify({ adminToken: 'another-admin-password' }),
     });
     expect(secondBootstrap.status).toBe(409);
+  });
+
+  it('rate-limits repeated failed admin logins before password hashing can be abused', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'admin-login-rate-'));
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminStoreMode: 'file-store',
+        adminAllowMutations: true,
+        adminFileStoreDir: dir,
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await fetch(`${baseUrl}/admin/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: 'rate-limit-admin', password: `wrong-${attempt}` }),
+      });
+      expect(response.status).toBe(401);
+    }
+
+    const limited = await fetch(`${baseUrl}/admin/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'rate-limit-admin', password: 'wrong-final' }),
+    });
+    const body = await limited.json();
+
+    expect(limited.status).toBe(429);
+    expect(body.error.code).toBe('RATE_LIMITED');
   });
 
   it('logs in with the default admin account and forces a password change', async () => {
@@ -328,6 +419,180 @@ describe('admin routes', () => {
     expect(fs.existsSync(path.join(storeDir, 'admin-settings.json'))).toBe(false);
   });
 
+  it('invalidates bootstrapped file-store admin session tokens on logout', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'admin-logout-'));
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminStoreMode: 'file-store',
+        adminAllowMutations: true,
+        adminFileStoreDir: dir,
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const loginResponse = await fetch(`${baseUrl}/admin/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'changeme' }),
+    });
+    const loginBody = await loginResponse.json();
+    expect(loginResponse.status).toBe(200);
+    expect(loginBody.token).toMatch(/^adm_/);
+
+    const logoutResponse = await fetch(`${baseUrl}/admin/api/auth/logout`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${loginBody.token}` },
+    });
+    expect(logoutResponse.status).toBe(200);
+
+    const healthResponse = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: `Bearer ${loginBody.token}` },
+    });
+    expect(healthResponse.status).toBe(401);
+  });
+
+  it('rejects expired admin session tokens on authenticated requests', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'admin-expired-session-'));
+    const expiredAt = new Date(Date.now() - (13 * 60 * 60 * 1000)).toISOString();
+    await seedChangedAdminPassword(dir);
+    fs.writeFileSync(path.join(dir, 'admin-settings.json'), JSON.stringify({
+      ...JSON.parse(fs.readFileSync(path.join(dir, 'admin-settings.json'), 'utf8')),
+      adminSessionToken: 'expired-session-token',
+      adminSessionTokenCreatedAt: expiredAt,
+    }));
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'expired-session-token',
+        adminStoreMode: 'file-store',
+        adminAllowMutations: true,
+        adminFileStoreDir: dir,
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: 'Bearer expired-session-token' },
+    });
+
+    expect(response.status).toBe(401);
+    const settings = JSON.parse(fs.readFileSync(path.join(dir, 'admin-settings.json'), 'utf8'));
+    expect(settings.adminSessionToken).toBeNull();
+    expect(settings.adminSessionTokenCreatedAt).toBeNull();
+  });
+
+  it('issues a fresh admin session token after an expired file-store session is rejected', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'admin-expired-login-'));
+    const expiredAt = new Date(Date.now() - (13 * 60 * 60 * 1000)).toISOString();
+    await seedChangedAdminPassword(dir);
+    fs.writeFileSync(path.join(dir, 'admin-settings.json'), JSON.stringify({
+      ...JSON.parse(fs.readFileSync(path.join(dir, 'admin-settings.json'), 'utf8')),
+      adminSessionToken: 'expired-session-token',
+      adminSessionTokenCreatedAt: expiredAt,
+    }));
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'expired-session-token',
+        adminStoreMode: 'file-store',
+        adminAllowMutations: true,
+        adminFileStoreDir: dir,
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const login = await fetch(`${baseUrl}/admin/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'changed-admin-password' }),
+    });
+    const body = await login.json();
+
+    expect(login.status).toBe(200);
+    expect(body.token).toMatch(/^adm_/);
+    expect(body.token).not.toBe('expired-session-token');
+    const settings = JSON.parse(fs.readFileSync(path.join(dir, 'admin-settings.json'), 'utf8'));
+    expect(settings.adminSessionToken).toBe(body.token);
+  });
+
+  it('prunes stale admin login failure windows before recording new usernames', async () => {
+    const { createAdminLoginRateLimiter } = await import('../src/admin/admin-login-rate-limit.js');
+    const limiter = createAdminLoginRateLimiter({
+      now: () => currentTime,
+      windowMs: 60_000,
+      maxFailures: 5,
+    });
+    const req = { socket: { remoteAddress: '127.0.0.1' } } as Pick<Parameters<typeof limiter.assertAllowed>[0], 'socket'>;
+    let currentTime = 0;
+
+    limiter.recordFailure(req, 'stale-user-1');
+    limiter.recordFailure(req, 'stale-user-2');
+    limiter.recordFailure(req, 'stale-user-3');
+    // Per-IP+username scoping: different usernames create separate buckets.
+    expect(limiter.size()).toBe(3);
+
+    currentTime = 61_000;
+    limiter.recordFailure(req, 'fresh-user');
+
+    // Stale per-user entries are pruned on the next write; only the fresh one remains.
+    expect(limiter.size()).toBe(1);
+  });
+
+  it('periodically prunes expired admin login failures even without new login attempts', async () => {
+    vi.useFakeTimers();
+    const { createAdminLoginRateLimiter } = await import('../src/admin/admin-login-rate-limit.js');
+    let currentTime = 0;
+    const limiter = createAdminLoginRateLimiter({
+      now: () => currentTime,
+      windowMs: 60_000,
+      maxFailures: 5,
+      cleanupIntervalMs: 5_000,
+    });
+    const req = { socket: { remoteAddress: '127.0.0.1' } } as Pick<Parameters<typeof limiter.assertAllowed>[0], 'socket'>;
+
+    limiter.recordFailure(req, 'stale-user-1');
+    limiter.recordFailure(req, 'stale-user-2');
+    // Per-IP+username scoping yields separate entries per username.
+    expect(limiter.size()).toBe(2);
+
+    currentTime = 61_000;
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(limiter.size()).toBe(0);
+    limiter.dispose?.();
+    vi.useRealTimers();
+  });
+
+  it('scopes rate limiting per IP+username so rotating usernames do not cross-lock other users', async () => {
+    const { createAdminLoginRateLimiter } = await import('../src/admin/admin-login-rate-limit.js');
+    const limiter = createAdminLoginRateLimiter({
+      windowMs: 60_000,
+      maxFailures: 5,
+      cleanupIntervalMs: 0,
+    });
+    const req = { socket: { remoteAddress: '127.0.0.1' } } as Pick<Parameters<typeof limiter.assertAllowed>[0], 'socket'>;
+
+    // Five different usernames → five independent buckets; no cross-user lockout.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      limiter.recordFailure(req, `user-${attempt}`);
+    }
+
+    // A fresh username on the same IP is still allowed.
+    expect(() => limiter.assertAllowed(req, 'fresh-username')).not.toThrow();
+
+    // Same username repeated beyond threshold is rate limited.
+    const sameUser = 'same-user';
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      limiter.recordFailure(req, sameUser);
+    }
+    expect(() => limiter.assertAllowed(req, sameUser)).toThrow('Too many failed admin login attempts');
+    limiter.dispose?.();
+  });
+
   it('accepts trailing slashes on admin API routes', async () => {
     server = createApp({
       config: testConfig({
@@ -385,6 +650,7 @@ describe('admin routes', () => {
   });
 
   it('serves the admin shell on /admin/ with a trailing slash', async () => {
+    writeAdminSpaFixture();
     server = createApp({
       config: testConfig({
         enableAdminRoutes: true,
@@ -398,7 +664,7 @@ describe('admin routes', () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain('Gateway Admin');
+    expect(html).toContain('<div id="root"></div>');
   });
 
   it('supports file-store import, list, detail, patch, test, model update, reload, and delete', async () => {
@@ -445,6 +711,14 @@ describe('admin routes', () => {
     expect(importedBody.credential.private_key).toBeUndefined();
     expect(importedBody.credential.email).toBe('svc@example.test');
     expect(importedBody.credential.apiKeyMode).toBe('full');
+
+    const credentialsResponse = await fetch(`${baseUrl}/admin/api/vertex-credentials`, {
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const credentialsBody = await credentialsResponse.json();
+    expect(credentialsBody.vertexPools[0].credentialsFile).toBeNull();
+    expect(credentialsBody.vertexPools[0].fileName).toBeUndefined();
+    expect(JSON.stringify(credentialsBody)).not.toContain(dir);
 
     const list = await fetch(`${baseUrl}/admin/api/vertex-credentials`, {
       headers: { authorization: 'Bearer admin-secret' },
@@ -496,6 +770,8 @@ describe('admin routes', () => {
     });
     const modelGetBody = await modelGet.json();
     expect(modelGetBody.defaultModel).toBe('gemini-2.5-flash');
+    expect(modelGetBody.builtInModels).toContain('gemini-3.5-flash');
+    expect(modelGetBody.aliases.fast).toBe('gemini-2.5-flash');
 
     const reload = await fetch(`${baseUrl}/admin/api/runtime/reload`, {
       method: 'POST',
@@ -535,6 +811,18 @@ describe('admin routes', () => {
     const invalidJsonBody = await invalidJson.json();
     expect(invalidJson.status).toBe(400);
     expect(invalidJsonBody.error.code).toBe('VALIDATION_FAILED');
+
+    const invalidAliases = await fetch(`${baseUrl}/admin/api/models/gemini`, {
+      method: 'PUT',
+      headers: {
+        authorization: 'Bearer admin-secret',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ aliases: { fast: 123 } }),
+    });
+    const invalidAliasesBody = await invalidAliases.json();
+    expect(invalidAliases.status).toBe(400);
+    expect(invalidAliasesBody.error.message).toMatch(/invalid aliases json/i);
 
     const tooLarge = await fetch(`${baseUrl}/admin/api/models/gemini`, {
       method: 'PUT',
@@ -640,7 +928,8 @@ describe('admin routes', () => {
     expect(fs.readdirSync(path.join(dir, 'credentials'))).toEqual([]);
   });
 
-  it('serves the admin dashboard shell from the gateway', async () => {
+  it('serves the React admin SPA shell from the gateway', async () => {
+    writeAdminSpaFixture();
     server = createApp({
       config: testConfig({
         enableAdminRoutes: true,
@@ -655,11 +944,70 @@ describe('admin routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
-    expect(html).toContain('Gateway Admin');
-    expect(html).toContain('id="username-input"');
-    expect(html).toContain('id="password-input"');
-    expect(html).toContain('id="password-change-panel"');
-    expect(html).toContain('id="credential-list"');
+    expect(html).toContain('<div id="root"></div>');
+    expect(html).toContain('/admin/assets/');
+  });
+
+  it('serves built React admin assets from /admin/assets', async () => {
+    writeAdminSpaFixture();
+    server = createApp({
+      config: testConfig({ enableAdminRoutes: true, adminToken: 'admin-secret' }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/admin/assets/admin-fixture.js`);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/javascript');
+    expect(response.headers.get('cache-control')).toContain('immutable');
+    expect(body).toContain('admin fixture');
+  });
+
+  it('rejects malformed admin asset URLs as validation errors', async () => {
+    writeAdminSpaFixture();
+    server = createApp({
+      config: testConfig({ enableAdminRoutes: true, adminToken: 'admin-secret' }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/admin/assets/%E0%A4%A`);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('does not stream directories from /admin/assets', async () => {
+    writeAdminSpaFixture();
+    server = createApp({
+      config: testConfig({ enableAdminRoutes: true, adminToken: 'admin-secret' }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/admin/assets/directory-fixture`);
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('rejects path traversal attempts from /admin/assets', async () => {
+    writeAdminSpaFixture();
+    server = createApp({
+      config: testConfig({ enableAdminRoutes: true, adminToken: 'admin-secret' }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await rawHttpGet(baseUrl, '/admin/assets/%2e%2e/index.html');
+    const body = JSON.parse(response.body);
+
+    expect(response.status).toBe(400);
+    expect(body.error.code).toBe('VALIDATION_FAILED');
   });
 
   it('creates, lists, and revokes managed gateway keys without leaking secrets', async () => {
@@ -932,5 +1280,40 @@ describe('admin routes', () => {
       expect.objectContaining({ model: 'gemini-3.5-flash' }),
       expect.any(Object),
     );
+  });
+
+  it('serves the React admin shell at /admin without exposing the old static admin UI', async () => {
+    server = createApp({
+      config: testConfig({ enableAdminRoutes: true, adminToken: 'admin-secret' }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/admin`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(html).toContain('<div id="root"></div>');
+    expect(html).toContain('/admin/assets/');
+    expect(html).not.toContain('Vertex JSON Login');
+    expect(html).not.toContain('id="log-search"');
+  });
+
+  it('keeps /admin/api routes JSON-backed after the SPA replacement', async () => {
+    server = createApp({
+      config: testConfig({ enableAdminRoutes: true, adminToken: 'admin-secret' }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/admin/api/health`, {
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.runtime).toBeDefined();
   });
 });

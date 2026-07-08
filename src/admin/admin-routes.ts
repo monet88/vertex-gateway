@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import path from 'node:path';
 import type { URL } from 'node:url';
 import type { GatewayConfig, VertexPoolConfig } from '../config/env.js';
 import { createDerivedConfig } from '../config/env.js';
@@ -8,7 +9,8 @@ import { GatewayError, sendJson } from '../http/error-response.js';
 import type { GenAiRuntimeLike } from '../lib/genai-runtime.js';
 import { readJsonBody } from '../lib/read-json.js';
 import { requireAdminAuth } from './admin-auth.js';
-import { renderAdminUi } from './admin-ui.js';
+import { createAdminLoginRateLimiter } from './admin-login-rate-limit.js';
+import { renderAdminSpa, serveAdminAsset } from './admin-spa.js';
 import {
   createApiKeyVertexCredential,
   createCredentialStore,
@@ -17,7 +19,7 @@ import {
   type AdminVertexCredentialRecord,
 } from './credential-store.js';
 import type { GenAiTargetHealth } from '../lib/genai-pool.js';
-import { getProviderModelCatalog } from './model-store.js';
+import { getProviderBuiltInModels, getProviderModelCatalog } from './model-store.js';
 import { createGatewayKeyStore, verifyManagedGatewayKey } from './gateway-key-store.js';
 import {
   canBootstrapAdminToken,
@@ -32,10 +34,17 @@ import {
   isValidNewAdminPassword,
   verifyAdminPassword,
 } from './admin-password.js';
+import {
+  ADMIN_SESSION_TTL_MS,
+  clearPersistedAdminSessionToken,
+  isFreshAdminSessionToken,
+  readPersistedAdminSessionToken,
+} from './admin-session.js';
 
 // Response-only shape: the raw express-mode `apiKey` is stripped and replaced
 // with a boolean presence flag. Runtime health is attached for the admin UI.
-type SanitizedCredentialRecord = Omit<AdminVertexCredentialRecord, 'apiKey'> & {
+type SanitizedCredentialRecord = Omit<AdminVertexCredentialRecord, 'apiKey' | 'credentialsFile'> & {
+  credentialsFile: null;
   hasApiKey: boolean;
   health?: GenAiTargetHealth;
 };
@@ -50,6 +59,35 @@ const parseJsonBody = async (
 ): Promise<Record<string, unknown>> => readJsonBody<Record<string, unknown>>(req, maxBytes);
 
 const createAdminSessionToken = (): string => `adm_${randomBytes(32).toString('base64url')}`;
+
+const ADMIN_LOGIN_WINDOW_MS = 60_000;
+const ADMIN_LOGIN_MAX_FAILURES = 5;
+
+const adminLoginRateLimiters = new WeakMap<GatewayConfig, ReturnType<typeof createAdminLoginRateLimiter>>();
+
+const getAdminLoginRateLimiter = (config: GatewayConfig) => {
+  let limiter = adminLoginRateLimiters.get(config);
+  if (!limiter) {
+    limiter = createAdminLoginRateLimiter({
+      windowMs: ADMIN_LOGIN_WINDOW_MS,
+      maxFailures: ADMIN_LOGIN_MAX_FAILURES,
+    });
+    adminLoginRateLimiters.set(config, limiter);
+  }
+  return limiter;
+};
+
+const assertAdminLoginAllowed = (config: GatewayConfig, req: IncomingMessage, username: string): void => {
+  getAdminLoginRateLimiter(config).assertAllowed(req, username);
+};
+
+const recordAdminLoginFailure = (config: GatewayConfig, req: IncomingMessage, username: string): void => {
+  getAdminLoginRateLimiter(config).recordFailure(req, username);
+};
+
+const clearAdminLoginFailures = (config: GatewayConfig, req: IncomingMessage, username: string): void => {
+  getAdminLoginRateLimiter(config).clearFailures(req, username);
+};
 
 const configuredAdminUsername = (config: GatewayConfig): string => {
   const settings = readAdminFileStoreSettings(config);
@@ -112,25 +150,57 @@ const isAdminPasswordChangeRequired = (config: GatewayConfig): boolean => {
   return Boolean(configuredToken || staticToken || sessionToken) && !settings.adminPasswordHash;
 };
 
+const activateNullableAdminToken = (
+  config: GatewayConfig,
+  adminToken: string | null,
+  runtime?: GenAiRuntimeLike,
+  onConfigReload?: (nextConfig: GatewayConfig) => void,
+): void => {
+  const nextConfig = createDerivedConfig(config, { adminToken });
+  onConfigReload?.(nextConfig);
+  if (!onConfigReload) runtime?.reload(nextConfig);
+};
+
 const ensureAdminSessionToken = (
   config: GatewayConfig,
   runtime?: GenAiRuntimeLike,
   onConfigReload?: (nextConfig: GatewayConfig) => void,
 ): string => {
-  if (config.adminToken) return config.adminToken;
   const settings = readAdminFileStoreSettings(config);
-  const existingSessionToken = typeof settings.adminSessionToken === 'string'
-    ? settings.adminSessionToken.trim()
+  const existingSessionToken = readPersistedAdminSessionToken(config);
+  const persistedStaticToken = typeof settings.adminToken === 'string'
+    ? settings.adminToken.trim()
     : '';
-  if (existingSessionToken) {
+  const configToken = typeof config.adminToken === 'string' ? config.adminToken.trim() : '';
+  const isPersistedSessionActive = existingSessionToken
+    && configToken
+    && configToken === existingSessionToken
+    && configToken !== persistedStaticToken;
+
+  if (configToken && !isPersistedSessionActive) {
+    return configToken;
+  }
+  if (existingSessionToken && isFreshAdminSessionToken(settings.adminSessionTokenCreatedAt)) {
     activateAdminToken(config, existingSessionToken, runtime, onConfigReload);
     return existingSessionToken;
   }
-  if (!canBootstrapAdminToken(config)) {
+  if (existingSessionToken) {
+    clearPersistedAdminSessionToken(config);
+    if (isPersistedSessionActive) {
+      activateNullableAdminToken(config, persistedStaticToken || null, runtime, onConfigReload);
+    }
+  }
+  const canIssueSessionToken = config.adminStoreMode === 'file-store'
+    && config.adminAllowMutations
+    && Boolean(config.adminFileStoreDir);
+  if (!canIssueSessionToken) {
     throw new GatewayError(409, 'VALIDATION_FAILED', 'Admin session token bootstrap is not available.');
   }
   const adminSessionToken = createAdminSessionToken();
-  persistAdminFileStoreSettings(config, { adminSessionToken });
+  persistAdminFileStoreSettings(config, {
+    adminSessionToken,
+    adminSessionTokenCreatedAt: new Date().toISOString(),
+  });
   activateAdminToken(config, adminSessionToken, runtime, onConfigReload);
   return adminSessionToken;
 };
@@ -149,9 +219,15 @@ const findCredentialOrThrow = <T extends { id: string }>(
 // Never expose the raw express-mode API key in admin responses. Mirror how
 // service-account private keys are withheld (only client_email surfaces); expose
 // a boolean presence flag so the UI can still show that express mode is active.
-const redactApiKey = <T extends { apiKey?: string | null }>(entry: T): Omit<T, 'apiKey'> & { hasApiKey: boolean } => {
-  const { apiKey: _apiKey, ...rest } = entry;
-  return { ...rest, hasApiKey: Boolean(_apiKey) };
+const redactCredentialForAdmin = <T extends { apiKey?: string | null; credentialsFile?: string | null }>(
+  entry: T,
+): Omit<T, 'apiKey' | 'credentialsFile'> & { credentialsFile: null; hasApiKey: boolean } => {
+  const { apiKey: _apiKey, credentialsFile: _credentialsFile, ...rest } = entry;
+  return {
+    ...rest,
+    credentialsFile: null,
+    hasApiKey: Boolean(_apiKey),
+  };
 };
 
 const withRuntimeHealth = (
@@ -163,7 +239,7 @@ const withRuntimeHealth = (
   );
   return {
     ...snapshot,
-    vertexPools: snapshot.vertexPools.map((entry) => redactApiKey({
+    vertexPools: snapshot.vertexPools.map((entry) => redactCredentialForAdmin({
       ...entry,
       ...(healthById.get(entry.id) ? { health: healthById.get(entry.id) } : {}),
     })),
@@ -203,9 +279,14 @@ export const maybeHandleAdminRoute = async (
   runtime?: GenAiRuntimeLike,
   onConfigReload?: (nextConfig: GatewayConfig) => void,
 ): Promise<boolean> => {
+  const rawPathname = (req.url ?? '/').split('?', 1)[0] || '/';
   const normalizedPathname = url.pathname === '/' ? '/' : (url.pathname.replace(/\/+$/, '') || '/');
-  if (!normalizedPathname.startsWith('/admin')) {
+  if (!normalizedPathname.startsWith('/admin') && !rawPathname.startsWith('/admin')) {
     return false;
+  }
+
+  if (req.method === 'GET' && serveAdminAsset(rawPathname, res)) {
+    return true;
   }
 
   if (req.method === 'OPTIONS') {
@@ -217,7 +298,8 @@ export const maybeHandleAdminRoute = async (
   if (req.method === 'GET' && normalizedPathname === '/admin') {
     res.statusCode = 200;
     res.setHeader('content-type', 'text/html; charset=utf-8');
-    res.end(renderAdminUi());
+    res.setHeader('cache-control', 'no-store');
+    res.end(await renderAdminSpa());
     return true;
   }
 
@@ -253,10 +335,13 @@ export const maybeHandleAdminRoute = async (
     const body = await parseJsonBody(req, config.maxJsonBytes);
     const username = typeof body.username === 'string' ? body.username.trim() : '';
     const password = typeof body.password === 'string' ? body.password : '';
+    assertAdminLoginAllowed(config, req, username);
     const login = await verifyAdminPasswordLogin(config, username, password);
     if (!login) {
+      recordAdminLoginFailure(config, req, username);
       throw new GatewayError(401, 'AUTH_INVALID', 'Admin login failed.');
     }
+    clearAdminLoginFailures(config, req, username);
     const token = ensureAdminSessionToken(config, runtime, onConfigReload);
     sendJson(res, 200, {
       ok: true,
@@ -268,6 +353,22 @@ export const maybeHandleAdminRoute = async (
   }
 
   requireAdminAuth(req.headers, config);
+
+  if (req.method === 'POST' && normalizedPathname === '/admin/api/auth/logout') {
+    const settings = readAdminFileStoreSettings(config);
+    const sessionToken = typeof settings.adminSessionToken === 'string'
+      ? settings.adminSessionToken.trim()
+      : '';
+    if (config.adminToken && sessionToken && config.adminToken === sessionToken) {
+      persistAdminFileStoreSettings(config, {
+        adminSessionToken: null,
+        adminSessionTokenCreatedAt: null,
+      });
+      activateNullableAdminToken(config, null, runtime, onConfigReload);
+    }
+    sendJson(res, 200, { ok: true });
+    return true;
+  }
 
   if (req.method === 'POST' && normalizedPathname === '/admin/api/auth/change-password') {
     assertPasswordStoreWritable(config);
@@ -295,7 +396,10 @@ export const maybeHandleAdminRoute = async (
       adminUsername: username,
       adminPasswordHash: await hashAdminPassword(newPassword),
       adminPasswordChangedAt: new Date().toISOString(),
-      ...(shouldRotateSessionToken ? { adminSessionToken: nextToken } : {}),
+      ...(shouldRotateSessionToken ? {
+        adminSessionToken: nextToken,
+        adminSessionTokenCreatedAt: new Date().toISOString(),
+      } : {}),
     });
     if (nextToken && nextToken !== config.adminToken) {
       activateAdminToken(config, nextToken, runtime, onConfigReload);
@@ -435,7 +539,10 @@ export const maybeHandleAdminRoute = async (
     if (!provider) {
       throw new GatewayError(400, 'VALIDATION_FAILED', 'provider query param is required.');
     }
-    sendJson(res, 200, getProviderModelCatalog(credentialStore.getSnapshot().modelCatalog, provider));
+    sendJson(res, 200, {
+      ...getProviderModelCatalog(credentialStore.getSnapshot().modelCatalog, provider),
+      builtInModels: getProviderBuiltInModels(provider),
+    });
     return true;
   }
 
@@ -443,15 +550,25 @@ export const maybeHandleAdminRoute = async (
   if (modelMatch && req.method === 'PUT') {
     const provider = decodeURIComponent(modelMatch[1]);
     const body = await parseJsonBody(req, config.maxJsonBytes);
+    let aliases: Record<string, string> = {};
+    if (body.aliases !== undefined) {
+      if (!body.aliases || typeof body.aliases !== 'object' || Array.isArray(body.aliases)) {
+        throw new GatewayError(400, 'VALIDATION_FAILED', 'Invalid aliases JSON');
+      }
+      for (const [alias, value] of Object.entries(body.aliases)) {
+        if (typeof value !== 'string') {
+          throw new GatewayError(400, 'VALIDATION_FAILED', 'Invalid aliases JSON');
+        }
+        aliases[alias] = value;
+      }
+    }
     const snapshot = credentialStore.updateVertexPools((state) => ({
       ...state,
       modelCatalog: {
         ...state.modelCatalog,
         [provider]: {
           ...(typeof body.defaultModel === 'string' ? { defaultModel: body.defaultModel } : {}),
-          aliases: body.aliases && typeof body.aliases === 'object' && !Array.isArray(body.aliases)
-            ? Object.fromEntries(Object.entries(body.aliases).filter(([, value]) => typeof value === 'string'))
-            : {},
+          aliases,
           allowlist: Array.isArray(body.allowlist)
             ? body.allowlist.filter((value): value is string => typeof value === 'string')
             : [],

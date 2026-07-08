@@ -1,5 +1,7 @@
 # Resilience & Error Handling Implementation Plan
 
+> Status note: this is a historical implementation plan. Review comments and proposed changes within should be re-validated against the current codebase before reuse.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Harden the gateway's retry/failover/error pipeline — fix SSE framing, OpenAI error mapping, jitter math, resource leaks, stale config, and cross-platform deps.
