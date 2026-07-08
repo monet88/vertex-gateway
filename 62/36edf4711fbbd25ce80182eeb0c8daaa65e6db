@@ -1,0 +1,25 @@
+frontend/src/data/admin-static.ts
+  s_dc99d2ddddbb95::t_740a3efeda56de 15
+frontend/src/pages/AuthFilesView.tsx
+  s_dc99d2ddddbb95::t_2af5ba371ec472 4-5,24,62-63,65-73,80-96,100
+frontend/src/pages/Dashboard.tsx
+  s_dc99d2ddddbb95::t_585942ae12c7a6 21-23,26-27,67,71
+test/admin-frontend-helpers.test.ts
+  s_dc99d2ddddbb95::t_70fa2617030049 18-24,68-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6236edf4711fbbd25ce80182eeb0c8daaa65e6db",
+  "prompts": {},
+  "sessions": {
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
