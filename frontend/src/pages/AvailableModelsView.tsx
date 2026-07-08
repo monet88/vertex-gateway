@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AdminError, TableSkeleton } from '@/components/console/AdminState';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { fetchModelCatalog } from '@/lib/admin-dashboard-api';
-import type { ProviderModelCatalog } from '@/types/admin';
+import { fetchModelCatalog, type AdminProviderModelCatalog } from '@/lib/admin-dashboard-api';
+import { buildAvailableModelRows } from '@/pages/available-models-data';
 
 const PROVIDERS = ['gemini', 'openai'] as const;
 
@@ -11,41 +11,8 @@ interface AvailableModelsViewProps {
   readonly token: string;
 }
 
-interface CatalogModelRow {
-  readonly provider: string;
-  readonly model: string;
-  readonly status: 'allowed' | 'disabled';
-  readonly aliases: readonly string[];
-  readonly isDefault: boolean;
-}
-
-const buildRows = (provider: string, catalog: ProviderModelCatalog): CatalogModelRow[] => {
-  const statuses = new Map<string, 'allowed' | 'disabled'>();
-  for (const model of catalog.allowlist ?? []) statuses.set(model, 'allowed');
-  for (const model of catalog.defaultModel ? [catalog.defaultModel] : []) {
-    if (!statuses.has(model)) statuses.set(model, 'allowed');
-  }
-  for (const model of Object.values(catalog.aliases ?? {})) {
-    if (!statuses.has(model)) statuses.set(model, 'allowed');
-  }
-  for (const model of catalog.disabled ?? []) statuses.set(model, 'disabled');
-
-  return Array.from(statuses.entries())
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([model, status]) => ({
-      provider,
-      model,
-      status,
-      aliases: Object.entries(catalog.aliases ?? {})
-        .filter(([, target]) => target === model)
-        .map(([alias]) => alias)
-        .sort(),
-      isDefault: catalog.defaultModel === model,
-    }));
-};
-
 export function AvailableModelsView({ token }: AvailableModelsViewProps) {
-  const [catalogs, setCatalogs] = useState<Record<string, ProviderModelCatalog>>({});
+  const [catalogs, setCatalogs] = useState<Record<string, AdminProviderModelCatalog>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,7 +34,7 @@ export function AvailableModelsView({ token }: AvailableModelsViewProps) {
   useEffect(() => { void load(); }, [load]);
 
   const rows = useMemo(
-    () => PROVIDERS.flatMap((provider) => buildRows(provider, catalogs[provider] ?? { aliases: {}, allowlist: [], disabled: [] })),
+    () => PROVIDERS.flatMap((provider) => buildAvailableModelRows(provider, catalogs[provider] ?? { aliases: {}, allowlist: [], disabled: [] })),
     [catalogs],
   );
 

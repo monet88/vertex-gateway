@@ -10,6 +10,7 @@ interface AdminLoginRateLimiterOptions {
   readonly now?: () => number;
   readonly windowMs: number;
   readonly maxFailures: number;
+  readonly cleanupIntervalMs?: number;
 }
 
 const loginRateLimitKey = (req: Pick<IncomingMessage, 'socket'>, username: string): string =>
@@ -20,6 +21,7 @@ export interface AdminLoginRateLimiter {
   recordFailure: (req: Pick<IncomingMessage, 'socket'>, username: string) => void;
   clearFailures: (req: Pick<IncomingMessage, 'socket'>, username: string) => void;
   size: () => number;
+  dispose: () => void;
 }
 
 export const createAdminLoginRateLimiter = (
@@ -27,6 +29,7 @@ export const createAdminLoginRateLimiter = (
 ): AdminLoginRateLimiter => {
   const attempts = new Map<string, LoginAttemptState>();
   const now = options.now ?? Date.now;
+  const cleanupIntervalMs = options.cleanupIntervalMs ?? 5 * 60_000;
 
   const pruneExpired = (currentTime: number): void => {
     for (const [key, state] of attempts.entries()) {
@@ -64,10 +67,22 @@ export const createAdminLoginRateLimiter = (
     attempts.delete(loginRateLimitKey(req, username));
   };
 
+  const cleanupTimer = cleanupIntervalMs > 0
+    ? setInterval(() => {
+        pruneExpired(now());
+      }, cleanupIntervalMs)
+    : null;
+  cleanupTimer?.unref?.();
+
   return {
     assertAllowed,
     recordFailure,
     clearFailures,
     size: () => attempts.size,
+    dispose: () => {
+      if (cleanupTimer) {
+        clearInterval(cleanupTimer);
+      }
+    },
   };
 };

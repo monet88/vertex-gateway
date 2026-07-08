@@ -1,7 +1,12 @@
 export function parseModelCatalogAliases(aliasesJson: string): Record<string, string> {
+  const trimmed = aliasesJson.trim();
+  if (!trimmed) {
+    return {};
+  }
+
   let parsed: unknown;
   try {
-    parsed = JSON.parse(aliasesJson) as unknown;
+    parsed = JSON.parse(trimmed) as unknown;
   } catch {
     throw new Error('Invalid aliases JSON');
   }

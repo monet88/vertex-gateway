@@ -505,6 +505,30 @@ describe('admin routes', () => {
     expect(limiter.size()).toBe(1);
   });
 
+  it('periodically prunes expired admin login failures even without new login attempts', async () => {
+    vi.useFakeTimers();
+    const { createAdminLoginRateLimiter } = await import('../src/admin/admin-login-rate-limit.js');
+    let currentTime = 0;
+    const limiter = createAdminLoginRateLimiter({
+      now: () => currentTime,
+      windowMs: 60_000,
+      maxFailures: 5,
+      cleanupIntervalMs: 5_000,
+    });
+    const req = { socket: { remoteAddress: '127.0.0.1' } } as Pick<Parameters<typeof limiter.assertAllowed>[0], 'socket'>;
+
+    limiter.recordFailure(req, 'stale-user-1');
+    limiter.recordFailure(req, 'stale-user-2');
+    expect(limiter.size()).toBe(2);
+
+    currentTime = 61_000;
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(limiter.size()).toBe(0);
+    limiter.dispose?.();
+    vi.useRealTimers();
+  });
+
   it('accepts trailing slashes on admin API routes', async () => {
     server = createApp({
       config: testConfig({
@@ -682,6 +706,8 @@ describe('admin routes', () => {
     });
     const modelGetBody = await modelGet.json();
     expect(modelGetBody.defaultModel).toBe('gemini-2.5-flash');
+    expect(modelGetBody.builtInModels).toContain('gemini-3.5-flash');
+    expect(modelGetBody.aliases.fast).toBe('gemini-2.5-flash');
 
     const reload = await fetch(`${baseUrl}/admin/api/runtime/reload`, {
       method: 'POST',

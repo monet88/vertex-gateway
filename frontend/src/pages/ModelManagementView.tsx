@@ -5,6 +5,7 @@ import { fetchModelCatalog, saveModelCatalog } from '@/lib/admin-dashboard-api';
 import type { ProviderModelCatalog } from '@/types/admin';
 
 const PROVIDERS = ['gemini', 'openai'] as const;
+const EMPTY_CATALOG: ProviderModelCatalog = { aliases: {}, allowlist: [], disabled: [] };
 
 interface ModelManagementViewProps {
   readonly token: string;
@@ -60,7 +61,7 @@ export function ModelManagementView({ token }: ModelManagementViewProps) {
           <ModelCatalogEditor
             key={provider}
             provider={provider}
-            catalog={catalogs[provider] ?? { aliases: {}, allowlist: [], disabled: [] }}
+            catalog={catalogs[provider] ?? EMPTY_CATALOG}
             onSave={(catalog) => handleSave(provider, catalog)}
           />
         ))

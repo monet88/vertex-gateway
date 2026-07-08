@@ -17,6 +17,10 @@ const BUILT_IN_PROVIDER_MODELS: Record<string, string[]> = {
   ],
 };
 
+export const getProviderBuiltInModels = (provider: string): string[] => [
+  ...(BUILT_IN_PROVIDER_MODELS[provider] ?? []),
+];
+
 export const getProviderModelCatalog = (
   modelCatalog: Record<string, ProviderModelCatalog>,
   provider: string,
@@ -65,7 +69,7 @@ export const listProviderRouteModels = (
 ): Array<{ name: string }> => {
   const catalog = getProviderModelCatalog(modelCatalog, provider);
   const names = [
-    ...(BUILT_IN_PROVIDER_MODELS[provider] ?? []),
+    ...getProviderBuiltInModels(provider),
     ...(catalog.defaultModel ? [catalog.defaultModel] : []),
     ...catalog.allowlist,
     ...Object.keys(catalog.aliases),

@@ -19,7 +19,7 @@ import {
   type AdminVertexCredentialRecord,
 } from './credential-store.js';
 import type { GenAiTargetHealth } from '../lib/genai-pool.js';
-import { getProviderModelCatalog } from './model-store.js';
+import { getProviderBuiltInModels, getProviderModelCatalog } from './model-store.js';
 import { createGatewayKeyStore, verifyManagedGatewayKey } from './gateway-key-store.js';
 import {
   canBootstrapAdminToken,
@@ -513,7 +513,10 @@ export const maybeHandleAdminRoute = async (
     if (!provider) {
       throw new GatewayError(400, 'VALIDATION_FAILED', 'provider query param is required.');
     }
-    sendJson(res, 200, getProviderModelCatalog(credentialStore.getSnapshot().modelCatalog, provider));
+    sendJson(res, 200, {
+      ...getProviderModelCatalog(credentialStore.getSnapshot().modelCatalog, provider),
+      builtInModels: getProviderBuiltInModels(provider),
+    });
     return true;
   }
 

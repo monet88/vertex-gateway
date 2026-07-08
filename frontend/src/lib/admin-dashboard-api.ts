@@ -1,6 +1,10 @@
 import { adminFetch, type AdminApiOptions } from './admin-api';
 import type { GatewayKeyRow, ProviderModelCatalog, RuntimeHealthSummary, VertexTargetRow } from '@/types/admin';
 
+export interface AdminProviderModelCatalog extends ProviderModelCatalog {
+  readonly builtInModels?: readonly string[];
+}
+
 export interface AdminGatewayKeyRecord extends GatewayKeyRow {
   readonly revokedAt?: string;
 }
@@ -173,8 +177,8 @@ export async function testVertexCredential(options: AdminApiOptions, id: string)
   return adminFetch<{ ok: true; id: string; response: unknown }>(`/admin/api/vertex-credentials/${encodeURIComponent(id)}/test`, options, { method: 'POST' });
 }
 
-export async function fetchModelCatalog(options: AdminApiOptions, provider = 'gemini'): Promise<ProviderModelCatalog> {
-  return adminFetch<ProviderModelCatalog>(`/admin/api/models?provider=${encodeURIComponent(provider)}`, options);
+export async function fetchModelCatalog(options: AdminApiOptions, provider = 'gemini'): Promise<AdminProviderModelCatalog> {
+  return adminFetch<AdminProviderModelCatalog>(`/admin/api/models?provider=${encodeURIComponent(provider)}`, options);
 }
 
 export async function saveModelCatalog(options: AdminApiOptions, provider: string, catalog: ProviderModelCatalog): Promise<ProviderModelCatalog> {

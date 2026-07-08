@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { logoutAdminSession } from '../frontend/src/pages/admin-session.js';
 import { parseModelCatalogAliases } from '../frontend/src/components/console/model-catalog-form.js';
+import { buildAvailableModelRows } from '../frontend/src/pages/available-models-data.js';
 
 describe('admin frontend helpers', () => {
   it('clears local auth before awaiting remote logout', async () => {
@@ -55,5 +56,35 @@ describe('admin frontend helpers', () => {
     expect(parseModelCatalogAliases('{"fast":"gemini-3.5-flash"}')).toEqual({
       fast: 'gemini-3.5-flash',
     });
+  });
+
+  it('treats empty aliases json as an empty object', () => {
+    expect(parseModelCatalogAliases('')).toEqual({});
+    expect(parseModelCatalogAliases('   ')).toEqual({});
+  });
+
+  it('builds available model rows from built-ins plus catalog rules', () => {
+    expect(buildAvailableModelRows('gemini', {
+      builtInModels: ['gemini-3.5-flash', 'gemini-2.5-pro'],
+      defaultModel: 'gemini-3.5-flash',
+      aliases: { fast: 'gemini-3.5-flash' },
+      allowlist: [],
+      disabled: ['gemini-2.5-pro'],
+    })).toEqual([
+      {
+        provider: 'gemini',
+        model: 'gemini-2.5-pro',
+        status: 'disabled',
+        aliases: [],
+        isDefault: false,
+      },
+      {
+        provider: 'gemini',
+        model: 'gemini-3.5-flash',
+        status: 'allowed',
+        aliases: ['fast'],
+        isDefault: true,
+      },
+    ]);
   });
 });

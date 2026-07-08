@@ -133,12 +133,13 @@ when browser access should be restricted to specific domains.
 
 ## Admin API
 
-The admin dashboard is always available at `/admin`; authenticated APIs live at
-`/admin/api/*`. File-store admin login defaults to username `admin` and password
-`changeme`; the dashboard requires changing that default password before loading
-management data. Supports credential import, pool health, model catalog
-management, and hot-reload. File-store mode for persistence is for Docker/VPS
-only; Cloud Run rejects file-store mutations.
+The admin dashboard is available at `/admin` after the frontend SPA has been
+built; authenticated APIs live at `/admin/api/*`. File-store admin login
+defaults to username `admin` and password `changeme`; the dashboard requires
+changing that default password before loading management data. Supports
+credential import, pool health, model catalog management, and hot-reload.
+File-store mode for persistence is for Docker/VPS only; Cloud Run rejects
+file-store mutations.
 
 ## Models
 
@@ -152,7 +153,7 @@ Full list, aliases, and 404s: [docs/model-list.md](docs/model-list.md).
 ```bash
 npm run dev       # tsx dev server
 npm run test      # vitest
-npm run compile   # tsc → compiled/
+npm run compile   # tsc → compiled/ and builds frontend/dist for /admin
 npm start         # node compiled/server.js
 ```
 
