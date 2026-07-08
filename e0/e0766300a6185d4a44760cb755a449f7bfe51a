@@ -1,0 +1,39 @@
+Dockerfile
+  s_350e22a90b4abf::t_453d1c5d120135 4
+src/admin/admin-login-rate-limit.ts
+  s_aef3267f315afe::t_e5a3853666f99a 16-17,45,57,67
+src/admin/admin-session.ts
+  s_f1dd3b40a3b257::t_073d19e7b821d4 9-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e0e0766300a6185d4a44760cb755a449f7bfe51a",
+  "prompts": {},
+  "sessions": {
+    "s_350e22a90b4abf": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3cda-f822-7e6b-972a-a5b228bbd978",
+        "model": "gpt-5.4"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_aef3267f315afe": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3d0a-3686-7537-8847-b9897b4c8c2a",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_f1dd3b40a3b257": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3d39-c521-7c3a-b444-0c0ad13c415e",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
