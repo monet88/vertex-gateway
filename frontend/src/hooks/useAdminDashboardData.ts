@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { GatewayKeyRow, VertexTargetRow } from '@/data/mockData';
+import type { GatewayKeyRow, RuntimeHealthSummary, VertexTargetRow } from '@/types/admin';
 import {
   createGatewayKey,
   createVertexTarget,
+  fetchAdminHealth,
   fetchGatewayKeys,
   fetchVertexTargets,
   importServiceAccountTarget,
+  reloadRuntime,
   revokeGatewayKey,
   type ServiceAccountTargetDraftPayload,
   type VertexTargetDraftPayload,
@@ -14,6 +16,7 @@ import {
 interface AdminDashboardState {
   readonly gatewayKeys: readonly GatewayKeyRow[];
   readonly vertexTargets: readonly VertexTargetRow[];
+  readonly health: RuntimeHealthSummary | null;
   readonly loading: boolean;
   readonly error: string | null;
   readonly mutable: boolean;
@@ -26,28 +29,40 @@ export function useAdminDashboardData(token: string) {
   const [state, setState] = useState<AdminDashboardState>({
     gatewayKeys: [],
     vertexTargets: [],
+    health: null,
     loading: false,
     error: null,
     mutable: false,
   });
   const refreshSequence = useRef(0);
+  const tokenRef = useRef(token);
   const options = useMemo(() => ({ token }), [token]);
+
+  useEffect(() => {
+    tokenRef.current = token;
+    refreshSequence.current += 1;
+  }, [token]);
 
   const refresh = useCallback(async () => {
     const sequence = refreshSequence.current + 1;
     refreshSequence.current = sequence;
     if (!token) {
-      setState((current) => ({ ...current, gatewayKeys: [], vertexTargets: [], loading: false, error: null, mutable: false }));
+      setState((current) => ({ ...current, gatewayKeys: [], vertexTargets: [], health: null, loading: false, error: null, mutable: false }));
       return;
     }
     setState((current) => ({ ...current, loading: true, error: null }));
     try {
-      const [keysResponse, targets] = await Promise.all([fetchGatewayKeys(options), fetchVertexTargets(options)]);
+      const [keysResponse, targets, health] = await Promise.all([
+        fetchGatewayKeys(options),
+        fetchVertexTargets(options),
+        fetchAdminHealth(options),
+      ]);
       if (refreshSequence.current !== sequence) return;
       setState((current) => ({
         ...current,
         gatewayKeys: keysResponse.gatewayKeys,
         vertexTargets: targets,
+        health,
         mutable: keysResponse.mutable,
         loading: false,
       }));
@@ -79,7 +94,7 @@ export function useAdminDashboardData(token: string) {
     }
   }, [options, refresh]);
 
-  const createTarget = useCallback(async (draft: VertexTargetDraftPayload) => {
+  const addTarget = useCallback(async (draft: VertexTargetDraftPayload) => {
     try {
       await createVertexTarget(options, draft);
       await refresh();
@@ -89,7 +104,7 @@ export function useAdminDashboardData(token: string) {
     }
   }, [options, refresh]);
 
-  const importServiceAccount = useCallback(async (draft: ServiceAccountTargetDraftPayload) => {
+  const importTarget = useCallback(async (draft: ServiceAccountTargetDraftPayload) => {
     try {
       await importServiceAccountTarget(options, draft);
       await refresh();
@@ -99,12 +114,30 @@ export function useAdminDashboardData(token: string) {
     }
   }, [options, refresh]);
 
+  const reload = useCallback(async () => {
+    if (!token) return;
+    const sequence = refreshSequence.current + 1;
+    const tokenAtStart = token;
+    refreshSequence.current = sequence;
+    try {
+      const health = await reloadRuntime(options);
+      if (refreshSequence.current !== sequence || tokenRef.current !== tokenAtStart) return;
+      setState((current) => ({ ...current, health }));
+      await refresh();
+    } catch (error) {
+      if (refreshSequence.current !== sequence || tokenRef.current !== tokenAtStart) return;
+      setState((current) => ({ ...current, error: errorMessage(error, 'Failed to reload runtime') }));
+    }
+  }, [options, refresh, token]);
+
   return {
     ...state,
     refresh,
+    refetch: refresh,
     createKey,
     revokeKey,
-    createTarget,
-    importServiceAccount,
+    addTarget,
+    importTarget,
+    reload,
   };
 }

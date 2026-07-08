@@ -13,6 +13,7 @@ export type GatewayErrorCode =
   | 'UPSTREAM_QUOTA'
   | 'UPSTREAM_UNAVAILABLE'
   | 'IMAGE_NOT_RETURNED'
+  | 'ADMIN_UI_NOT_BUILT'
   | 'INTERNAL';
 
 export type ErrorFormat = 'gateway' | 'openai';

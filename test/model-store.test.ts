@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { listProviderRouteModels } from '../src/admin/model-store.js';
+import { getProviderBuiltInModels, listProviderRouteModels } from '../src/admin/model-store.js';
 
 describe('model store route listing', () => {
   it('builds discoverable provider models from built-ins and catalog rules', () => {
@@ -19,5 +19,10 @@ describe('model store route listing', () => {
       { name: 'gemini-2.5-flash' },
       { name: 'fast' },
     ]);
+  });
+
+  it('returns provider built-in models for admin inventory consumers', () => {
+    expect(getProviderBuiltInModels('gemini')).toContain('gemini-3.5-flash');
+    expect(getProviderBuiltInModels('openai')).toEqual([]);
   });
 });

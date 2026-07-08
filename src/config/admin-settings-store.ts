@@ -8,6 +8,7 @@ const SETTINGS_FILE = "admin-settings.json";
 export interface AdminFileStoreSettings {
   adminToken?: string | null;
   adminSessionToken?: string | null;
+  adminSessionTokenCreatedAt?: string | null;
   adminUsername?: string | null;
   adminPasswordHash?: string | null;
   adminPasswordChangedAt?: string | null;

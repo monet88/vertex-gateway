@@ -1,7 +1,7 @@
-import { Dashboard } from './pages/Dashboard';
+import { AdminApp } from './pages/AdminApp';
 
 function App() {
-  return <Dashboard />;
+  return <AdminApp />;
 }
 
 export default App;

@@ -3,6 +3,18 @@ export interface AdminApiOptions {
   readonly baseUrl?: string;
 }
 
+const parseAdminError = async (response: Response): Promise<string> => {
+  const text = await response.text().catch(() => '');
+  if (!text) return `${response.status} ${response.statusText}`.trim();
+  try {
+    const body = JSON.parse(text) as { error?: { code?: string; message?: string } };
+    const code = body.error?.code ? `${body.error.code}: ` : '';
+    return `${response.status} ${code}${body.error?.message ?? response.statusText}`.trim();
+  } catch {
+    return `${response.status} ${response.statusText} ${text}`.trim();
+  }
+};
+
 export async function adminFetch<T>(path: string, options: AdminApiOptions, init: RequestInit = {}): Promise<T> {
   const headers = new Headers({
     'content-type': 'application/json',
@@ -16,9 +28,7 @@ export async function adminFetch<T>(path: string, options: AdminApiOptions, init
   });
 
   if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    const detail = body ? ` ${body}` : '';
-    throw new Error(`Admin API failed: ${response.status} ${response.statusText}${detail}`.trimEnd());
+    throw new Error(`Admin API failed: ${await parseAdminError(response)}`);
   }
 
   const text = await response.text();

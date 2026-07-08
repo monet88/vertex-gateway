@@ -2,10 +2,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useSortableTable } from '@/hooks/useSortableTable';
-import type { VertexTargetRow } from '@/data/mockData';
+import type { VertexTargetRow } from '@/types/admin';
+import type { VertexTargetPatchPayload } from '@/lib/admin-dashboard-api';
 
 export interface VertexTargetsTableProps {
   readonly rows: readonly VertexTargetRow[];
+  readonly onTest?: (id: string) => Promise<void>;
+  readonly onDelete?: (id: string) => Promise<void>;
+  readonly onUpdate?: (id: string, patch: VertexTargetPatchPayload) => Promise<void>;
+  readonly pendingIds?: ReadonlySet<string>;
 }
 
 const columns: Array<{ key: keyof VertexTargetRow; label: string }> = [
@@ -25,8 +30,12 @@ const getHealthColor = (health: string) => {
   return 'bg-gray-500 hover:bg-gray-600';
 };
 
-export function VertexTargetsTable({ rows }: VertexTargetsTableProps) {
+const hasActions = (props: VertexTargetsTableProps) => Boolean(props.onTest || props.onDelete || props.onUpdate);
+
+export function VertexTargetsTable(props: VertexTargetsTableProps) {
+  const { rows, onTest, onDelete, onUpdate, pendingIds } = props;
   const { sortKey, direction, handleSort, ariaSort, sortedRows } = useSortableTable(rows, 'label', 'asc');
+  const showActions = hasActions(props);
 
   return (
     <div className="rounded-md border">
@@ -45,6 +54,7 @@ export function VertexTargetsTable({ rows }: VertexTargetsTableProps) {
                 </Button>
               </TableHead>
             ))}
+            {showActions && <TableHead>Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -59,11 +69,48 @@ export function VertexTargetsTable({ rows }: VertexTargetsTableProps) {
                 <TableCell>
                   <Badge className={getHealthColor(target.health)}>{target.health}</Badge>
                 </TableCell>
+                {showActions && (
+                  <TableCell>
+                    <div className="flex gap-1">
+                      {onTest && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={pendingIds?.has(target.id)}
+                          onClick={() => onTest(target.id)}
+                        >
+                          Test
+                        </Button>
+                      )}
+                      {onUpdate && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={pendingIds?.has(target.id)}
+                          onClick={() => onUpdate(target.id, { enabled: !target.enabled })}
+                        >
+                          {target.enabled ? 'Disable' : 'Enable'}
+                        </Button>
+                      )}
+                      {onDelete && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive"
+                          disabled={pendingIds?.has(target.id)}
+                          onClick={() => onDelete(target.id)}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                )}
               </TableRow>
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={6} className="h-24 text-center">
+              <TableCell colSpan={showActions ? 7 : 6} className="h-24 text-center">
                 No targets configured.
               </TableCell>
             </TableRow>

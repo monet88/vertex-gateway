@@ -12,7 +12,6 @@ import { readJsonIfExists, writeJsonAtomic } from '../lib/json-file-store.js';
 
 export interface AdminVertexCredentialRecord extends VertexPoolConfig {
   email?: string;
-  fileName?: string;
   sizeBytes?: number;
   modifiedAt?: string;
 }
@@ -73,7 +72,6 @@ const toRecord = (entry: VertexPoolConfig): AdminVertexCredentialRecord => {
   return {
     ...entry,
     ...(credential ? { email: credential.client_email } : {}),
-    ...(entry.credentialsFile ? { fileName: path.basename(entry.credentialsFile) } : {}),
     ...(fileStats ? { sizeBytes: fileStats.size, modifiedAt: fileStats.mtime.toISOString() } : {}),
   };
 };
