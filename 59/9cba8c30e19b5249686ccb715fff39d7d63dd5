@@ -1,0 +1,23 @@
+frontend/index.html
+  s_902fac117cbbb5::t_db24940315d0e3 7
+frontend/src/pages/AdminLoginScreen.tsx
+  s_902fac117cbbb5::t_667429cbd91c18 1,33-43,46-69,71,76,82,84,90,97,102,107,110,118-119,125
+test/admin-frontend-helpers.test.ts
+  s_902fac117cbbb5::t_8ae48d5a5ce05b 136-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "599cba8c30e19b5249686ccb715fff39d7d63dd5",
+  "prompts": {},
+  "sessions": {
+    "s_902fac117cbbb5": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "0686861a-f0c9-4588-91da-769db0d56e5a",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
