@@ -15,6 +15,13 @@ describe('admin frontend helpers', () => {
     expect(adminNavItems.find((item) => item.id === 'model-management')?.label).toBe('Model Policy');
   });
 
+  it('labels upstream credentials as the Agent Platform manager', () => {
+    const upstreamManager = adminNavItems.find((item) => item.id === 'auth-files');
+
+    expect(upstreamManager?.label).toBe('Agent Platform Manager');
+    expect(upstreamManager?.description).toBe('API keys and project account JSON');
+  });
+
   it('derives shell runtime badge from live health', async () => {
     const { getShellRuntimeBadge } = await import('../frontend/src/components/stitch/shell-runtime-badge.js');
 
@@ -56,6 +63,23 @@ describe('admin frontend helpers', () => {
 
     expect(dashboardSource).not.toContain('StitchSecurityRail');
     expect(dashboardSource).not.toContain('adminSecurityNotices');
+  });
+
+  it('uses Agent Platform Apikey naming instead of Vertex Targets on dashboard', () => {
+    const dashboardSource = readFileSync(new URL('../frontend/src/pages/Dashboard.tsx', import.meta.url), 'utf8');
+
+    expect(dashboardSource).toContain('Agent Platform Apikey');
+    expect(dashboardSource).not.toContain('Vertex Targets');
+  });
+
+  it('groups upstream credentials into API key and account JSON sections', () => {
+    const authFilesSource = readFileSync(new URL('../frontend/src/pages/AuthFilesView.tsx', import.meta.url), 'utf8');
+
+    expect(authFilesSource).toContain('Agent Platform Manager');
+    expect(authFilesSource).toContain('Agent Platform Apikey');
+    expect(authFilesSource).toContain('Project Account Json');
+    expect(authFilesSource).toContain('target.hasApiKey');
+    expect(authFilesSource).toContain("target.authType === 'Service Account JSON'");
   });
 
   it('clears local auth before awaiting remote logout', async () => {

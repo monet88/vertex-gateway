@@ -18,12 +18,13 @@ interface DashboardProps {
 
 export function Dashboard({ adminData }: DashboardProps) {
   const activeGatewayKeys = adminData.gatewayKeys.filter((key) => key.status === 'active').length;
-  const readyTargets = adminData.vertexTargets.filter((target) => target.health === 'ready').length;
-  const failedTargets = adminData.vertexTargets.filter((target) => target.health === 'failed').length;
+  const apiKeyTargets = adminData.vertexTargets.filter((target) => target.hasApiKey);
+  const readyApiKeyTargets = apiKeyTargets.filter((target) => target.health === 'ready').length;
+  const failedApiKeyTargets = apiKeyTargets.filter((target) => target.health === 'failed').length;
   const metrics = [
     { id: 'gateway-keys', label: 'Active Gateway Keys', value: String(activeGatewayKeys), icon: 'key', colorScheme: 'primary' as const },
-    { id: 'vertex-targets', label: 'Vertex Targets', value: String(adminData.vertexTargets.length), icon: 'dns', colorScheme: 'secondary' as const },
-    { id: 'ready-targets', label: 'Ready Targets', value: String(readyTargets), trendValue: failedTargets ? `${failedTargets} failed` : 'ready', colorScheme: failedTargets ? 'error' as const : 'tertiary' as const },
+    { id: 'agent-platform-apikey', label: 'Agent Platform Apikey', value: String(apiKeyTargets.length), icon: 'dns', colorScheme: 'secondary' as const },
+    { id: 'ready-apikey-targets', label: 'Ready Apikey', value: String(readyApiKeyTargets), trendValue: failedApiKeyTargets ? `${failedApiKeyTargets} failed` : 'ready', colorScheme: failedApiKeyTargets ? 'error' as const : 'tertiary' as const },
     { id: 'runtime-mode', label: 'Runtime Mode', value: adminData.health?.runtimeMode ?? 'unknown', colorScheme: 'secondary' as const },
   ];
 
@@ -63,11 +64,11 @@ export function Dashboard({ adminData }: DashboardProps) {
           )}
         </StitchPanel>
 
-        <StitchPanel title="Vertex Targets">
+        <StitchPanel title="Agent Platform Apikey">
           {adminData.loading ? (
             <TableSkeleton rows={3} columns={6} />
           ) : (
-            <VertexTargetsTable rows={adminData.vertexTargets} />
+            <VertexTargetsTable rows={apiKeyTargets} />
           )}
         </StitchPanel>
       </div>
