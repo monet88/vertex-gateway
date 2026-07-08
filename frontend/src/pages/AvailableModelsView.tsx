@@ -20,10 +20,24 @@ export function AvailableModelsView({ token }: AvailableModelsViewProps) {
     setLoading(true);
     setError(null);
     try {
-      const results = await Promise.all(
+      const settled = await Promise.allSettled(
         PROVIDERS.map(async (provider) => [provider, await fetchModelCatalog({ token }, provider)] as const),
       );
-      setCatalogs(Object.fromEntries(results));
+      const next: Record<string, AdminProviderModelCatalog> = {};
+      const errors: string[] = [];
+      for (const r of settled) {
+        if (r.status === 'fulfilled') {
+          const [provider, catalog] = r.value;
+          next[provider] = catalog;
+        } else {
+          const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+          errors.push(msg);
+        }
+      }
+      setCatalogs(next);
+      if (errors.length > 0) {
+        setError(`Partial load: ${errors.join('; ')}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load catalog');
     } finally {

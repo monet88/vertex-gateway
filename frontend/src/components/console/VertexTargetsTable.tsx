@@ -10,6 +10,7 @@ export interface VertexTargetsTableProps {
   readonly onTest?: (id: string) => Promise<void>;
   readonly onDelete?: (id: string) => Promise<void>;
   readonly onUpdate?: (id: string, patch: VertexTargetPatchPayload) => Promise<void>;
+  readonly pendingIds?: ReadonlySet<string>;
 }
 
 const columns: Array<{ key: keyof VertexTargetRow; label: string }> = [
@@ -32,7 +33,7 @@ const getHealthColor = (health: string) => {
 const hasActions = (props: VertexTargetsTableProps) => Boolean(props.onTest || props.onDelete || props.onUpdate);
 
 export function VertexTargetsTable(props: VertexTargetsTableProps) {
-  const { rows, onTest, onDelete, onUpdate } = props;
+  const { rows, onTest, onDelete, onUpdate, pendingIds } = props;
   const { sortKey, direction, handleSort, ariaSort, sortedRows } = useSortableTable(rows, 'label', 'asc');
   const showActions = hasActions(props);
 
@@ -71,18 +72,34 @@ export function VertexTargetsTable(props: VertexTargetsTableProps) {
                 {showActions && (
                   <TableCell>
                     <div className="flex gap-1">
-                      {onTest && <Button variant="ghost" size="sm" onClick={() => onTest(target.id)}>Test</Button>}
+                      {onTest && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={pendingIds?.has(target.id)}
+                          onClick={() => onTest(target.id)}
+                        >
+                          Test
+                        </Button>
+                      )}
                       {onUpdate && (
                         <Button
                           variant="ghost"
                           size="sm"
+                          disabled={pendingIds?.has(target.id)}
                           onClick={() => onUpdate(target.id, { enabled: !target.enabled })}
                         >
                           {target.enabled ? 'Disable' : 'Enable'}
                         </Button>
                       )}
                       {onDelete && (
-                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(target.id)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive"
+                          disabled={pendingIds?.has(target.id)}
+                          onClick={() => onDelete(target.id)}
+                        >
                           Delete
                         </Button>
                       )}

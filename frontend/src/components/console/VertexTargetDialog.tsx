@@ -71,7 +71,7 @@ export function VertexTargetDialog({ onCreate, disabled }: VertexTargetDialogPro
               <Input id="target-location" value={draft.location} onChange={(event) => patch({ location: event.target.value })} required disabled={pending} />
             </div>
           </div>
-          <SecretInput id="target-api-key" label="Google Cloud API key" value={draft.apiKey} onChange={(apiKey) => patch({ apiKey })} disabled={pending} />
+          <SecretInput id="target-api-key" label="Google Cloud API key" value={draft.apiKey} onChange={(apiKey) => patch({ apiKey })} disabled={pending} required />
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" disabled={pending}>{pending ? 'Đang tạo…' : 'Thêm target'}</Button>
         </form>

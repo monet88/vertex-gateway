@@ -16,37 +16,40 @@ interface AuthFilesViewProps {
 
 export function AuthFilesView({ adminData, token }: AuthFilesViewProps) {
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
   const saTargets = adminData.vertexTargets.filter((target) => target.authType === 'Service Account JSON');
 
-  const handleTest = async (id: string) => {
+  const withPending = async (id: string, fn: () => Promise<void>) => {
+    if (pendingIds.has(id)) return;
+    setPendingIds((prev) => new Set(prev).add(id));
     setActionError(null);
     try {
-      await testVertexCredential({ token }, id);
-      await adminData.refetch();
+      await fn();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Test failed');
+      setActionError(error instanceof Error ? error.message : 'Action failed');
+    } finally {
+      setPendingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
-  const handleDelete = async (id: string) => {
-    setActionError(null);
-    try {
-      await deleteVertexCredential({ token }, id);
-      await adminData.refetch();
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Delete failed');
-    }
-  };
+  const handleTest = (id: string) => withPending(id, async () => {
+    await testVertexCredential({ token }, id);
+    await adminData.refetch();
+  });
 
-  const handleUpdate = async (id: string, patch: VertexTargetPatchPayload) => {
-    setActionError(null);
-    try {
-      await updateVertexCredential({ token }, id, patch);
-      await adminData.refetch();
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Update failed');
-    }
-  };
+  const handleDelete = (id: string) => withPending(id, async () => {
+    await deleteVertexCredential({ token }, id);
+    await adminData.refetch();
+  });
+
+  const handleUpdate = (id: string, patch: VertexTargetPatchPayload) => withPending(id, async () => {
+    await updateVertexCredential({ token }, id, patch);
+    await adminData.refetch();
+  });
 
   return (
     <div className="space-y-8">

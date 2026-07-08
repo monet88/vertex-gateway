@@ -6,7 +6,9 @@ export const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 export const isFreshAdminSessionToken = (createdAt: string | null | undefined): boolean => {
   if (!createdAt) return false;
   const createdMs = Date.parse(createdAt);
-  return Number.isFinite(createdMs) && Date.now() - createdMs <= ADMIN_SESSION_TTL_MS;
+  if (!Number.isFinite(createdMs)) return false;
+  const age = Date.now() - createdMs;
+  return age >= 0 && age <= ADMIN_SESSION_TTL_MS;
 };
 
 export const readPersistedAdminSessionToken = (config: GatewayConfig): string => {

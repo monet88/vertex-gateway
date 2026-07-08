@@ -532,11 +532,13 @@ describe('admin routes', () => {
     limiter.recordFailure(req, 'stale-user-1');
     limiter.recordFailure(req, 'stale-user-2');
     limiter.recordFailure(req, 'stale-user-3');
-    expect(limiter.size()).toBe(1);
+    // Per-IP+username scoping: different usernames create separate buckets.
+    expect(limiter.size()).toBe(3);
 
     currentTime = 61_000;
     limiter.recordFailure(req, 'fresh-user');
 
+    // Stale per-user entries are pruned on the next write; only the fresh one remains.
     expect(limiter.size()).toBe(1);
   });
 
@@ -554,7 +556,8 @@ describe('admin routes', () => {
 
     limiter.recordFailure(req, 'stale-user-1');
     limiter.recordFailure(req, 'stale-user-2');
-    expect(limiter.size()).toBe(1);
+    // Per-IP+username scoping yields separate entries per username.
+    expect(limiter.size()).toBe(2);
 
     currentTime = 61_000;
     await vi.advanceTimersByTimeAsync(5_000);
@@ -564,7 +567,7 @@ describe('admin routes', () => {
     vi.useRealTimers();
   });
 
-  it('rate-limits repeated failures from one IP even when usernames rotate', async () => {
+  it('scopes rate limiting per IP+username so rotating usernames do not cross-lock other users', async () => {
     const { createAdminLoginRateLimiter } = await import('../src/admin/admin-login-rate-limit.js');
     const limiter = createAdminLoginRateLimiter({
       windowMs: 60_000,
@@ -573,11 +576,20 @@ describe('admin routes', () => {
     });
     const req = { socket: { remoteAddress: '127.0.0.1' } } as Pick<Parameters<typeof limiter.assertAllowed>[0], 'socket'>;
 
+    // Five different usernames → five independent buckets; no cross-user lockout.
     for (let attempt = 0; attempt < 5; attempt += 1) {
       limiter.recordFailure(req, `user-${attempt}`);
     }
 
-    expect(() => limiter.assertAllowed(req, 'fresh-username')).toThrow('Too many failed admin login attempts');
+    // A fresh username on the same IP is still allowed.
+    expect(() => limiter.assertAllowed(req, 'fresh-username')).not.toThrow();
+
+    // Same username repeated beyond threshold is rate limited.
+    const sameUser = 'same-user';
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      limiter.recordFailure(req, sameUser);
+    }
+    expect(() => limiter.assertAllowed(req, sameUser)).toThrow('Too many failed admin login attempts');
     limiter.dispose?.();
   });
 

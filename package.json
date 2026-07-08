@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "build:frontend": "npm --prefix frontend run build",
-    "compile": "node ./scripts/check-node-platform.mjs --package-root . && tsc -p tsconfig.json && npm run build:frontend",
+    "compile": "node ./scripts/check-node-platform.mjs --package-root . && tsc -p tsconfig.json && npm --prefix frontend ci && npm run build:frontend",
     "start": "node compiled/server.js",
     "test": "node ./scripts/check-node-platform.mjs --package-root . && vitest --run --config vitest.config.ts"
   },

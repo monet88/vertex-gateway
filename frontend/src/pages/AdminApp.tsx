@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { StitchConsoleShell } from '@/components/stitch/StitchConsoleShell';
 import { StitchSecurityRail } from '@/components/stitch/StitchSecurityRail';
 import { Button } from '@/components/ui/button';
@@ -57,7 +57,7 @@ export function AdminApp() {
   const dataToken = mustChangePassword ? '' : token;
   const adminData = useAdminDashboardData(dataToken);
 
-  const handleLogin = async (event: React.FormEvent) => {
+  const handleLogin = async (event: FormEvent) => {
     event.preventDefault();
     setAuthLoading(true);
     setAuthError(null);
@@ -75,7 +75,7 @@ export function AdminApp() {
     }
   };
 
-  const handleChangePassword = async (event: React.FormEvent) => {
+  const handleChangePassword = async (event: FormEvent) => {
     event.preventDefault();
     setAuthLoading(true);
     setAuthError(null);
