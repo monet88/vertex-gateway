@@ -141,6 +141,12 @@ credential import, pool health, model catalog management, and hot-reload.
 File-store mode for persistence is for Docker/VPS only; Cloud Run rejects
 file-store mutations.
 
+The admin UI is a Vite/React operator console built from `frontend/` into
+`frontend/dist` and served by the gateway process. All admin UI/UX, visual
+styling, layout, copy, accessibility, and interaction work must follow the root
+[DESIGN.md](DESIGN.md) design system; `frontend/src/index.css` encodes those
+tokens for the React components.
+
 ## Models
 
 Recommended: `gemini-3.5-flash` (text), `gemini-3.1-flash-image-preview`
