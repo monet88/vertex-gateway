@@ -1,0 +1,33 @@
+frontend/src/lib/admin-token-storage.ts
+  s_1cccc949b9f2c3::t_f4a2068665dbc4 3-6,19,23
+frontend/src/pages/AdminApp.tsx
+  s_dc99d2ddddbb95::t_a7f8cc7f9cc653 12,58,71,89,115-154,163
+test/admin-frontend-helpers.test.ts
+  s_dc99d2ddddbb95::t_e8ba53217ee6c2 125-135
+test/admin-token-storage.test.ts
+  s_1cccc949b9f2c3::t_d8e77a2361295c 37-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "76242898f60f01a99063254d9d9c6c25c9605077",
+  "prompts": {},
+  "sessions": {
+    "s_1cccc949b9f2c3": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "b2bb5785-cca1-4805-b0e5-afb34d13b686",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
