@@ -1,0 +1,66 @@
+frontend/src/lib/admin-dashboard-api.ts
+  s_350e22a90b4abf::t_9aabd3b13fedbc 2
+  s_dc99d2ddddbb95::t_f41cb1add86605 24,33,57-58,91-96,115,142,150,166-167,190-196
+frontend/src/components/console/GatewayKeysTable.tsx
+  s_dc99d2ddddbb95::t_7fc802e6212e81 11,28-33,36-39,50-71,104-106,108-118
+frontend/src/components/console/RuntimeBadges.tsx
+  s_dc99d2ddddbb95::t_d3bc33976529ca 13
+frontend/src/components/console/VertexTargetDialog.tsx
+  s_dc99d2ddddbb95::t_048363b2c603f6 6,8,15,20-22,26-29,41,50-51,62,65-66,83-93,95
+frontend/src/components/console/VertexTargetsTable.tsx
+  s_dc99d2ddddbb95::t_2d1092eafe9f9f 7,15-21,43-58,60,86-96,98-112,114-164
+frontend/src/components/stitch/StitchConsoleShell.tsx
+  s_dc99d2ddddbb95::t_845ca3ade9b8de 15,37,39
+frontend/src/data/admin-static.ts
+  s_dc99d2ddddbb95::t_22e61ea63a88a1 11
+frontend/src/hooks/useAdminDashboardData.ts
+  s_dc99d2ddddbb95::t_b48bac9419d7b0 6,98-106,149
+frontend/src/lib/admin-token-storage.ts
+  s_1cccc949b9f2c3::t_24836487b4bf34 1-26
+frontend/src/pages/AIProvidersView.tsx
+  s_dc99d2ddddbb95::t_428e14c103323e 8,14,17-19,28-29,32,34,37-59,62,86-95,101,121,126-138,147-148
+frontend/src/pages/Dashboard.tsx
+  s_dc99d2ddddbb95::t_55d5ab65e1b15b 23,48,53
+frontend/src/types/admin.ts
+  s_dc99d2ddddbb95::t_00143c4789ee3a 11-12,28-29,45
+src/admin/admin-routes.ts
+  s_dc99d2ddddbb95::t_8d64eb4b3df64e 264-265,455-461,466-478
+src/admin/credential-store.ts
+  s_dc99d2ddddbb95::t_65c1c4eebe3798 20,28,113,134,142,155,171,186,294-296,305
+test/admin-routes.test.ts
+  s_dc99d2ddddbb95::t_a1a143c5e8f17c 1013,1060-1073,1213-1361
+test/admin-token-storage.test.ts
+  s_1cccc949b9f2c3::t_41670f3494c188 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fdf5ff19d29ae9d7bfd3b998d86be8ee74493fb6",
+  "prompts": {},
+  "sessions": {
+    "s_1cccc949b9f2c3": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "b2bb5785-cca1-4805-b0e5-afb34d13b686",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_350e22a90b4abf": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3cda-f822-7e6b-972a-a5b228bbd978",
+        "model": "gpt-5.4"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
