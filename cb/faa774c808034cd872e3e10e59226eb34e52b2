@@ -1,0 +1,25 @@
+frontend/src/components/console/GatewayKeysTable.tsx
+  s_dc99d2ddddbb95::t_54473dab90505d 7,29,31-33,64,108-109
+frontend/src/hooks/useAdminDashboardData.ts
+  s_dc99d2ddddbb95::t_3a77b332a3b34a 3,65,82-85
+frontend/src/types/admin.ts
+  s_dc99d2ddddbb95::t_d2e68121313f69 19
+test/admin-frontend-helpers.test.ts
+  s_dc99d2ddddbb95::t_f9c3b293f72886 85-124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cbfaa774c808034cd872e3e10e59226eb34e52b2",
+  "prompts": {},
+  "sessions": {
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
