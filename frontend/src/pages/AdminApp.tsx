@@ -9,6 +9,7 @@ import { useAdminView } from '@/hooks/useAdminView';
 import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
 import { changeAdminPassword, loginAdmin, logoutAdmin } from '@/lib/admin-dashboard-api';
 import { securityNotices as adminSecurityNotices } from '@/data/admin-static';
+import { AdminLoginScreen } from '@/pages/AdminLoginScreen';
 import { Dashboard } from '@/pages/Dashboard';
 import { GatewayKeysView } from '@/pages/GatewayKeysView';
 import { AIProvidersView } from '@/pages/AIProvidersView';
@@ -54,6 +55,7 @@ export function AdminApp() {
   const [password, setPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [rememberSession, setRememberSession] = useState(true);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -66,7 +68,7 @@ export function AdminApp() {
     setAuthError(null);
     try {
       const response = await loginAdmin(username, password);
-      setToken(response.token);
+      setToken(response.token, { persist: rememberSession && !response.mustChangePassword });
       setPassword('');
       if (response.mustChangePassword) {
         setMustChangePassword(true);
@@ -84,7 +86,7 @@ export function AdminApp() {
     setAuthError(null);
     try {
       const response = await changeAdminPassword({ token }, currentPassword, newPassword);
-      setToken(response.token);
+      setToken(response.token, { persist: rememberSession });
       setCurrentPassword('');
       setNewPassword('');
       setMustChangePassword(false);
@@ -110,6 +112,46 @@ export function AdminApp() {
 
   const isAuthenticated = Boolean(token) && !mustChangePassword;
 
+  if (!isAuthenticated) {
+    if (mustChangePassword) {
+      return (
+        <main className="flex min-h-dvh items-center justify-center bg-background p-6 text-foreground">
+          <section className="w-full max-w-xl rounded-xl border border-border bg-card p-6">
+            <h1 className="mb-4 text-xl font-semibold tracking-tight text-foreground">Change Password Required</h1>
+            <form className="grid gap-4" onSubmit={handleChangePassword}>
+              <div>
+                <Label htmlFor="current-password">Current Password</Label>
+                <Input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+              </div>
+              <div>
+                <Label htmlFor="new-password">New Password</Label>
+                <Input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+              </div>
+              <Button type="submit" disabled={authLoading}>{authLoading ? 'Loading...' : 'Change Password'}</Button>
+            </form>
+            {authError && (
+              <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{authError}</p>
+            )}
+          </section>
+        </main>
+      );
+    }
+
+    return (
+      <AdminLoginScreen
+        username={username}
+        password={password}
+        authError={authError}
+        authLoading={authLoading}
+        rememberSession={rememberSession}
+        onUsernameChange={setUsername}
+        onPasswordChange={setPassword}
+        onRememberSessionChange={setRememberSession}
+        onSubmit={handleLogin}
+      />
+    );
+  }
+
   return (
     <StitchConsoleShell
       rail={<StitchSecurityRail notices={securityNotices} />}
@@ -118,53 +160,7 @@ export function AdminApp() {
       onLogout={isAuthenticated ? () => { void handleLogout(); } : undefined}
       health={isAuthenticated ? adminData.health : null}
     >
-      <div className="space-y-8">
-        {!isAuthenticated && (
-          <section className="rounded-xl border border-border bg-card p-6">
-            <h2 className="mb-4 text-xl font-semibold tracking-tight text-foreground">
-              {mustChangePassword ? 'Change Password Required' : 'Admin Login'}
-            </h2>
-            <form
-              className="grid gap-3 sm:grid-cols-2 sm:gap-4"
-              onSubmit={mustChangePassword ? handleChangePassword : handleLogin}
-            >
-              {mustChangePassword ? (
-                <>
-                  <div>
-                    <Label htmlFor="current-password">Current Password</Label>
-                    <Input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor="new-password">New Password</Label>
-                    <Input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <Label htmlFor="username-input">Username</Label>
-                    <Input id="username-input" value={username} onChange={(e) => setUsername(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor="password-input">Password</Label>
-                    <Input id="password-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-                  </div>
-                </>
-              )}
-              <div className="sm:col-span-2">
-                <Button type="submit" disabled={authLoading}>
-                  {authLoading ? 'Loading…' : mustChangePassword ? 'Change Password' : 'Login'}
-                </Button>
-              </div>
-            </form>
-            {authError && (
-              <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{authError}</p>
-            )}
-          </section>
-        )}
-
-        {isAuthenticated && renderView(view, adminData, token)}
-      </div>
+      <div className="space-y-8">{renderView(view, adminData, token)}</div>
     </StitchConsoleShell>
   );
 }

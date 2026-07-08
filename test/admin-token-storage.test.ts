@@ -34,6 +34,16 @@ describe('admin token browser storage', () => {
     expect(readPersistedAdminToken()).toBe('');
   });
 
+  it('clears browser storage when the caller does not remember the session', () => {
+    const localStorage = createStorage();
+    vi.stubGlobal('window', { localStorage });
+
+    persistAdminToken('remembered-token');
+    persistAdminToken('session-only-token', { persist: false });
+
+    expect(readPersistedAdminToken()).toBe('');
+  });
+
   it('does not throw when browser storage writes fail', () => {
     const localStorage = createStorage();
     vi.mocked(localStorage.setItem).mockImplementation(() => {

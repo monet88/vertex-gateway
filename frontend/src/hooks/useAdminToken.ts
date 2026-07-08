@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { persistAdminToken, readPersistedAdminToken } from '@/lib/admin-token-storage';
+import { persistAdminToken, readPersistedAdminToken, type AdminTokenStorageOptions } from '@/lib/admin-token-storage';
 
 /**
  * Persisting the admin token keeps local operator sessions usable across page
@@ -8,9 +8,9 @@ import { persistAdminToken, readPersistedAdminToken } from '@/lib/admin-token-st
 export function useAdminToken() {
   const [token, setTokenState] = useState(readPersistedAdminToken);
 
-  const setToken = (nextToken: string): void => {
+  const setToken = (nextToken: string, options?: AdminTokenStorageOptions): void => {
     setTokenState(nextToken);
-    persistAdminToken(nextToken);
+    persistAdminToken(nextToken, options);
   };
 
   return { token, setToken };

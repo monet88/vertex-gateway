@@ -122,6 +122,17 @@ describe('admin frontend helpers', () => {
     expect(refreshed).toEqual([{ ...createdGatewayKey, secret }]);
   });
 
+  it('renders a standalone login screen before the admin shell', () => {
+    const adminAppSource = readFileSync(new URL('../frontend/src/pages/AdminApp.tsx', import.meta.url), 'utf8');
+    const loginScreenSource = readFileSync(new URL('../frontend/src/pages/AdminLoginScreen.tsx', import.meta.url), 'utf8');
+
+    expect(adminAppSource).toContain('AdminLoginScreen');
+    expect(adminAppSource).toContain('if (!isAuthenticated)');
+    expect(loginScreenSource).toContain('Sign in');
+    expect(loginScreenSource).toContain('Admin Username');
+    expect(loginScreenSource).toContain('Remember session');
+  });
+
   it('clears local auth before awaiting remote logout', async () => {
     const events: string[] = [];
     let resolveRemote: (() => void) | undefined;
