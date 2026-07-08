@@ -1,0 +1,35 @@
+frontend/src/components/stitch/StitchConsoleShell.tsx
+  s_dc99d2ddddbb95::t_3c84dce72d2da7 4-5,14,17-19,67,70
+frontend/src/components/stitch/shell-runtime-badge.ts
+  s_902fac117cbbb5::t_e6578ef5795968 1-22
+frontend/src/data/admin-static.ts
+  s_dc99d2ddddbb95::t_706d452a707e04 18
+frontend/src/pages/AdminApp.tsx
+  s_dc99d2ddddbb95::t_a46e03459befec 119
+test/admin-frontend-helpers.test.ts
+  s_dc99d2ddddbb95::t_1c3ebc0c525e6d 13-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a5e60fe636aab893a618063f2cf4250a078bfeda",
+  "prompts": {},
+  "sessions": {
+    "s_902fac117cbbb5": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "0686861a-f0c9-4588-91da-769db0d56e5a",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
