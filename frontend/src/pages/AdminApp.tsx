@@ -116,6 +116,7 @@ export function AdminApp() {
       activeView={view}
       onViewChange={setView}
       onLogout={isAuthenticated ? () => { void handleLogout(); } : undefined}
+      health={isAuthenticated ? adminData.health : null}
     >
       <div className="space-y-8">
         {!isAuthenticated && (

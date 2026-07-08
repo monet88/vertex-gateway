@@ -10,6 +10,46 @@ describe('admin frontend helpers', () => {
     expect(adminNavItems.find((item) => item.id === 'gateway-keys')?.label).toBe('Quản lý Key');
   });
 
+  it('labels model management as model policy rather than security settings', () => {
+    expect(adminNavItems.find((item) => item.id === 'model-management')?.label).toBe('Model Policy');
+  });
+
+  it('derives shell runtime badge from live health', async () => {
+    const { getShellRuntimeBadge } = await import('../frontend/src/components/stitch/shell-runtime-badge.js');
+
+    expect(getShellRuntimeBadge(null)).toEqual({ label: 'Health Unknown', toneClass: 'bg-[var(--warning-amber)]' });
+    expect(getShellRuntimeBadge({
+      ok: true,
+      service: 'vertex-gateway',
+      mode: 'file-store',
+      runtimeMode: 'pool',
+      selection: 'round-robin',
+      targetCount: 2,
+      healthyTargets: 2,
+      degradedTargets: 0,
+    })).toEqual({ label: 'Runtime Ready', toneClass: 'bg-[var(--healthy-green)]' });
+    expect(getShellRuntimeBadge({
+      ok: true,
+      service: 'vertex-gateway',
+      mode: 'file-store',
+      runtimeMode: 'pool',
+      selection: 'round-robin',
+      targetCount: 2,
+      healthyTargets: 1,
+      degradedTargets: 1,
+    })).toEqual({ label: 'Runtime Degraded', toneClass: 'bg-[var(--warning-amber)]' });
+    expect(getShellRuntimeBadge({
+      ok: false,
+      service: 'vertex-gateway',
+      mode: 'file-store',
+      runtimeMode: 'pool',
+      selection: 'round-robin',
+      targetCount: 2,
+      healthyTargets: 0,
+      degradedTargets: 2,
+    })).toEqual({ label: 'Runtime Failed', toneClass: 'bg-[var(--failure-red)]' });
+  });
+
   it('clears local auth before awaiting remote logout', async () => {
     const events: string[] = [];
     let resolveRemote: (() => void) | undefined;

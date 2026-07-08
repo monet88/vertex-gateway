@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { Activity, Database, ExternalLink, LogOut } from 'lucide-react';
 import { adminNavItems } from '@/data/admin-static';
-import type { AdminViewId } from '@/types/admin';
+import { getShellRuntimeBadge } from '@/components/stitch/shell-runtime-badge';
+import type { AdminViewId, RuntimeHealthSummary } from '@/types/admin';
 
 export interface StitchConsoleShellProps {
   readonly children: ReactNode;
@@ -10,9 +11,12 @@ export interface StitchConsoleShellProps {
   readonly onViewChange?: (view: AdminViewId) => void;
   readonly topActions?: ReactNode;
   readonly onLogout?: () => void;
+  readonly health?: RuntimeHealthSummary | null;
 }
 
-export function StitchConsoleShell({ children, rail, activeView = 'dashboard', onViewChange, topActions, onLogout }: StitchConsoleShellProps) {
+export function StitchConsoleShell({ children, rail, activeView = 'dashboard', onViewChange, topActions, onLogout, health = null }: StitchConsoleShellProps) {
+  const runtimeBadge = getShellRuntimeBadge(health);
+
   return (
     <main className="min-h-dvh bg-background text-foreground">
       <div className="grid min-h-dvh grid-cols-1 md:grid-cols-[240px_1fr]">
@@ -60,10 +64,10 @@ export function StitchConsoleShell({ children, rail, activeView = 'dashboard', o
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-xl font-semibold tracking-tight text-[var(--operator-teal)]">Vertex Gateway</span>
               <span className="inline-flex items-center gap-2 rounded border border-border bg-[var(--console-surface-highest)] px-2.5 py-1 font-mono text-[11px] uppercase tracking-widest text-foreground">
-                <span className="status-dot bg-[var(--healthy-green)]" /> Production
+                <span className={`status-dot ${runtimeBadge.toneClass}`} /> {runtimeBadge.label}
               </span>
               <span className="inline-flex items-center gap-2 rounded border border-border bg-[var(--console-surface-highest)] px-2.5 py-1 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                <Database className="h-3.5 w-3.5 text-[var(--operator-teal)]" aria-hidden /> Admin Store
+                <Database className="h-3.5 w-3.5 text-[var(--operator-teal)]" aria-hidden /> Admin Store: {health?.mode ?? 'unknown'}
               </span>
             </div>
             <div className="flex items-center gap-2">

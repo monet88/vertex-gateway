@@ -15,7 +15,7 @@ export const adminNavItems: readonly AdminNavItem[] = [
   { id: 'auth-files', label: 'Vertex Auth', description: 'Gateway to Google credentials', icon: Terminal },
   { id: 'logs-viewer', label: 'Nhật ký API', description: 'Telemetry beta', icon: ListTree },
   { id: 'ai-providers', label: 'Cấu hình', description: 'Routing and targets', icon: Settings2 },
-  { id: 'model-management', label: 'Bảo mật', description: 'Model policy controls', icon: Shield },
+  { id: 'model-management', label: 'Model Policy', description: 'Model policy controls', icon: Shield },
   { id: 'available-models', label: 'Model Catalog', description: 'Read-only inventory', icon: ListTree },
 ];
 
