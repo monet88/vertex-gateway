@@ -1,5 +1,7 @@
 # Frontend Console React Implementation Plan
 
+> Status note: several frontend concerns called out in this document are already addressed in the current codebase, including partial catalog loading and duplicate-action protection on credential rows.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Tách Vertex Gateway Admin Console thành một dự án Vite + React + TypeScript độc lập tại `frontend/`, đồng bộ thiết kế mới từ Stitch, rồi nâng cấp các vùng tương tác bằng shadcn/ui.

@@ -1,5 +1,7 @@
 # Admin React Stitch Replacement Implementation Plan
 
+> Status note: some review comments in this plan are already resolved in the current codebase, including the shared frontend catalog loading flow, pending row actions in `AuthFilesView`, and the admin session freshness check.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the live backend-rendered `/admin` page with the React Stitch-aligned admin app while preserving the existing `/admin/api/*` contract.

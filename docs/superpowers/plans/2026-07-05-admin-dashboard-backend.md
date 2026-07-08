@@ -1,5 +1,7 @@
 # Admin Dashboard Backend Implementation Plan
 
+> Status note: this plan includes some historical review comments that no longer match the current repo state. In particular, the admin login rate limiter, session TTL guard, and related auth-path hardening have already landed.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the minimal safe backend/admin surface for the Vertex Gateway dashboard: managed gateway API keys, admin security status, Vertex API-key targets, API call logs, and domain allow/block policy.
@@ -1458,7 +1460,7 @@ export const createApiKeyVertexCredential = (
 Modify imports in `src/admin/admin-routes.ts`:
 
 ```typescript
-  importApiKeyCredential,
+  createApiKeyVertexCredential,
 ```
 
 Add before service-account import route:

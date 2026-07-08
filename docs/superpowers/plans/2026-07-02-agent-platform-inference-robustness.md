@@ -1,5 +1,7 @@
 # Agent Platform Inference Robustness Implementation Plan
 
+> Status note: this plan contains older review comments that are not all still applicable to the current repo. Treat the notes below as historical unless they are re-validated against the present code.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the Vertex Gateway robustly handle upstream errors, per-target jittered retries, failover, and SSE streaming while emitting route-family-correct error envelopes (gateway-native vs OpenAI-compatible).

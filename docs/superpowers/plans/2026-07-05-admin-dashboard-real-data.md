@@ -1,5 +1,7 @@
 # Admin Dashboard Real Data Implementation Plan
 
+> Status note: some review notes here are historical only. The current code already guards timing-safe comparison length mismatches in the gateway-key store and handles admin session freshness correctly.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace mock Vertex target and gateway-key dashboard data with real admin API data while keeping gateway keys hash-only at rest.

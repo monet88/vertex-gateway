@@ -1,5 +1,7 @@
 # Admin React Stitch Review Fixes Implementation Plan
 
+> Status note: the current repo already includes several fixes called out in the review comments below, including per-IP+username admin login throttling, future-timestamp rejection for admin sessions, partial catalog loading with `Promise.allSettled`, and pending-state protection in `AuthFilesView`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix every valid PR #8 review finding for the React admin replacement without expanding the admin product scope.
