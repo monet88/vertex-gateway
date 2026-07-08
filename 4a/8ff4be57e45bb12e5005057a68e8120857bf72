@@ -1,0 +1,19 @@
+README.md
+  s_dc99d2ddddbb95::t_522e3c60dc0017 144-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4a8ff4be57e45bb12e5005057a68e8120857bf72",
+  "prompts": {},
+  "sessions": {
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
