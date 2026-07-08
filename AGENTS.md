@@ -103,6 +103,23 @@ Restart: `docker compose up -d --build`
 
 ---
 
+## UI/UX Source of Truth
+
+For any admin frontend, UI, UX, visual styling, layout, copy, accessibility, or
+interaction work, **read and follow the root [`DESIGN.md`](DESIGN.md) first**.
+
+- `DESIGN.md` is the canonical design system for the Vertex Gateway Operator Console.
+- Keep React/admin UI changes aligned with its dark infrastructure cockpit theme,
+  operator teal accent, dense data-first layout, masked-secret rules, responsive
+  behavior, and accessibility requirements.
+- Do not introduce UI patterns that `DESIGN.md` bans, including generic SaaS
+  dashboards, violet/purple AI gradients, centered hero layouts, decorative
+  fake terminal panels, emojis, pure black, or unmasked secrets by default.
+- If a product requirement appears to conflict with `DESIGN.md`, call out the
+  conflict before changing the UI direction.
+
+---
+
 ## Key Source Files
 
 | File | What it does |
@@ -118,6 +135,10 @@ Restart: `docker compose up -d --build`
 | `src/lib/genai-runtime.ts` | Runtime lifecycle, hot-reload, probe |
 | `src/routes/openai-images-routes.ts` | Rejects: `response_format`, `quality`, `style`, `background`, `user` |
 | `src/admin/credential-store.ts` | File-store persistence, atomic write |
+| `frontend/src/pages/AdminApp.tsx` | React admin shell, auth gate, view routing |
+| `frontend/src/pages/AdminLoginScreen.tsx` | Standalone admin login screen |
+| `frontend/src/index.css` | Encodes root `DESIGN.md` console tokens |
+| `DESIGN.md` | Canonical UI/UX design system for admin frontend work |
 
 ---
 

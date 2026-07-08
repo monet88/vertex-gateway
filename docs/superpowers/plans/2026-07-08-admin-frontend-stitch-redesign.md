@@ -12,7 +12,7 @@
 
 - Source Stitch project: `https://stitch.withgoogle.com/projects/13996043634571471896`.
 - Local Stitch reference files: `.stitch/designs/admin-dashboard.html`, `.stitch/designs/gateway-key-management.html`, `.stitch/designs/vertex-auth.html`, `.stitch/designs/api-call-logs.html`.
-- Local design-system source: `frontend/DESIGN.md` and Stitch project design tokens.
+- Local design-system source: root `DESIGN.md` and Stitch project design tokens.
 - Do not change `/admin/api/*` route behavior or response shapes.
 - Do not expose full gateway keys, Google Cloud API keys, service-account private keys, or absolute credential paths.
 - Keep operator copy concise and mostly Vietnamese where the redesigned Stitch screens already use Vietnamese labels.
@@ -30,7 +30,7 @@ The Stitch project currently contains these relevant desktop screens:
 - `Quản lý Gateway Key` -> new first-class page: `frontend/src/pages/GatewayKeysView.tsx`
 - `Xác thực Vertex AI` -> target page: `frontend/src/pages/AuthFilesView.tsx` plus `frontend/src/pages/AIProvidersView.tsx`
 - `Nhật ký cuộc gọi API` -> target page: `frontend/src/pages/LogsViewerView.tsx`
-- `DESIGN.md` -> token/style source, already reflected in `frontend/DESIGN.md`
+- `DESIGN.md` -> token/style source, reflected in frontend CSS tokens
 
 ## File Structure
 

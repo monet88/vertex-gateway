@@ -1642,6 +1642,6 @@ Skip this commit only if Step 1 proves there are no cleanup edits after Task 7.
 - Spec coverage: `/admin` route replacement, `/admin/api/*` stability, six navigation views, live admin-backed data, runtime reload, model catalog load/save, credential create/import/inspect/test/edit/delete, and beta Logs Viewer are each covered by a task.
 - Boundary check: no public Gemini/OpenAI gateway route behavior changes are included. Backend changes are limited to admin SPA serving and existing admin API consumption.
 - Auth distinction: Gateway keys remain Client to Gateway credentials; Vertex API keys and service-account JSON remain Gateway to Google upstream credentials and are never shown as client secrets.
-- Design alignment: shell, badges, tables, forms, and beta states use the dark Stitch console direction from `frontend/DESIGN.md`; the old beige UI is no longer the live route.
+- Design alignment: shell, badges, tables, forms, and beta states use the dark Stitch console direction from root `DESIGN.md`; the old beige UI is no longer the live route.
 - Placeholder scan: the plan avoids fake telemetry rows and does not instruct implementers to add unspecified error handling or unspecified tests.
 - Validation: backend compile, full backend tests, frontend lint/build, and local browser smoke are required before completion.

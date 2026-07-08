@@ -6,7 +6,7 @@ Scope: Replace the live `/admin` UI with the React frontend and align the experi
 
 ## Goal
 
-Replace the backend-rendered `/admin` HTML UI with a single React admin application that follows the Stitch project direction and the local `frontend/DESIGN.md` design system.
+Replace the backend-rendered `/admin` HTML UI with a single React admin application that follows the Stitch project direction and the local root `DESIGN.md` design system.
 
 The new admin must become the only operator experience served at `/admin`. It must preserve the existing admin API surface under `/admin/api/*`, keep all current live admin feature areas visible, and avoid maintaining two unrelated admin UIs in parallel.
 
@@ -17,7 +17,7 @@ The repository currently has two separate admin experiences:
 - `src/admin/admin-ui.ts` renders the live `/admin` page as a large backend-generated HTML/CSS/JS document.
 - `frontend/` contains a React operator console introduced in PR #5, with a dark Stitch-aligned shell, partial admin data wiring, and a narrower feature surface.
 
-The current live `/admin` UI is visually divergent from the Stitch project and from `frontend/DESIGN.md`. It uses a light beige theme, different typography, different layout rules, and a separate interaction model. That divergence is structural, not a small styling drift.
+The current live `/admin` UI is visually divergent from the Stitch project and from root `DESIGN.md`. It uses a light beige theme, different typography, different layout rules, and a separate interaction model. That divergence is structural, not a small styling drift.
 
 The backend admin routes already provide real JSON endpoints for authentication, password change, health, gateway keys, Vertex credentials, model catalog, and runtime reload. The React frontend already contains reusable shell, table, dialog, and auth pieces, but it does not yet replace the live `/admin` route or cover the full feature inventory of the current live admin.
 
@@ -99,7 +99,7 @@ The policy-editing screen for default models, aliases, allowlists, disabled entr
 
 ## UX And Visual Design
 
-The new admin must follow the Stitch project and `frontend/DESIGN.md` direction: dark operator console, restrained teal accent, dense but scannable tables, fixed left navigation, and data-first composition.
+The new admin must follow the Stitch project and root `DESIGN.md` direction: dark operator console, restrained teal accent, dense but scannable tables, fixed left navigation, and data-first composition.
 
 The current light beige, glassy, gradient-heavy admin styling must not carry forward.
 
@@ -228,7 +228,7 @@ This slice is complete when:
 
 - `/admin` no longer serves the old beige backend-rendered UI
 - the React frontend is the only active admin experience
-- the experience visually aligns with Stitch and `frontend/DESIGN.md`
+- the experience visually aligns with Stitch and root `DESIGN.md`
 - the current live `/admin` feature areas all exist in the React admin
 - unsupported telemetry-backed surfaces are represented honestly as beta states
 - the codebase no longer has two competing admin UX sources of truth for the live route
