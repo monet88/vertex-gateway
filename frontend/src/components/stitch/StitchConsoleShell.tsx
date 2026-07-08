@@ -12,7 +12,7 @@ export interface StitchConsoleShellProps {
 export function StitchConsoleShell({ children, rail, activeView = 'dashboard', onViewChange }: StitchConsoleShellProps) {
   return (
     <main className="min-h-dvh bg-background text-foreground">
-      <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[240px_1fr]">
+      <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[280px_1fr]">
         <aside className="border-b border-border bg-card/90 p-4 lg:border-b-0 lg:border-r">
           <a href="/admin" className="block rounded-lg text-lg font-semibold tracking-tight text-foreground">
             Vertex Gateway Admin
@@ -34,10 +34,10 @@ export function StitchConsoleShell({ children, rail, activeView = 'dashboard', o
               </button>
             ))}
           </nav>
+          {rail ? <div className="mt-6">{rail}</div> : null}
         </aside>
-        <section className="grid gap-4 p-4 xl:grid-cols-[1fr_340px] xl:p-6">
+        <section className="p-4 xl:p-6">
           <div className="min-w-0 space-y-4">{children}</div>
-          {rail ? <aside className="space-y-4">{rail}</aside> : null}
         </section>
       </div>
     </main>

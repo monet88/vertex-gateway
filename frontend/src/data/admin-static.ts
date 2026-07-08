@@ -8,7 +8,7 @@ export interface AdminNavItem {
 
 export const adminNavItems: readonly AdminNavItem[] = [
   { id: 'dashboard', label: 'Dashboard', description: 'Runtime posture' },
-  { id: 'ai-providers', label: 'AI Providers', description: 'Vertex targets' },
+  { id: 'ai-providers', label: 'AI Providers', description: 'Agent Platform Apikey' },
   { id: 'auth-files', label: 'Auth Files', description: 'Upstream credentials' },
   { id: 'available-models', label: 'Available Models', description: 'Catalog inventory' },
   { id: 'logs-viewer', label: 'Logs Viewer', description: 'Telemetry beta' },

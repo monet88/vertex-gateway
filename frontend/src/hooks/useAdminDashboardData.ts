@@ -3,6 +3,7 @@ import type { GatewayKeyRow, RuntimeHealthSummary, VertexTargetRow } from '@/typ
 import {
   createGatewayKey,
   createVertexTarget,
+  deleteGatewayKey,
   fetchAdminHealth,
   fetchGatewayKeys,
   fetchVertexTargets,
@@ -94,6 +95,15 @@ export function useAdminDashboardData(token: string) {
     }
   }, [options, refresh]);
 
+  const deleteKey = useCallback(async (id: string) => {
+    try {
+      await deleteGatewayKey(options, id);
+      await refresh();
+    } catch (error) {
+      setState((current) => ({ ...current, error: errorMessage(error, 'Failed to delete key') }));
+    }
+  }, [options, refresh]);
+
   const addTarget = useCallback(async (draft: VertexTargetDraftPayload) => {
     try {
       await createVertexTarget(options, draft);
@@ -136,6 +146,7 @@ export function useAdminDashboardData(token: string) {
     refetch: refresh,
     createKey,
     revokeKey,
+    deleteKey,
     addTarget,
     importTarget,
     reload,

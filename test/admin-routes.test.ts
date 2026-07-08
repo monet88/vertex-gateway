@@ -1010,7 +1010,7 @@ describe('admin routes', () => {
     expect(body.error.code).toBe('VALIDATION_FAILED');
   });
 
-  it('creates, lists, and revokes managed gateway keys without leaking secrets', async () => {
+  it('creates, lists, revokes, and deletes managed gateway keys without leaking secrets', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
     await seedChangedAdminPassword(dir);
     const runtime = createFakeRuntime();
@@ -1057,6 +1057,20 @@ describe('admin routes', () => {
     const revokedBody = await revoked.json();
     expect(revoked.status).toBe(200);
     expect(revokedBody.gatewayKey.status).toBe('revoked');
+
+    const deleted = await fetch(`${baseUrl}/admin/api/gateway-keys/${id}`, {
+      method: 'DELETE',
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const deletedBody = await deleted.json();
+    expect(deleted.status).toBe(200);
+    expect(deletedBody.gatewayKey.id).toBe(id);
+
+    const listAfterDelete = await fetch(`${baseUrl}/admin/api/gateway-keys`, {
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    const listAfterDeleteBody = await listAfterDelete.json();
+    expect(listAfterDeleteBody.gatewayKeys).toHaveLength(0);
   });
 
   it('keeps managed gateway keys active after unrelated admin config reloads', async () => {
@@ -1194,6 +1208,155 @@ describe('admin routes', () => {
     const listBody = await list.json();
     expect(JSON.stringify(listBody)).not.toContain('google-secret');
     expect(runtime.reload).toHaveBeenCalled();
+  });
+
+  it('creates express-mode API-key targets when requested', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+        runtimeMode: 'pool',
+        vertexPools: [],
+        resolvedVertexTargets: [],
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/admin/api/vertex-credentials/api-key`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-secret', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        label: 'Express key',
+        project: 'project-a',
+        location: 'global',
+        apiKey: 'google-secret',
+        apiKeyMode: 'express',
+      }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.credential.apiKeyMode).toBe('express');
+    expect(JSON.stringify(body)).not.toContain('google-secret');
+  });
+
+  it('updates API-key target connection fields without exposing raw upstream keys', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+        runtimeMode: 'pool',
+        vertexPools: [],
+        resolvedVertexTargets: [],
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const headers = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+
+    const created = await fetch(`${baseUrl}/admin/api/vertex-credentials/api-key`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ label: 'Global key', project: 'project-a', location: 'global', apiKey: 'google-secret' }),
+    });
+    const createdBody = await created.json();
+    const id = createdBody.credential.id as string;
+
+    const updated = await fetch(`${baseUrl}/admin/api/vertex-credentials/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({
+        label: 'Updated key',
+        project: 'project-b',
+        location: 'us-central1',
+        apiKeyMode: 'express',
+        apiKey: 'replacement-secret',
+      }),
+    });
+    const updatedBody = await updated.json();
+
+    expect(updated.status).toBe(200);
+    expect(updatedBody.credential.label).toBe('Updated key');
+    expect(updatedBody.credential.project).toBe('project-b');
+    expect(updatedBody.credential.location).toBe('us-central1');
+    expect(updatedBody.credential.apiKeyMode).toBe('express');
+    expect(updatedBody.credential.hasApiKey).toBe(true);
+    expect(JSON.stringify(updatedBody)).not.toContain('replacement-secret');
+
+    const testResponse = await fetch(`${baseUrl}/admin/api/vertex-credentials/${id}/test`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-secret' },
+    });
+    expect(testResponse.status).toBe(200);
+    expect(runtime.probeTarget).toHaveBeenCalledWith(expect.objectContaining({
+      id,
+      project: 'project-b',
+      location: 'us-central1',
+      apiKeyMode: 'express',
+      apiKey: 'replacement-secret',
+    }));
+
+    const list = await fetch(`${baseUrl}/admin/api/vertex-credentials`, { headers: { authorization: 'Bearer admin-secret' } });
+    const listBody = await list.json();
+    expect(JSON.stringify(listBody)).not.toContain('replacement-secret');
+    expect(JSON.stringify(listBody)).not.toContain('google-secret');
+  });
+
+  it('updates file-store pool selection without losing configured targets', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+        runtimeMode: 'pool',
+        vertexPoolSelection: 'round-robin',
+        vertexPools: [],
+        resolvedVertexTargets: [],
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const headers = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+
+    const created = await fetch(`${baseUrl}/admin/api/vertex-credentials/api-key`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ label: 'Global key', project: 'project-a', location: 'global', apiKey: 'google-secret' }),
+    });
+    expect(created.status).toBe(200);
+
+    const updated = await fetch(`${baseUrl}/admin/api/runtime-config`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ vertexPoolSelection: 'bind-first' }),
+    });
+    const updatedBody = await updated.json();
+
+    expect(updated.status).toBe(200);
+    expect(updatedBody.vertexPoolSelection).toBe('bind-first');
+    expect(updatedBody.vertexPools).toHaveLength(1);
+    expect(runtime.reload).toHaveBeenLastCalledWith(expect.objectContaining({ vertexPoolSelection: 'bind-first' }));
+
+    const persisted = JSON.parse(fs.readFileSync(path.join(dir, 'store.json'), 'utf8'));
+    expect(persisted.vertexPoolSelection).toBe('bind-first');
   });
 
   it('rejects duplicate API-key Vertex targets instead of replacing them', async () => {

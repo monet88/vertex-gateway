@@ -3,22 +3,30 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SecretInput } from './SecretInput';
+import type { VertexApiKeyMode } from '@/types/admin';
 
 export interface VertexTargetDraft {
   readonly label: string;
   readonly project: string;
   readonly location: string;
   readonly apiKey: string;
+  readonly apiKeyMode: VertexApiKeyMode;
 }
 
 export interface VertexTargetDialogProps {
   readonly onCreate: (target: VertexTargetDraft) => void | Promise<void>;
+  readonly initialDraft?: VertexTargetDraft;
+  readonly mode?: 'create' | 'edit';
+  readonly triggerLabel?: string;
   readonly disabled?: boolean;
 }
 
-export function VertexTargetDialog({ onCreate, disabled }: VertexTargetDialogProps) {
-  const [draft, setDraft] = useState<VertexTargetDraft>({ label: '', project: '', location: 'global', apiKey: '' });
+const emptyDraft: VertexTargetDraft = { label: '', project: '', location: 'global', apiKey: '', apiKeyMode: 'full' };
+
+export function VertexTargetDialog({ onCreate, initialDraft, mode = 'create', triggerLabel, disabled }: VertexTargetDialogProps) {
+  const [draft, setDraft] = useState<VertexTargetDraft>(initialDraft ?? emptyDraft);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +38,7 @@ export function VertexTargetDialog({ onCreate, disabled }: VertexTargetDialogPro
   function handleOpenChange(nextOpen: boolean) {
     if (pending && !nextOpen) return;
     setError(null);
+    if (nextOpen) setDraft(initialDraft ?? emptyDraft);
     setOpen(nextOpen);
   }
 
@@ -38,8 +47,8 @@ export function VertexTargetDialog({ onCreate, disabled }: VertexTargetDialogPro
     setPending(true);
     setError(null);
     try {
-      await onCreate({ ...draft, label: draft.label.trim() || 'Vertex target' });
-      setDraft({ label: '', project: '', location: 'global', apiKey: '' });
+      await onCreate({ ...draft, label: draft.label.trim() || 'Agent Platform Apikey' });
+      setDraft(initialDraft ?? emptyDraft);
       setOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create target');
@@ -50,11 +59,11 @@ export function VertexTargetDialog({ onCreate, disabled }: VertexTargetDialogPro
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild><Button disabled={disabled}>Thêm target</Button></DialogTrigger>
+      <DialogTrigger asChild><Button variant={mode === 'edit' ? 'ghost' : 'default'} size={mode === 'edit' ? 'sm' : 'default'} disabled={disabled}>{triggerLabel ?? (mode === 'edit' ? 'Edit' : 'Thêm apikey')}</Button></DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Thêm Vertex target</DialogTitle>
-          <DialogDescription>Upstream credential dùng cho Gateway đến Google. Không hiển thị cho client.</DialogDescription>
+          <DialogTitle>{mode === 'edit' ? 'Edit Agent Platform Apikey' : 'Thêm Agent Platform Apikey'}</DialogTitle>
+          <DialogDescription>Upstream credential dùng cho Gateway đến Google. Secret không hiển thị cho client.</DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={submit}>
           <div className="grid gap-2">
@@ -71,9 +80,19 @@ export function VertexTargetDialog({ onCreate, disabled }: VertexTargetDialogPro
               <Input id="target-location" value={draft.location} onChange={(event) => patch({ location: event.target.value })} required disabled={pending} />
             </div>
           </div>
-          <SecretInput id="target-api-key" label="Google Cloud API key" value={draft.apiKey} onChange={(apiKey) => patch({ apiKey })} disabled={pending} required />
+          <div className="grid gap-2">
+            <Label htmlFor="target-api-key-mode">Mode</Label>
+            <Select value={draft.apiKeyMode} onValueChange={(apiKeyMode: VertexApiKeyMode) => patch({ apiKeyMode })} disabled={pending}>
+              <SelectTrigger id="target-api-key-mode"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="full">full</SelectItem>
+                <SelectItem value="express">express</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <SecretInput id="target-api-key" label="Agent Platform API key" value={draft.apiKey} onChange={(apiKey) => patch({ apiKey })} placeholder={mode === 'edit' ? 'Để trống nếu giữ nguyên key hiện tại' : undefined} disabled={pending} required={mode === 'create'} />
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={pending}>{pending ? 'Đang tạo…' : 'Thêm target'}</Button>
+          <Button type="submit" disabled={pending}>{pending ? 'Đang lưu…' : (mode === 'edit' ? 'Lưu thay đổi' : 'Thêm apikey')}</Button>
         </form>
       </DialogContent>
     </Dialog>

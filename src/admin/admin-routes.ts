@@ -261,6 +261,8 @@ const toPoolPatch = (
   ...(typeof body.label === 'string' ? { label: body.label.trim() || undefined } : {}),
   ...(typeof body.project === 'string' ? { project: body.project.trim() } : {}),
   ...(typeof body.location === 'string' ? { location: body.location.trim() } : {}),
+  ...(typeof body.apiKey === 'string' && body.apiKey.trim() ? { apiKey: body.apiKey.trim() } : {}),
+  ...(body.apiKeyMode === 'full' || body.apiKeyMode === 'express' ? { apiKeyMode: body.apiKeyMode } : {}),
   ...(typeof body.enabled === 'boolean' ? { enabled: body.enabled } : {}),
   ...(typeof body.weight === 'number' && body.weight > 0 ? { weight: body.weight } : {}),
   ...(Array.isArray(body.modelAllowlist)
@@ -450,8 +452,28 @@ export const maybeHandleAdminRoute = async (
     sendJson(res, 200, { ok: true, ...revoked });
     return true;
   }
+  const gatewayKeyDeleteMatch = normalizedPathname.match(/^\/admin\/api\/gateway-keys\/([^/]+)$/);
+  if (gatewayKeyDeleteMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(gatewayKeyDeleteMatch[1]);
+    const deleted = gatewayKeyStore.delete(id);
+    sendJson(res, 200, { ok: true, ...deleted });
+    return true;
+  }
   if (req.method === 'GET' && normalizedPathname === '/admin/api/vertex-credentials') {
     sendJson(res, 200, withRuntimeHealth(credentialStore.getSnapshot(), runtime));
+    return true;
+  }
+  if (req.method === 'PATCH' && normalizedPathname === '/admin/api/runtime-config') {
+    const body = await parseJsonBody(req, config.maxJsonBytes);
+    const vertexPoolSelection = body.vertexPoolSelection;
+    if (vertexPoolSelection !== 'round-robin' && vertexPoolSelection !== 'bind-first') {
+      throw new GatewayError(400, 'VALIDATION_FAILED', 'vertexPoolSelection must be "round-robin" or "bind-first".');
+    }
+    const snapshot = credentialStore.updateVertexPools((state) => ({
+      ...state,
+      vertexPoolSelection,
+    }));
+    sendJson(res, 200, { ok: true, ...withRuntimeHealth(snapshot, runtime) });
     return true;
   }
   if (req.method === 'POST' && normalizedPathname === '/admin/api/vertex-credentials/import') {

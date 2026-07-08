@@ -1,13 +1,17 @@
 import { useState } from 'react';
+import { persistAdminToken, readPersistedAdminToken } from '@/lib/admin-token-storage';
 
 /**
- * Admin token is kept in memory only for the lifetime of the tab.
- * It is intentionally NOT persisted to sessionStorage/localStorage so that
- * an XSS payload cannot read a long-lived admin credential from Web Storage.
- * Reloading the page clears the token and the operator re-enters it.
+ * Persisting the admin token keeps local operator sessions usable across page
+ * reloads. Logout clears the browser copy via setToken('').
  */
 export function useAdminToken() {
-  const [token, setToken] = useState('');
+  const [token, setTokenState] = useState(readPersistedAdminToken);
+
+  const setToken = (nextToken: string): void => {
+    setTokenState(nextToken);
+    persistAdminToken(nextToken);
+  };
 
   return { token, setToken };
 }

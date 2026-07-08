@@ -35,11 +35,16 @@ export interface RevokedGatewayKey {
   gatewayKey: SanitizedGatewayKeyRecord;
 }
 
+export interface DeletedGatewayKey {
+  gatewayKey: SanitizedGatewayKeyRecord;
+}
+
 export interface GatewayKeyStore {
   getSnapshot(): GatewayKeySnapshot;
   getActiveHashes(): string[];
   create(input: { label?: string }): CreatedGatewayKey;
   revoke(id: string): RevokedGatewayKey;
+  delete(id: string): DeletedGatewayKey;
 }
 
 const STORE_FILE = 'gateway-keys.json';
@@ -110,6 +115,9 @@ export const createGatewayKeyStore = (
         throw new GatewayError(400, 'VALIDATION_FAILED', 'Admin store is read-only in static-config mode.');
       },
       revoke: () => {
+        throw new GatewayError(400, 'VALIDATION_FAILED', 'Admin store is read-only in static-config mode.');
+      },
+      delete: () => {
         throw new GatewayError(400, 'VALIDATION_FAILED', 'Admin store is read-only in static-config mode.');
       },
     };
@@ -213,6 +221,25 @@ export const createGatewayKeyStore = (
         throw error;
       }
       return { gatewayKey: sanitize(record) };
+    },
+
+    delete(id: string): DeletedGatewayKey {
+      assertWritableMode(config);
+      const previousRecords = readJsonIfExists<AdminGatewayKeyRecord[]>(storePath);
+      const records = previousRecords ? previousRecords.map((entry) => ({ ...entry })) : [];
+      const recordIndex = records.findIndex((r) => r.id === id);
+      if (recordIndex === -1) {
+        throw new GatewayError(404, 'NOT_FOUND', `Gateway key ${id} not found.`);
+      }
+      const [deleted] = records.splice(recordIndex, 1);
+      try {
+        writeRecords(records);
+        deriveAndNotify(records);
+      } catch (error) {
+        tryRestoreRecords(previousRecords);
+        throw error;
+      }
+      return { gatewayKey: sanitize(deleted) };
     },
   };
 };

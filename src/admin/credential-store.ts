@@ -17,6 +17,7 @@ export interface AdminVertexCredentialRecord extends VertexPoolConfig {
 }
 
 interface FileStoreState {
+  vertexPoolSelection?: GatewayConfig['vertexPoolSelection'];
   vertexPools: VertexPoolConfig[];
   modelCatalog: Record<string, ProviderModelCatalog>;
 }
@@ -24,6 +25,7 @@ interface FileStoreState {
 export interface AdminCredentialStoreSnapshot {
   mode: GatewayConfig['adminStoreMode'];
   mutable: boolean;
+  vertexPoolSelection: GatewayConfig['vertexPoolSelection'];
   vertexPools: AdminVertexCredentialRecord[];
   modelCatalog: Record<string, ProviderModelCatalog>;
 }
@@ -108,6 +110,7 @@ const storeStateToConfig = (
   config: GatewayConfig,
   state: AdminCredentialStoreSnapshot,
 ): GatewayConfig => createDerivedConfig(config, {
+  vertexPoolSelection: state.vertexPoolSelection,
   vertexPools: credentialStateToRuntimePools(state),
   modelCatalog: cloneModelCatalog(state.modelCatalog),
 });
@@ -128,6 +131,7 @@ const readFileStoreSnapshot = (config: GatewayConfig): AdminCredentialStoreSnaps
     return {
       mode: 'file-store',
       mutable: config.adminAllowMutations,
+      vertexPoolSelection: config.vertexPoolSelection,
       vertexPools: config.vertexPools.map(toRecord),
       modelCatalog: cloneModelCatalog(config.modelCatalog),
     };
@@ -135,6 +139,7 @@ const readFileStoreSnapshot = (config: GatewayConfig): AdminCredentialStoreSnaps
   return {
     mode: 'file-store',
     mutable: config.adminAllowMutations,
+    vertexPoolSelection: storeState.vertexPoolSelection ?? config.vertexPoolSelection,
     vertexPools: cloneVertexPools(storeState.vertexPools).map(toRecord),
     modelCatalog: cloneModelCatalog(storeState.modelCatalog),
   };
@@ -147,6 +152,7 @@ const persistFileStoreSnapshot = (
   const dir = config.adminFileStoreDir!;
   ensureStoreDir(dir);
   const storeState: FileStoreState = {
+    vertexPoolSelection: state.vertexPoolSelection,
     vertexPools: credentialStateToRuntimePools(state),
     modelCatalog: cloneModelCatalog(state.modelCatalog),
   };
@@ -162,6 +168,7 @@ export const createCredentialStore = (
       return {
         mode: 'static-config',
         mutable: false,
+        vertexPoolSelection: config.vertexPoolSelection,
         vertexPools: config.vertexPools.map(toRecord),
         modelCatalog: cloneModelCatalog(config.modelCatalog),
       };
@@ -176,6 +183,7 @@ export const createCredentialStore = (
       const next = mutate({
         mode: previous.mode,
         mutable: previous.mutable,
+        vertexPoolSelection: previous.vertexPoolSelection,
         vertexPools: previous.vertexPools.map((entry) => ({ ...entry })),
         modelCatalog: cloneModelCatalog(previous.modelCatalog),
       });
@@ -283,6 +291,9 @@ export const createApiKeyVertexCredential = (
   if (!project || !location || !apiKey) {
     throw new GatewayError(400, 'VALIDATION_FAILED', 'project, location, and apiKey are required.');
   }
+  if (body.apiKeyMode !== undefined && body.apiKeyMode !== 'full' && body.apiKeyMode !== 'express') {
+    throw new GatewayError(400, 'VALIDATION_FAILED', 'apiKeyMode must be "full" or "express".');
+  }
   const id = sanitizeCredentialId(`${project}-${location}-${typeof body.label === 'string' ? body.label.trim() : 'api-key'}`);
   return {
     id,
@@ -291,7 +302,7 @@ export const createApiKeyVertexCredential = (
     location,
     credentialsFile: null,
     apiKey,
-    apiKeyMode: 'full',
+    apiKeyMode: body.apiKeyMode === 'express' ? 'express' : 'full',
     enabled: body.enabled !== false,
     weight: typeof body.weight === 'number' && body.weight > 0 ? body.weight : 1,
     modelAllowlist: [],

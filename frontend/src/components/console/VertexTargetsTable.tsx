@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useSortableTable } from '@/hooks/useSortableTable';
 import type { VertexTargetRow } from '@/types/admin';
 import type { VertexTargetPatchPayload } from '@/lib/admin-dashboard-api';
+import { VertexTargetDialog, type VertexTargetDraft } from './VertexTargetDialog';
 
 export interface VertexTargetsTableProps {
   readonly rows: readonly VertexTargetRow[];
@@ -11,6 +12,13 @@ export interface VertexTargetsTableProps {
   readonly onDelete?: (id: string) => Promise<void>;
   readonly onUpdate?: (id: string, patch: VertexTargetPatchPayload) => Promise<void>;
   readonly pendingIds?: ReadonlySet<string>;
+  readonly testResults?: ReadonlyMap<string, VertexTargetTestResult>;
+}
+
+export interface VertexTargetTestResult {
+  readonly status: 'success' | 'error';
+  readonly message: string;
+  readonly testedAt: string;
 }
 
 const columns: Array<{ key: keyof VertexTargetRow; label: string }> = [
@@ -32,8 +40,24 @@ const getHealthColor = (health: string) => {
 
 const hasActions = (props: VertexTargetsTableProps) => Boolean(props.onTest || props.onDelete || props.onUpdate);
 
+const toEditDraft = (target: VertexTargetRow): VertexTargetDraft => ({
+  label: target.label,
+  project: target.project,
+  location: target.location,
+  apiKey: '',
+  apiKeyMode: target.apiKeyMode,
+});
+
+const toPatchPayload = (draft: VertexTargetDraft): VertexTargetPatchPayload => ({
+  label: draft.label,
+  project: draft.project,
+  location: draft.location,
+  apiKeyMode: draft.apiKeyMode,
+  ...(draft.apiKey.trim() ? { apiKey: draft.apiKey.trim() } : {}),
+});
+
 export function VertexTargetsTable(props: VertexTargetsTableProps) {
-  const { rows, onTest, onDelete, onUpdate, pendingIds } = props;
+  const { rows, onTest, onDelete, onUpdate, pendingIds, testResults } = props;
   const { sortKey, direction, handleSort, ariaSort, sortedRows } = useSortableTable(rows, 'label', 'asc');
   const showActions = hasActions(props);
 
@@ -59,55 +83,85 @@ export function VertexTargetsTable(props: VertexTargetsTableProps) {
         </TableHeader>
         <TableBody>
           {sortedRows.length > 0 ? (
-            sortedRows.map((target) => (
-              <TableRow key={target.id}>
-                <TableCell className="font-medium">{target.label}</TableCell>
-                <TableCell>{target.project}</TableCell>
-                <TableCell>{target.location}</TableCell>
-                <TableCell>{target.authType}</TableCell>
-                <TableCell>{target.apiKeyMode}</TableCell>
-                <TableCell>
-                  <Badge className={getHealthColor(target.health)}>{target.health}</Badge>
-                </TableCell>
-                {showActions && (
+            sortedRows.map((target) => {
+              const isPending = pendingIds?.has(target.id) ?? false;
+              const testResult = testResults?.get(target.id);
+
+              return (
+                <TableRow key={target.id}>
+                  <TableCell className="font-medium">{target.label}</TableCell>
+                  <TableCell>{target.project}</TableCell>
+                  <TableCell>{target.location}</TableCell>
+                  <TableCell>{target.authType}</TableCell>
+                  <TableCell>{target.apiKeyMode}</TableCell>
                   <TableCell>
-                    <div className="flex gap-1">
-                      {onTest && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={pendingIds?.has(target.id)}
-                          onClick={() => onTest(target.id)}
-                        >
-                          Test
-                        </Button>
-                      )}
-                      {onUpdate && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={pendingIds?.has(target.id)}
-                          onClick={() => onUpdate(target.id, { enabled: !target.enabled })}
-                        >
-                          {target.enabled ? 'Disable' : 'Enable'}
-                        </Button>
-                      )}
-                      {onDelete && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive"
-                          disabled={pendingIds?.has(target.id)}
-                          onClick={() => onDelete(target.id)}
-                        >
-                          Delete
-                        </Button>
-                      )}
-                    </div>
+                    <Badge className={getHealthColor(target.health)}>{target.health}</Badge>
+                    {isPending && (
+                      <div className="mt-1 text-xs text-muted-foreground" role="status" aria-live="polite">
+                        Testing upstream...
+                      </div>
+                    )}
+                    {testResult && !isPending && (
+                      <div
+                        className={testResult.status === 'success' ? 'mt-1 text-xs text-emerald-700' : 'mt-1 text-xs text-destructive'}
+                        role="status"
+                        aria-live="polite"
+                      >
+                        {testResult.message} · {testResult.testedAt}
+                      </div>
+                    )}
                   </TableCell>
-                )}
-              </TableRow>
-            ))
+                  {showActions && (
+                    <TableCell>
+                      <div className="flex gap-1">
+                        {onTest && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={isPending}
+                            onClick={() => onTest(target.id)}
+                          >
+                            {isPending ? 'Testing...' : 'Test'}
+                          </Button>
+                        )}
+                        {onUpdate && (
+                          <>
+                            {target.hasApiKey && (
+                              <VertexTargetDialog
+                                mode="edit"
+                                triggerLabel="Edit"
+                                initialDraft={toEditDraft(target)}
+                                disabled={isPending}
+                                onCreate={(draft) => onUpdate(target.id, toPatchPayload(draft))}
+                              />
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={isPending}
+                              onClick={() => onUpdate(target.id, { enabled: !target.enabled })}
+                            >
+                              {target.enabled ? 'Disable' : 'Enable'}
+                            </Button>
+                          </>
+                        )}
+                        {onDelete && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive"
+                            disabled={isPending}
+                            onClick={() => onDelete(target.id)}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  )}
+                </TableRow>
+              );
+            })
           ) : (
             <TableRow>
               <TableCell colSpan={showActions ? 7 : 6} className="h-24 text-center">

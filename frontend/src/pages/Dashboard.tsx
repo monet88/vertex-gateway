@@ -20,7 +20,7 @@ export function Dashboard({ adminData }: DashboardProps) {
       <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Vertex Gateway Admin</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Runtime posture, gateway keys, and Vertex targets overview.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Runtime posture, gateway keys, and Agent Platform Apikey overview.</p>
           <RuntimeBadges health={adminData.health ?? null} />
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -45,12 +45,12 @@ export function Dashboard({ adminData }: DashboardProps) {
         {adminData.loading ? (
           <TableSkeleton rows={3} columns={5} />
         ) : (
-          <GatewayKeysTable rows={adminData.gatewayKeys} onRevoke={(id) => adminData.revokeKey(id)} mutable={adminData.mutable} />
+          <GatewayKeysTable rows={adminData.gatewayKeys} onRevoke={(id) => adminData.revokeKey(id)} onDelete={(id) => adminData.deleteKey(id)} mutable={adminData.mutable} />
         )}
       </section>
 
       <section id="targets" className="scroll-mt-6">
-        <h2 className="mb-4 text-xl font-semibold tracking-tight text-foreground">Vertex targets</h2>
+        <h2 className="mb-4 text-xl font-semibold tracking-tight text-foreground">Agent Platform Apikey</h2>
         {adminData.loading ? (
           <TableSkeleton rows={3} columns={6} />
         ) : (

@@ -8,6 +8,8 @@ export type AdminViewId =
 
 export type AdminStoreMode = 'static-config' | 'file-store';
 export type VertexHealth = 'ready' | 'degraded' | 'failed' | 'disabled' | 'unknown';
+export type VertexApiKeyMode = 'full' | 'express';
+export type VertexPoolSelection = 'round-robin' | 'bind-first';
 
 export interface GatewayKeyRow {
   readonly id: string;
@@ -23,8 +25,8 @@ export interface VertexTargetRow {
   readonly label: string;
   readonly project: string;
   readonly location: string;
-  readonly authType: 'Google Cloud API key' | 'Service Account JSON';
-  readonly apiKeyMode: 'full' | 'express';
+  readonly authType: 'Agent Platform API key' | 'Service Account JSON';
+  readonly apiKeyMode: VertexApiKeyMode;
   readonly enabled: boolean;
   readonly weight: number;
   readonly modelAllowlist: readonly string[];
@@ -40,6 +42,7 @@ export interface RuntimeHealthSummary {
   readonly service: string;
   readonly mode: AdminStoreMode;
   readonly runtimeMode: string;
+  readonly selection: VertexPoolSelection;
   readonly targetCount: number;
   readonly healthyTargets: number;
   readonly degradedTargets: number;

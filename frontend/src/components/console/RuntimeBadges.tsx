@@ -10,6 +10,7 @@ export function RuntimeBadges({ health }: { readonly health: RuntimeHealthSummar
     <div className="mt-2 flex flex-wrap gap-2">
       <Badge variant={health.ok ? 'default' : 'destructive'}>{health.ok ? 'Ready' : 'Not ready'}</Badge>
       <Badge variant="secondary">{health.runtimeMode}</Badge>
+      <Badge variant="secondary">{health.selection}</Badge>
       <Badge variant="secondary">{health.mode}</Badge>
       <Badge variant={health.degradedTargets > 0 ? 'destructive' : 'secondary'}>{targetLabel}</Badge>
     </div>
