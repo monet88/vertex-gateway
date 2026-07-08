@@ -1,0 +1,25 @@
+docs/superpowers/plans/2026-07-05-admin-dashboard-backend.md
+  s_dc99d2ddddbb95::t_410ca518b43135 1295
+docs/superpowers/plans/2026-07-05-frontend-console-react.md
+  s_dc99d2ddddbb95::t_c4a1a0e201161f 610-611,614,619,623-637,948-949,952,975-976,978,981
+src/admin/admin-auth.ts
+  s_dc99d2ddddbb95::t_222c3b31c07509 20-22,24-27,30,34-36,38
+test/admin-auth.test.ts
+  s_dc99d2ddddbb95::t_2e393ed39094eb 1-4,6-7,10-23,42-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "72d3a259ed81f2810f1b45443233d27f57b6e0c0",
+  "prompts": {},
+  "sessions": {
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
