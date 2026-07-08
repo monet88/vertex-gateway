@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import type { GatewayKeyRow } from '@/types/admin';
+import { getGatewayKeyCopyValue } from './gateway-key-copy';
 
 export interface GatewayKeysTableProps {
   readonly rows: readonly GatewayKeyRow[];
@@ -25,9 +26,11 @@ const getStatusColor = (status: string) => {
   return 'border border-border bg-secondary text-secondary-foreground';
 };
 
-const copyPreview = async (preview: string): Promise<void> => {
+const copyGatewayKey = async (key: GatewayKeyRow): Promise<void> => {
   if (!navigator.clipboard) throw new Error('Clipboard unavailable');
-  await navigator.clipboard.writeText(preview);
+  const copyValue = getGatewayKeyCopyValue(key);
+  if (!copyValue) throw new Error('Gateway key secret is unavailable');
+  await navigator.clipboard.writeText(copyValue);
 };
 
 export function GatewayKeysTable({ rows, onRevoke, onDelete, mutable }: GatewayKeysTableProps) {
@@ -58,7 +61,7 @@ export function GatewayKeysTable({ rows, onRevoke, onDelete, mutable }: GatewayK
 
   async function handleCopy(key: GatewayKeyRow) {
     try {
-      await copyPreview(key.preview);
+      await copyGatewayKey(key);
       setCopyFailedId(null);
       setCopiedId(key.id);
       window.setTimeout(() => setCopiedId((current) => (current === key.id ? null : current)), 1600);
@@ -102,8 +105,8 @@ export function GatewayKeysTable({ rows, onRevoke, onDelete, mutable }: GatewayK
                 {showActions && (
                   <TableCell>
                     <div className="flex flex-wrap justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => { void handleCopy(key); }}>
-                        {copyFailedId === key.id ? 'Copy failed' : copiedId === key.id ? 'Copied' : 'Copy'}
+                      <Button variant="ghost" size="sm" disabled={!key.secret} onClick={() => { void handleCopy(key); }}>
+                        {copyFailedId === key.id ? 'Secret unavailable' : copiedId === key.id ? 'Copied' : key.secret ? 'Copy' : 'Secret unavailable'}
                       </Button>
                       {mutable && onRevoke && key.status === 'active' && (
                         <Button variant="ghost" size="sm" className="text-destructive" disabled={revokingId === key.id || deletingId === key.id} onClick={() => handleRevoke(key.id)}>

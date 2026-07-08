@@ -82,6 +82,46 @@ describe('admin frontend helpers', () => {
     expect(authFilesSource).toContain("target.authType === 'Service Account JSON'");
   });
 
+  it('copies the full gateway key secret instead of its masked preview', async () => {
+    const { getGatewayKeyCopyValue } = await import('../frontend/src/components/console/gateway-key-copy.js');
+    const fullSecret = 'vgw_full_secret_value_for_copy';
+
+    expect(getGatewayKeyCopyValue({
+      id: 'key-1',
+      label: 'Mobile app',
+      preview: 'vgw_full...copy',
+      status: 'active',
+      createdAt: new Date(0).toISOString(),
+      secret: fullSecret,
+    })).toBe(fullSecret);
+    expect(getGatewayKeyCopyValue({
+      id: 'key-2',
+      label: 'Persisted app',
+      preview: 'vgw_mask...only',
+      status: 'active',
+      createdAt: new Date(0).toISOString(),
+    })).toBeNull();
+  });
+
+  it('preserves newly created gateway key secrets across refreshed snapshots', async () => {
+    const { insertCreatedGatewayKey, mergeGatewayKeySecrets } = await import('../frontend/src/hooks/gateway-key-secrets.js');
+    const createdAt = new Date(0).toISOString();
+    const secret = 'vgw_new_secret_value';
+    const createdGatewayKey = {
+      id: 'key-1',
+      label: 'Dashboard key',
+      preview: 'vgw_new_...alue',
+      status: 'active' as const,
+      createdAt,
+    };
+
+    const withSecret = insertCreatedGatewayKey([], createdGatewayKey, secret);
+    const refreshed = mergeGatewayKeySecrets([{ ...createdGatewayKey, preview: 'vgw_new_...alue' }], withSecret);
+
+    expect(withSecret).toEqual([{ ...createdGatewayKey, secret }]);
+    expect(refreshed).toEqual([{ ...createdGatewayKey, secret }]);
+  });
+
   it('clears local auth before awaiting remote logout', async () => {
     const events: string[] = [];
     let resolveRemote: (() => void) | undefined;

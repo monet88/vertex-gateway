@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GatewayKeyRow, RuntimeHealthSummary, VertexTargetRow } from '@/types/admin';
+import { insertCreatedGatewayKey, mergeGatewayKeySecrets } from '@/hooks/gateway-key-secrets';
 import {
   createGatewayKey,
   createVertexTarget,
@@ -61,7 +62,7 @@ export function useAdminDashboardData(token: string) {
       if (refreshSequence.current !== sequence) return;
       setState((current) => ({
         ...current,
-        gatewayKeys: keysResponse.gatewayKeys,
+        gatewayKeys: mergeGatewayKeySecrets(keysResponse.gatewayKeys, current.gatewayKeys),
         vertexTargets: targets,
         health,
         mutable: keysResponse.mutable,
@@ -78,6 +79,10 @@ export function useAdminDashboardData(token: string) {
   const createKey = useCallback(async (label: string) => {
     try {
       const created = await createGatewayKey(options, label);
+      setState((current) => ({
+        ...current,
+        gatewayKeys: insertCreatedGatewayKey(current.gatewayKeys, created.gatewayKey, created.secret),
+      }));
       void refresh();
       return created.secret;
     } catch (error) {

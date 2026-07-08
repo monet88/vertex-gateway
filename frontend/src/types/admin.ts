@@ -16,6 +16,7 @@ export interface GatewayKeyRow {
   readonly id: string;
   readonly label: string;
   readonly preview: string;
+  readonly secret?: string;
   readonly status: 'active' | 'revoked';
   readonly createdAt: string;
   readonly revokedAt?: string;
