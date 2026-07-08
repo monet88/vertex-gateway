@@ -151,6 +151,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  base: '/admin/',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -449,11 +450,10 @@ bash scripts/fetch-stitch.sh "[screenshot.downloadUrl]=w[width]" "frontend/.stit
 ```
 
 6. Visually inspect every downloaded PNG.
-7. Save metadata to both:
+7. Save metadata to the canonical frontend location:
 
 ```text
 frontend/.stitch/metadata.json
-.stitch/metadata.json
 ```
 
 The metadata must include `projectId`, `title`, `deviceType`, `Last Sync Time`, and a `screens` map with screen id, label, source screen, dimensions, and canvas position.
@@ -805,7 +805,13 @@ export function ApiLogsTable({ rows }: ApiLogsTableProps) {
         <Table id="api-log-table">
           <TableHeader>
             <TableRow>
-              {(['time', 'routeFamily', 'model', 'latencyMs', 'status'] as const).map((key) => (
+              {([
+                ['time', 'Time'],
+                ['routeFamily', 'Route Family'],
+                ['model', 'Model'],
+                ['latencyMs', 'Latency (ms)'],
+                ['status', 'Status'],
+              ] as const).map(([key, label]) => (
                 <TableHead key={key}>
                   <Button
                     variant="ghost"
@@ -813,7 +819,7 @@ export function ApiLogsTable({ rows }: ApiLogsTableProps) {
                     className="px-0 text-muted-foreground hover:text-foreground"
                     onClick={() => setSort({ key, direction: sort.key === key ? nextDirection : 'asc' })}
                   >
-                    {key} {sort.key === key ? (sort.direction === 'asc' ? '↑' : '↓') : ''}
+                    {label} {sort.key === key ? (sort.direction === 'asc' ? '↑' : '↓') : ''}
                   </Button>
                 </TableHead>
               ))}
@@ -930,8 +936,12 @@ export function SecretInput({ id, label, value, onChange, placeholder }: SecretI
   const [revealed, setRevealed] = useState(false);
 
   async function copyValue() {
-    if (!value) return;
-    await navigator.clipboard.writeText(value);
+    if (!value || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // Clipboard write denied or unavailable.
+    }
   }
 
   return (
@@ -1155,18 +1165,18 @@ export async function adminFetch<T>(path: string, options: AdminApiOptions, init
 Create `frontend/src/hooks/useAdminToken.ts`:
 
 ```typescript
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 const storageKey = 'vertex-gateway-admin-token';
 
 export function useAdminToken() {
   const [token, setTokenState] = useState(() => sessionStorage.getItem(storageKey) ?? '');
 
-  function setToken(nextToken: string) {
+  const setToken = useCallback((nextToken: string) => {
     setTokenState(nextToken);
     if (nextToken) sessionStorage.setItem(storageKey, nextToken);
     else sessionStorage.removeItem(storageKey);
-  }
+  }, []);
 
   return { token, setToken };
 }

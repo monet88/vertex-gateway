@@ -100,8 +100,8 @@ Update `GenAiPoolClient.withFailover` and the streaming method, plus `retryWithJ
 
 - Base default: 250 ms (changed from 100 ms).
 - Algorithm: exponential backoff + full jitter.
-  Example: `delay = min(base * 2 ** attempt, cap) + random(0, base)`
-- Rationale: 100 ms linear was too aggressive for Google 429 responses and risked thundering herd. Exponential + jitter is a proven safe default.
+  Example: `delay = random(0, min(base * 2 ** attempt, 30_000))`
+- Rationale: 100 ms linear was too aggressive for Google 429 responses and risked thundering herd. Exponential + jitter is a proven safe default. The cap is a fixed 30_000 ms constant unless a future config surface is introduced.
 - `retryWithJitter` must read the configured base delay.
 - Future: honor `retry-after` / equivalent from SDK error when present.
 

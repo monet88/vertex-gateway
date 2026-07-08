@@ -101,20 +101,11 @@ While the structural changes (including the modular asset serving via `src/admin
   }, [catalog]);
   ```
 
-#### 4. Node.js Event Loop Crash Hazard in Asset Server
-- **Location:** `src/admin/admin-spa.ts` (lines 40-52)
-- **Mechanism:** `serveAdminAsset` streams assets directly using `createReadStream(assetPath).pipe(res)` without binding an error listener on the stream. An unhandled stream error (such as a premature network disconnect or disk fault) will emit an uncaught exception and crash the entire backend process.
-- **Actionable Recommendation:** Listen to stream errors and send a 500 error response if headers have not yet been sent:
-  ```typescript
-  const stream = createReadStream(assetPath);
-  stream.on('error', (err) => {
-    if (!res.headersSent) {
-      res.statusCode = 500;
-      res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({ error: { code: 'INTERNAL', message: 'Failed to read asset' } }));
-    }
-  });
-  stream.pipe(res);
+#### 4. Node.js Event Loop Crash Hazard in Asset Server (Resolved)
+- **Location:** `src/admin/admin-spa.ts`
+- **Status:** Already fixed in the current implementation.
+- **Mechanism:** `serveAdminAsset` now creates the stream explicitly, binds `stream.on('error', ...)`, returns a plain-text 500 before headers are sent, and calls `res.destroy()` if the stream fails after headers have already been flushed.
+- **Recommendation:** Keep the existing handler; no additional crash fix is required here.
   ```
 
 ---

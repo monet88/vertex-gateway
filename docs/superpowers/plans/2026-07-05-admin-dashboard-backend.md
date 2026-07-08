@@ -73,13 +73,10 @@ Those are real features, but they do not need to exist for the first working das
 Create `test/gateway-key-store.test.ts`:
 
 ```typescript
-import { describe, expect, it } from 'vitest';
-import {
-  createGatewayKeyRecord,
-  createReadOnlyGatewayKeyRecord,
-  matchesGatewayKeyRecord,
-  redactGatewayKeyRecord,
-} from '../src/admin/gateway-key-store.js';
+// Superseded design artifact: the shipped implementation centers the module on
+// `createGatewayKeyStore()` and `verifyManagedGatewayKey()` rather than the
+// standalone `createGatewayKeyRecord()` / `matchesGatewayKeyRecord()` helpers
+// described in this draft.
 
 describe('gateway key store helpers', () => {
   it('creates a managed key record without storing the raw key', () => {
@@ -257,34 +254,10 @@ git commit -m "feat: add managed gateway key helpers"
 Append to `test/env-config.test.ts`:
 
 ```typescript
-it('loads managed gateway keys and blocked origins from pool overlay', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-config-'));
-  const overlayFile = path.join(dir, 'pool-config.local.json');
-  fs.writeFileSync(overlayFile, JSON.stringify({
-    gatewayKeyRecords: [{
-      id: 'key-managed',
-      label: 'Managed key',
-      keyHash: 'a'.repeat(64),
-      keyPreview: 'vgw_...abc',
-      enabled: true,
-      createdAt: '2026-07-05T00:00:00.000Z',
-      revokedAt: null,
-      source: 'managed',
-    }],
-    blockedOrigins: ['https://blocked.example'],
-  }));
-
-  const config = loadConfig({
-    env: {
-      GATEWAY_POOL_CONFIG_FILE: overlayFile,
-      GATEWAY_API_KEYS: 'env-key',
-    },
-  });
-
-  expect(config.gatewayKeyRecords).toHaveLength(1);
-  expect(config.gatewayKeyRecords[0].id).toBe('key-managed');
-  expect(config.blockedOrigins).toEqual(['https://blocked.example']);
-});
+// Superseded design note: the shipped implementation does not add
+// `gatewayKeyRecords` or `blockedOrigins` to `GatewayConfig`. Managed gateway
+// state is persisted as `managedGatewayKeyHashes`, so this test should not be
+// implemented as written.
 ```
 
 If the existing `loadConfig` test helper uses a different signature, adapt only the `loadConfig` call to the existing helper style. Keep the same assertions.
@@ -1447,7 +1420,7 @@ Expected: FAIL with 404.
 Modify `src/admin/credential-store.ts`:
 
 ```typescript
-export const importApiKeyCredential = (
+export const createApiKeyVertexCredential = (
   config: GatewayConfig,
   body: Record<string, unknown>,
 ): AdminVertexCredentialRecord => {
