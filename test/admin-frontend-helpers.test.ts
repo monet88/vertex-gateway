@@ -133,6 +133,23 @@ describe('admin frontend helpers', () => {
     expect(loginScreenSource).toContain('Remember session');
   });
 
+  it('sets the browser page title to Vertex Gateway', () => {
+    const indexHtml = readFileSync(new URL('../frontend/index.html', import.meta.url), 'utf8');
+
+    expect(indexHtml).toContain('<title>Vertex Gateway</title>');
+  });
+
+  it('keeps the standalone login screen on the operator console design system', () => {
+    const loginScreenSource = readFileSync(new URL('../frontend/src/pages/AdminLoginScreen.tsx', import.meta.url), 'utf8');
+
+    expect(loginScreenSource).toContain('bg-background');
+    expect(loginScreenSource).toContain('operator-panel');
+    expect(loginScreenSource).toContain('var(--operator-teal)');
+    expect(loginScreenSource).toContain('var(--console-input)');
+    expect(loginScreenSource).not.toContain('#f7f7f7');
+    expect(loginScreenSource).not.toContain('bg-white');
+  });
+
   it('clears local auth before awaiting remote logout', async () => {
     const events: string[] = [];
     let resolveRemote: (() => void) | undefined;
