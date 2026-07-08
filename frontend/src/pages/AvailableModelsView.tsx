@@ -35,8 +35,11 @@ export function AvailableModelsView({ token }: AvailableModelsViewProps) {
         }
       }
       setCatalogs(next);
-      if (errors.length > 0) {
-        setError(`Partial load: ${errors.join('; ')}`);
+      const loadError = errors.length === 0
+        ? null
+        : `${Object.keys(next).length === 0 ? 'Failed to load catalog' : 'Partial load'}: ${errors.join('; ')}`;
+      if (loadError) {
+        setError(loadError);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load catalog');

@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.json ./
-RUN npm ci --omit=dev --omit=optional
+RUN npm ci --omit=optional
 
 FROM deps AS compile
 COPY src ./src
@@ -10,7 +10,7 @@ RUN npx tsc -p tsconfig.json
 FROM node:22-bookworm-slim AS frontend-deps
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --omit=dev --omit=optional
+RUN npm ci
 
 FROM frontend-deps AS frontend-build
 WORKDIR /app/frontend

@@ -1292,7 +1292,7 @@ Modify `src/app.ts` imports:
 import { enforceBlockedOrigin } from './lib/domain-policy.js';
 ```
 
-After admin route handling and before `applyCors(req, res, config);`, add:
+Before admin route handling and before `applyCors(req, res, config);`, add:
 
 ```typescript
       enforceBlockedOrigin(typeof req.headers.origin === 'string' ? req.headers.origin : undefined, config.blockedOrigins);

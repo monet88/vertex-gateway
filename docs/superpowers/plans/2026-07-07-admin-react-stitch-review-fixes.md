@@ -292,17 +292,22 @@ RUN npx tsc -p tsconfig.json
 FROM node:22-bookworm-slim AS frontend-deps
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --omit=optional
+RUN npm ci
 
 FROM frontend-deps AS frontend-build
 WORKDIR /app/frontend
 COPY frontend ./
 RUN npm run build
 
+FROM node:22-bookworm-slim AS prod-deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --omit=optional --ignore-scripts
+
 FROM node:22-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=compile /app/compiled ./compiled
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 COPY package.json ./package.json
@@ -478,36 +483,21 @@ interface LoginAttemptState {
   readonly failures: number;
 }
 
-const loginAttempts = new Map<string, LoginAttemptState>();
-
-const loginRateLimitKey = (req: IncomingMessage, username: string): string =>
-  `${req.socket.remoteAddress ?? 'unknown'}:${username}`;
+const rateLimiter = createAdminLoginRateLimiter({
+  windowMs: ADMIN_LOGIN_WINDOW_MS,
+  maxFailures: ADMIN_LOGIN_MAX_FAILURES,
+});
 
 const assertAdminLoginAllowed = (req: IncomingMessage, username: string): void => {
-  const now = Date.now();
-  const key = loginRateLimitKey(req, username);
-  const current = loginAttempts.get(key);
-  if (!current || now - current.firstFailureAt > ADMIN_LOGIN_WINDOW_MS) {
-    return;
-  }
-  if (current.failures >= ADMIN_LOGIN_MAX_FAILURES) {
-    throw new GatewayError(429, 'RATE_LIMITED', 'Too many failed admin login attempts. Try again later.');
-  }
+  rateLimiter.assertAllowed(req, username);
 };
 
 const recordAdminLoginFailure = (req: IncomingMessage, username: string): void => {
-  const now = Date.now();
-  const key = loginRateLimitKey(req, username);
-  const current = loginAttempts.get(key);
-  if (!current || now - current.firstFailureAt > ADMIN_LOGIN_WINDOW_MS) {
-    loginAttempts.set(key, { firstFailureAt: now, failures: 1 });
-    return;
-  }
-  loginAttempts.set(key, { firstFailureAt: current.firstFailureAt, failures: current.failures + 1 });
+  rateLimiter.recordFailure(req, username);
 };
 
 const clearAdminLoginFailures = (req: IncomingMessage, username: string): void => {
-  loginAttempts.delete(loginRateLimitKey(req, username));
+  rateLimiter.clearFailures(req, username);
 };
 ```
 

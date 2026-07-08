@@ -178,7 +178,10 @@ const sanitize = ({ hash: _hash, ...record }: AdminGatewayKeyRecord): SanitizedG
 
 export const verifyManagedGatewayKey = (candidate: string, hashes: readonly string[]): boolean => {
   const candidateHash = Buffer.from(hashGatewayKey(candidate), 'hex');
-  return hashes.some((hash) => timingSafeEqual(candidateHash, Buffer.from(hash, 'hex')));
+  return hashes.some((hash) => {
+    const stored = Buffer.from(hash, 'hex');
+    return candidateHash.length === stored.length && timingSafeEqual(candidateHash, stored);
+  });
 };
 ```
 

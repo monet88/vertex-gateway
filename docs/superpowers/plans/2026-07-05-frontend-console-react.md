@@ -614,14 +614,14 @@ export function StitchConsoleShell({ children, rail }: StitchConsoleShellProps) 
     <main className="min-h-dvh bg-background text-foreground">
       <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[240px_1fr]">
         <aside className="border-b border-border bg-card/90 p-4 lg:border-b-0 lg:border-r">
-          <a href="/" className="block rounded-lg text-lg font-semibold tracking-tight text-foreground">
+          <a href="/admin?view=dashboard" className="block rounded-lg text-lg font-semibold tracking-tight text-foreground">
             Vertex Gateway Admin
           </a>
           <nav aria-label="Console navigation" className="mt-8 grid gap-2 text-sm text-muted-foreground">
-            <a className="rounded-md bg-secondary px-3 py-2 text-foreground" href="#logs">API call logs</a>
-            <a className="rounded-md px-3 py-2 hover:bg-secondary hover:text-foreground" href="#keys">Gateway keys</a>
-            <a className="rounded-md px-3 py-2 hover:bg-secondary hover:text-foreground" href="#targets">Vertex targets</a>
-            <a className="rounded-md px-3 py-2 hover:bg-secondary hover:text-foreground" href="#policy">Domain policy</a>
+            <button type="button" className="rounded-md bg-secondary px-3 py-2 text-left text-foreground">Dashboard</button>
+            <button type="button" className="rounded-md px-3 py-2 text-left hover:bg-secondary hover:text-foreground">AI Providers</button>
+            <button type="button" className="rounded-md px-3 py-2 text-left hover:bg-secondary hover:text-foreground">Auth Files</button>
+            <button type="button" className="rounded-md px-3 py-2 text-left hover:bg-secondary hover:text-foreground">Available Models</button>
           </nav>
         </aside>
         <section className="grid gap-4 p-4 xl:grid-cols-[1fr_340px] xl:p-6">
@@ -989,7 +989,7 @@ export interface GatewayKeyDialogProps {
 export function GatewayKeyDialog({ onCreate }: GatewayKeyDialogProps) {
   const [label, setLabel] = useState('');
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onCreate(label.trim() || 'Managed key');
     setLabel('');
@@ -1046,7 +1046,7 @@ export function VertexTargetDialog({ onCreate }: VertexTargetDialogProps) {
     setDraft((current) => ({ ...current, ...update }));
   }
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onCreate({ ...draft, label: draft.label.trim() || 'Vertex target' });
     setDraft({ label: '', project: '', location: 'global', apiKey: '' });
@@ -1075,7 +1075,7 @@ export function VertexTargetDialog({ onCreate }: VertexTargetDialogProps) {
               <Input id="target-location" value={draft.location} onChange={(event) => patch({ location: event.target.value })} required />
             </div>
           </div>
-          <SecretInput id="target-api-key" label="Google Cloud API key" value={draft.apiKey} onChange={(apiKey) => patch({ apiKey })} />
+          <SecretInput id="target-api-key" label="Google Cloud API key" value={draft.apiKey} onChange={(apiKey) => patch({ apiKey })} required />
           <Button type="submit">Thêm target</Button>
         </form>
       </DialogContent>
@@ -1172,12 +1172,22 @@ import { useCallback, useState } from 'react';
 const storageKey = 'vertex-gateway-admin-token';
 
 export function useAdminToken() {
-  const [token, setTokenState] = useState(() => sessionStorage.getItem(storageKey) ?? '');
+  const [token, setTokenState] = useState(() => {
+    try {
+      return sessionStorage.getItem(storageKey) ?? '';
+    } catch {
+      return '';
+    }
+  });
 
   const setToken = useCallback((nextToken: string) => {
     setTokenState(nextToken);
-    if (nextToken) sessionStorage.setItem(storageKey, nextToken);
-    else sessionStorage.removeItem(storageKey);
+    try {
+      if (nextToken) sessionStorage.setItem(storageKey, nextToken);
+      else sessionStorage.removeItem(storageKey);
+    } catch {
+      // Ignore storage failures and keep the in-memory token.
+    }
   }, []);
 
   return { token, setToken };

@@ -53,6 +53,7 @@ Add this test to `test/admin-routes.test.ts` inside the admin route suite. Use t
 
 ```ts
 it('serves the React admin shell at /admin without exposing the old static admin UI', async () => {
+  writeAdminSpaFixture();
   server = createApp({
     config: testConfig({ enableAdminRoutes: true, adminToken: 'admin-secret' }),
     runtimeFactory: () => createFakeRuntime(),
@@ -504,7 +505,7 @@ export async function fetchAdminHealth(options: AdminApiOptions): Promise<Runtim
     runtimeMode: response.runtime.mode ?? 'unknown',
     targetCount: targets.length,
     healthyTargets: targets.filter((target) => target.health?.status === 'healthy').length,
-    degradedTargets: targets.filter((target) => target.health?.status && target.health.status !== 'healthy').length,
+    degradedTargets: targets.filter((target) => target.health?.status === 'cooldown' || target.health?.status === 'failed').length,
   };
 }
 
@@ -820,7 +821,7 @@ Add the shell return:
       onViewChange={setView}
       title={title}
       health={adminData.health}
-      onLogout={() => { setToken(''); setMustChangePassword(false); }}
+      onLogout={() => { void handleLogout(); }}
     >
       {view === 'dashboard' && <Dashboard data={adminData} />}
       {view === 'ai-providers' && <AIProvidersView data={adminData} />}
@@ -1442,6 +1443,7 @@ export function AvailableModelsView({ data }: AvailableModelsViewProps) {
     catalog.defaultModel,
     ...Object.values(catalog.aliases),
     ...catalog.allowlist,
+    ...catalog.disabled,
   ].filter((value): value is string => Boolean(value)))) : [];
 
   return (
