@@ -1,0 +1,29 @@
+src/admin/admin-login-rate-limit.ts
+  s_f1dd3b40a3b257::t_1aa332ef76a810 16-17,45,57,67
+src/admin/admin-auth.ts
+  s_f1dd3b40a3b257::t_a72a32de593d61 4-5
+  s_f1dd3b40a3b257::t_579ed4b70d455e 20,24-27,30
+src/admin/admin-routes.ts
+  s_f1dd3b40a3b257::t_b9851778b3a642 37-42
+  s_f1dd3b40a3b257::t_b79ff75e4704fe 66-78,80-81,84-85,88-89,170-172,174-182,187-196,338,341,344
+src/admin/admin-session.ts
+  s_f1dd3b40a3b257::t_edfc2642d1cab0 1-30
+test/admin-routes.test.ts
+  s_f1dd3b40a3b257::t_92e8b7c9fde3b3 487-521,535,557,567-583
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "36c055cbaf0c90e4897f9857f4b5456967a3c8c5",
+  "prompts": {},
+  "sessions": {
+    "s_f1dd3b40a3b257": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3d39-c521-7c3a-b444-0c0ad13c415e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
