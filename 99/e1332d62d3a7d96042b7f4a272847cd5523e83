@@ -1,0 +1,27 @@
+plans/reports/07-07-2026-pr8-review-report.md
+  s_f1dd3b40a3b257::t_bd52a40ceb95c4 104-108
+docs/superpowers/plans/2026-07-05-admin-dashboard-backend.md
+  s_f1dd3b40a3b257::t_9e88789d3f586c 76-79,257-260,1423
+docs/superpowers/plans/2026-07-05-frontend-console-react.md
+  s_f1dd3b40a3b257::t_2144843ff36edf 154,453,808-814,822,939-944,1168,1175,1179
+docs/superpowers/specs/2026-07-02-agent-platform-inference-robustness-design.md
+  s_f1dd3b40a3b257::t_e21748c8d539cb 103-104
+docs/superpowers/plans/2026-07-05-admin-dashboard-real-data.md
+  s_f1dd3b40a3b257::t_95bc0530fdaaaf 755-756,779,878-886
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "99e1332d62d3a7d96042b7f4a272847cd5523e83",
+  "prompts": {},
+  "sessions": {
+    "s_f1dd3b40a3b257": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3d39-c521-7c3a-b444-0c0ad13c415e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
