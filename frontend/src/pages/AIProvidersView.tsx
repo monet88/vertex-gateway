@@ -30,6 +30,15 @@ export function AIProvidersView({ adminData, token }: AIProvidersViewProps) {
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
   const [testResults, setTestResults] = useState<ReadonlyMap<string, VertexTargetTestResult>>(new Map());
 
+  const clearTestResult = (id: string): void => {
+    setTestResults((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
   const handleTest = async (id: string) => {
     if (pendingIds.has(id)) return;
     setActionError(null);
@@ -79,6 +88,7 @@ export function AIProvidersView({ adminData, token }: AIProvidersViewProps) {
     setActionError(null);
     try {
       await updateVertexCredential({ token }, id, patch);
+      clearTestResult(id);
       await adminData.refetch();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Update failed');
@@ -124,7 +134,7 @@ export function AIProvidersView({ adminData, token }: AIProvidersViewProps) {
       </StitchPanel>
 
       <StitchPanel
-        title="Agent Platform Apikey"
+        title="Agent Platform API key"
         actions={
           <div className="flex items-center gap-3">
             <Label htmlFor="pool-selection" className="whitespace-nowrap">Pool selection</Label>

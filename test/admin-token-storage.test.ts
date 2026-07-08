@@ -23,11 +23,14 @@ describe('admin token browser storage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('persists and clears the admin token in browser storage', () => {
+  it('only persists the admin token in browser storage when explicitly requested', () => {
     const localStorage = createStorage();
     vi.stubGlobal('window', { localStorage });
 
     persistAdminToken('admin-token');
+    expect(readPersistedAdminToken()).toBe('');
+
+    persistAdminToken('admin-token', { persist: true });
     expect(readPersistedAdminToken()).toBe('admin-token');
 
     persistAdminToken('');

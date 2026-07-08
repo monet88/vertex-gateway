@@ -15,11 +15,12 @@ export const mergeGatewayKeySecrets = (
 ): readonly GatewayKeyRow[] => {
   const secretsById = new Map(
     currentRows
-      .filter((row) => row.secret)
+      .filter((row) => row.status === 'active' && row.secret)
       .map((row) => [row.id, row.secret] as const),
   );
 
   return nextRows.map((row) => {
+    if (row.status !== 'active') return row;
     const secret = secretsById.get(row.id);
     return secret ? { ...row, secret } : row;
   });

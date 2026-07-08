@@ -1,17 +1,37 @@
-import { useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { persistAdminToken, readPersistedAdminToken, type AdminTokenStorageOptions } from '@/lib/admin-token-storage';
 
 /**
- * Persisting the admin token keeps local operator sessions usable across page
- * reloads. Logout clears the browser copy via setToken('').
+ * A module-scoped store keeps all hook consumers on the same admin session.
+ * Browser persistence is explicit opt-in via setToken(token, { persist: true }).
  */
-export function useAdminToken() {
-  const [token, setTokenState] = useState(readPersistedAdminToken);
+type TokenListener = () => void;
 
-  const setToken = (nextToken: string, options?: AdminTokenStorageOptions): void => {
-    setTokenState(nextToken);
-    persistAdminToken(nextToken, options);
+let currentToken = readPersistedAdminToken();
+const listeners = new Set<TokenListener>();
+
+const emitTokenChange = (): void => {
+  listeners.forEach((listener) => listener());
+};
+
+const subscribeToken = (listener: TokenListener): (() => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
   };
+};
 
-  return { token, setToken };
+const getTokenSnapshot = (): string => currentToken;
+const getServerTokenSnapshot = (): string => '';
+
+const setSharedAdminToken = (nextToken: string, options?: AdminTokenStorageOptions): void => {
+  currentToken = nextToken;
+  persistAdminToken(nextToken, options);
+  emitTokenChange();
+};
+
+export function useAdminToken() {
+  const token = useSyncExternalStore(subscribeToken, getTokenSnapshot, getServerTokenSnapshot);
+
+  return { token, setToken: setSharedAdminToken };
 }

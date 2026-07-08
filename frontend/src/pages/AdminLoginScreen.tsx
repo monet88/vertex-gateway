@@ -115,7 +115,7 @@ export function AdminLoginScreen({
               Remember session
             </label>
 
-            <Button type="submit" className="h-11 w-full rounded-lg bg-[var(--operator-teal)] text-sm font-semibold text-[#003731] hover:bg-[var(--operator-teal-container)] active:scale-[0.98]" disabled={authLoading}>
+            <Button type="submit" className="h-11 w-full rounded-lg bg-[var(--operator-teal)] text-sm font-semibold text-[#003731] hover:bg-[var(--operator-teal)]/90 active:scale-[0.98]" disabled={authLoading}>
               <LogIn className="mr-2 h-4 w-4" aria-hidden />
               {authLoading ? 'Signing in...' : 'Login'}
             </Button>

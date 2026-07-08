@@ -1,6 +1,7 @@
 const ADMIN_TOKEN_STORAGE_KEY = 'vertex-gateway.admin-token';
 
 export interface AdminTokenStorageOptions {
+  /** Browser persistence is opt-in because this is a privileged admin token. */
   readonly persist?: boolean;
 }
 
@@ -20,7 +21,7 @@ export const persistAdminToken = (token: string, options: AdminTokenStorageOptio
   const storage = getLocalStorage();
   if (!storage) return;
   try {
-    if (token && options.persist !== false) {
+    if (token && options.persist === true) {
       storage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
       return;
     }

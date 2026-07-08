@@ -65,21 +65,30 @@ describe('admin frontend helpers', () => {
     expect(dashboardSource).not.toContain('adminSecurityNotices');
   });
 
-  it('uses Agent Platform Apikey naming instead of Vertex Targets on dashboard', () => {
+  it('uses Agent Platform API key naming instead of Vertex Targets on dashboard', () => {
     const dashboardSource = readFileSync(new URL('../frontend/src/pages/Dashboard.tsx', import.meta.url), 'utf8');
 
-    expect(dashboardSource).toContain('Agent Platform Apikey');
+    expect(dashboardSource).toContain('Agent Platform API key');
     expect(dashboardSource).not.toContain('Vertex Targets');
+  });
+
+  it('keeps service-account import out of the API-key-only dashboard summary', () => {
+    const dashboardSource = readFileSync(new URL('../frontend/src/pages/Dashboard.tsx', import.meta.url), 'utf8');
+
+    expect(dashboardSource).not.toContain('ServiceAccountTargetDialog');
+    expect(dashboardSource).toContain('apiKeyTargets');
   });
 
   it('groups upstream credentials into API key and account JSON sections', () => {
     const authFilesSource = readFileSync(new URL('../frontend/src/pages/AuthFilesView.tsx', import.meta.url), 'utf8');
 
     expect(authFilesSource).toContain('Agent Platform Manager');
-    expect(authFilesSource).toContain('Agent Platform Apikey');
+    expect(authFilesSource).toContain('Agent Platform API key');
     expect(authFilesSource).toContain('Project Account Json');
     expect(authFilesSource).toContain('target.hasApiKey');
     expect(authFilesSource).toContain("target.authType === 'Service Account JSON'");
+    expect(authFilesSource).toContain('pendingIds={pendingIds}');
+    expect(authFilesSource).toContain('testResults={testResults}');
   });
 
   it('copies the full gateway key secret instead of its masked preview', async () => {
@@ -122,12 +131,38 @@ describe('admin frontend helpers', () => {
     expect(refreshed).toEqual([{ ...createdGatewayKey, secret }]);
   });
 
+  it('does not preserve gateway key secrets on revoked refreshed rows', async () => {
+    const { mergeGatewayKeySecrets } = await import('../frontend/src/hooks/gateway-key-secrets.js');
+    const createdAt = new Date(0).toISOString();
+    const currentGatewayKey = {
+      id: 'key-1',
+      label: 'Dashboard key',
+      preview: 'vgw_new_...alue',
+      status: 'active' as const,
+      createdAt,
+      secret: 'vgw_new_secret_value',
+    };
+    const revokedGatewayKey = {
+      id: currentGatewayKey.id,
+      label: currentGatewayKey.label,
+      preview: currentGatewayKey.preview,
+      status: 'revoked' as const,
+      createdAt,
+      revokedAt: new Date(1).toISOString(),
+    };
+    const refreshed = mergeGatewayKeySecrets([revokedGatewayKey], [currentGatewayKey]);
+
+    expect(refreshed).toEqual([revokedGatewayKey]);
+    expect(refreshed[0]).not.toHaveProperty('secret');
+  });
+
   it('renders a standalone login screen before the admin shell', () => {
     const adminAppSource = readFileSync(new URL('../frontend/src/pages/AdminApp.tsx', import.meta.url), 'utf8');
     const loginScreenSource = readFileSync(new URL('../frontend/src/pages/AdminLoginScreen.tsx', import.meta.url), 'utf8');
 
     expect(adminAppSource).toContain('AdminLoginScreen');
     expect(adminAppSource).toContain('if (!isAuthenticated)');
+    expect(adminAppSource).toContain('const [rememberSession, setRememberSession] = useState(false);');
     expect(loginScreenSource).toContain('Sign in');
     expect(loginScreenSource).toContain('Admin Username');
     expect(loginScreenSource).toContain('Remember session');

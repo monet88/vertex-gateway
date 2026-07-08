@@ -84,7 +84,6 @@ In `frontend/src/index.css`, align the existing token names with the Stitch proj
   color-scheme: dark;
   --radius: 0.5rem;
 
-  --console-canvas: #0b1020;
   --console-surface: #0e1513;
   --console-surface-low: #161d1b;
   --console-surface-panel: #1a211f;
@@ -95,9 +94,7 @@ In `frontend/src/index.css`, align the existing token names with the Stitch proj
   --console-ink: #e5e7eb;
   --console-ink-soft: #dde4e1;
   --console-muted: #94a3b8;
-  --console-muted-strong: #bacac5;
   --operator-teal: #57f1db;
-  --operator-teal-container: #2dd4bf;
   --healthy-green: #22c55e;
   --warning-amber: #f59e0b;
   --failure-red: #ef4444;
@@ -181,7 +178,7 @@ Add reusable operator classes:
 Create `frontend/src/components/stitch/StitchPanel.tsx`:
 
 ```tsx
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 interface StitchPanelProps {
@@ -193,12 +190,14 @@ interface StitchPanelProps {
 }
 
 export function StitchPanel({ children, className, title, description, actions }: StitchPanelProps) {
+  const titleId = useId();
+
   return (
-    <section className={cn('operator-panel overflow-hidden', className)}>
+    <section className={cn('operator-panel overflow-hidden', className)} aria-labelledby={title ? titleId : undefined}>
       {(title || description || actions) && (
         <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            {title ? <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2> : null}
+            {title ? <h2 id={titleId} className="text-lg font-semibold tracking-tight text-foreground">{title}</h2> : null}
             {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
           </div>
           {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
@@ -256,7 +255,7 @@ className={cn('h-10 px-3 text-left align-middle font-mono text-xs uppercase trac
 className={cn('px-3 py-3 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]', className)}
 ```
 
-In `frontend/src/components/ui/button-variants.ts`, keep variant names unchanged and tune the base to include `rounded-lg`, `active:scale-[0.96]`, and focus-visible ring styles already mapped to `--ring`.
+In `frontend/src/components/ui/button-variants.ts`, keep variant names unchanged and tune the base to include `rounded-lg`, `active:scale-[0.96]`, a transform-capable transition, and focus-visible ring styles already mapped to `--ring`.
 
 In `frontend/src/components/ui/badge-variants.ts`, keep variant names unchanged and tune `default` to teal, `secondary` to surface-high, and `destructive` to failure red with readable text.
 
@@ -348,13 +347,14 @@ Expected before implementation: fails until `gateway-keys` exists.
 
 - [ ] **Step 4: Rebuild `StitchConsoleShell`**
 
-Modify `frontend/src/components/stitch/StitchConsoleShell.tsx` so it keeps the same `children`, `rail`, `activeView`, and `onViewChange` props, and adds optional top-bar actions:
+Modify `frontend/src/components/stitch/StitchConsoleShell.tsx` so it keeps the same `children`, `rail`, `activeView`, `onViewChange`, and live `health` props, and adds optional top-bar actions:
 
 ```tsx
 import type { ReactNode } from 'react';
 import { Activity, Database, ExternalLink, LogOut } from 'lucide-react';
 import { adminNavItems } from '@/data/admin-static';
-import type { AdminViewId } from '@/types/admin';
+import { getShellRuntimeBadge } from '@/components/stitch/shell-runtime-badge';
+import type { AdminViewId, RuntimeHealthSummary } from '@/types/admin';
 
 export interface StitchConsoleShellProps {
   readonly children: ReactNode;
@@ -363,9 +363,13 @@ export interface StitchConsoleShellProps {
   readonly onViewChange?: (view: AdminViewId) => void;
   readonly topActions?: ReactNode;
   readonly onLogout?: () => void;
+  readonly health?: RuntimeHealthSummary | null;
 }
 
-export function StitchConsoleShell({ children, rail, activeView = 'dashboard', onViewChange, topActions, onLogout }: StitchConsoleShellProps) {
+export function StitchConsoleShell({ children, rail, activeView = 'dashboard', onViewChange, topActions, onLogout, health = null }: StitchConsoleShellProps) {
+  const runtimeBadge = getShellRuntimeBadge(health);
+  const runtimeModeLabel = `Runtime ${health?.runtimeMode ?? 'unknown'}`;
+
   return (
     <main className="min-h-dvh bg-background text-foreground">
       <div className="grid min-h-dvh grid-cols-1 md:grid-cols-[240px_1fr]">
@@ -374,7 +378,7 @@ export function StitchConsoleShell({ children, rail, activeView = 'dashboard', o
             <a href="/admin" className="block text-2xl font-semibold tracking-tight text-[var(--operator-teal)]">
               Hệ thống Vertex
             </a>
-            <p className="mt-1 text-xs text-muted-foreground">Môi trường Production</p>
+            <p className="mt-1 text-xs text-muted-foreground">{runtimeModeLabel}</p>
           </div>
           <nav aria-label="Console navigation" className="grid gap-1 text-sm">
             {adminNavItems.map((item) => {
@@ -398,7 +402,7 @@ export function StitchConsoleShell({ children, rail, activeView = 'dashboard', o
               );
             })}
           </nav>
-          {rail ? <div className="mt-6 hidden lg:block">{rail}</div> : null}
+          {rail ? <div className="mt-6">{rail}</div> : null}
           {onLogout ? (
             <div className="mt-6 border-t border-border pt-4">
               <button type="button" className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-[var(--failure-red)] hover:bg-[var(--console-surface-high)]" onClick={onLogout}>
@@ -413,10 +417,10 @@ export function StitchConsoleShell({ children, rail, activeView = 'dashboard', o
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-xl font-semibold tracking-tight text-[var(--operator-teal)]">Vertex Gateway</span>
               <span className="inline-flex items-center gap-2 rounded border border-border bg-[var(--console-surface-highest)] px-2.5 py-1 font-mono text-[11px] uppercase tracking-widest text-foreground">
-                <span className="status-dot bg-[var(--healthy-green)]" /> Production
+                <span className={`status-dot ${runtimeBadge.toneClass}`} /> {runtimeBadge.label}
               </span>
               <span className="inline-flex items-center gap-2 rounded border border-border bg-[var(--console-surface-highest)] px-2.5 py-1 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                <Database className="h-3.5 w-3.5 text-[var(--operator-teal)]" aria-hidden /> Admin Store
+                <Database className="h-3.5 w-3.5 text-[var(--operator-teal)]" aria-hidden /> Admin Store: {health?.mode ?? 'unknown'}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -560,12 +564,13 @@ In `frontend/src/pages/Dashboard.tsx`, derive KPI metrics from live data:
 
 ```tsx
 const activeGatewayKeys = adminData.gatewayKeys.filter((key) => key.status === 'active').length;
-const readyTargets = adminData.vertexTargets.filter((target) => target.health === 'ready').length;
-const failedTargets = adminData.vertexTargets.filter((target) => target.health === 'failed').length;
+const apiKeyTargets = adminData.vertexTargets.filter((target) => target.hasApiKey);
+const readyApiKeyTargets = apiKeyTargets.filter((target) => target.health === 'ready').length;
+const failedApiKeyTargets = apiKeyTargets.filter((target) => target.health === 'failed').length;
 const metrics = [
   { id: 'gateway-keys', label: 'Active Gateway Keys', value: String(activeGatewayKeys), icon: 'key', colorScheme: 'primary' as const },
-  { id: 'vertex-targets', label: 'Vertex Targets', value: String(adminData.vertexTargets.length), icon: 'dns', colorScheme: 'secondary' as const },
-  { id: 'ready-targets', label: 'Ready Targets', value: String(readyTargets), trendValue: failedTargets ? `${failedTargets} failed` : 'ready', colorScheme: failedTargets ? 'error' as const : 'tertiary' as const },
+  { id: 'agent-platform-api-key', label: 'Agent Platform API key', value: String(apiKeyTargets.length), icon: 'dns', colorScheme: 'secondary' as const },
+  { id: 'ready-api-key-targets', label: 'Ready API key targets', value: String(readyApiKeyTargets), trendValue: failedApiKeyTargets ? `${failedApiKeyTargets} failed` : 'ready', colorScheme: failedApiKeyTargets ? 'error' as const : 'tertiary' as const },
   { id: 'runtime-mode', label: 'Runtime Mode', value: adminData.health?.runtimeMode ?? 'unknown', colorScheme: 'secondary' as const },
 ];
 ```
@@ -577,9 +582,9 @@ Recompose the JSX around:
 <StitchKpiStrip metrics={metrics} />
 <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
   <div className="space-y-6">
-    <StitchPanel title="Nhật ký API gần đây" ...><ApiLogsTable rows={apiLogs} /></StitchPanel>
+    <StitchPanel title="Nhật ký API gần đây" ...><ApiLogsTable rows={apiLogs} standalone={false} /></StitchPanel>
     <StitchPanel title="Gateway Keys" ...>...</StitchPanel>
-    <StitchPanel title="Vertex Targets" ...>...</StitchPanel>
+    <StitchPanel title="Agent Platform API key" ...>...</StitchPanel>
   </div>
   <aside className="space-y-6">
     <StitchSecurityRail notices={...} />
@@ -613,9 +618,9 @@ Replace `getStatusColor` in `frontend/src/components/console/GatewayKeysTable.ts
 
 ```tsx
 const getStatusColor = (status: string) => {
-  if (status === 'active') return 'border border-[var(--healthy-green)]/30 bg-[var(--healthy-green)]/15 text-[var(--healthy-green)]';
-  if (status === 'revoked') return 'border border-[var(--failure-red)]/30 bg-[var(--failure-red)]/15 text-[var(--failure-red)]';
-  return 'border border-border bg-secondary text-secondary-foreground';
+  if (status === 'active') return 'border border-[var(--healthy-green)]/30 bg-[var(--healthy-green)]/15 text-[var(--healthy-green)] hover:bg-[var(--healthy-green)]/15';
+  if (status === 'revoked') return 'border border-[var(--failure-red)]/30 bg-[var(--failure-red)]/15 text-[var(--failure-red)] hover:bg-[var(--failure-red)]/15';
+  return 'border border-border bg-secondary text-secondary-foreground hover:bg-secondary';
 };
 ```
 
@@ -637,11 +642,11 @@ Replace `getHealthColor` in `frontend/src/components/console/VertexTargetsTable.
 
 ```tsx
 const getHealthColor = (health: string) => {
-  if (health === 'ready') return 'border border-[var(--healthy-green)]/30 bg-[var(--healthy-green)]/15 text-[var(--healthy-green)]';
-  if (health === 'degraded') return 'border border-[var(--warning-amber)]/30 bg-[var(--warning-amber)]/15 text-[var(--warning-amber)]';
-  if (health === 'failed') return 'border border-[var(--failure-red)]/30 bg-[var(--failure-red)]/15 text-[var(--failure-red)]';
-  if (health === 'disabled') return 'border border-border bg-secondary text-secondary-foreground';
-  return 'border border-border bg-muted text-muted-foreground';
+  if (health === 'ready') return 'border border-[var(--healthy-green)]/30 bg-[var(--healthy-green)]/15 text-[var(--healthy-green)] hover:bg-[var(--healthy-green)]/15';
+  if (health === 'degraded') return 'border border-[var(--warning-amber)]/30 bg-[var(--warning-amber)]/15 text-[var(--warning-amber)] hover:bg-[var(--warning-amber)]/15';
+  if (health === 'failed') return 'border border-[var(--failure-red)]/30 bg-[var(--failure-red)]/15 text-[var(--failure-red)] hover:bg-[var(--failure-red)]/15';
+  if (health === 'disabled') return 'border border-border bg-secondary text-secondary-foreground hover:bg-secondary';
+  return 'border border-border bg-muted text-muted-foreground hover:bg-muted';
 };
 ```
 
@@ -690,7 +695,7 @@ Expected: no frontend helper regressions.
 
 - [ ] **Step 1: Redesign `ApiLogsTable` filter panel**
 
-In `frontend/src/components/console/ApiLogsTable.tsx`, keep `useLogTable(rows)` unchanged. Replace the outer section with:
+In `frontend/src/components/console/ApiLogsTable.tsx`, keep `useLogTable(rows)` unchanged. Keep the panel wrapper for standalone use, but add a `standalone?: boolean` prop so Dashboard can render the table inside `StitchPanel` without nested panel borders:
 
 ```tsx
 <section className="operator-panel overflow-hidden">
@@ -723,7 +728,7 @@ description="Theo dõi yêu cầu API, route family, model, latency, status, gat
 warning={<span>Beta: dữ liệu hiện là mock data cho đến khi streaming log API được triển khai.</span>}
 ```
 
-Keep `BetaState` but move it below the page header and above `ApiLogsTable`.
+Do not render `BetaState` here when the page header warning already announces the same mock-data limitation.
 
 - [ ] **Step 4: Align admin states**
 

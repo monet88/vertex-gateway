@@ -8,19 +8,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 export interface ApiLogsTableProps {
   readonly rows: readonly ApiLogRow[];
+  readonly standalone?: boolean;
 }
 
 const routeFamilies: Array<RouteFamily | 'all'> = ['all', 'gemini', 'openai'];
 const statuses: Array<LogStatus | 'all'> = ['all', '2xx', '4xx', '5xx'];
 const sortableColumns = ['time', 'routeFamily', 'model', 'latencyMs', 'status'] as const;
 
-export function ApiLogsTable({ rows }: ApiLogsTableProps) {
+export function ApiLogsTable({ rows, standalone = true }: ApiLogsTableProps) {
   const { filters, setFilters, sort, setSort, visibleRows } = useLogTable(rows);
 
   const nextDirection = sort.direction === 'asc' ? 'desc' : 'asc';
-
-  return (
-    <section className="operator-panel overflow-hidden">
+  const content = (
+    <>
       <div className="grid gap-3 border-b border-border p-4 md:grid-cols-5">
         <Select
           value={filters.routeFamily}
@@ -83,6 +83,10 @@ export function ApiLogsTable({ rows }: ApiLogsTableProps) {
           ))}
         </TableBody>
       </Table>
-    </section>
+    </>
   );
+
+  if (!standalone) return <div className="overflow-hidden">{content}</div>;
+
+  return <section className="operator-panel overflow-hidden">{content}</section>;
 }

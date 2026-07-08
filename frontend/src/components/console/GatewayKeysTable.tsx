@@ -21,9 +21,9 @@ const columns: Array<{ key: keyof GatewayKeyRow; label: string }> = [
 ];
 
 const getStatusColor = (status: string) => {
-  if (status === 'active') return 'border border-[var(--healthy-green)]/30 bg-[var(--healthy-green)]/15 text-[var(--healthy-green)]';
-  if (status === 'revoked') return 'border border-[var(--failure-red)]/30 bg-[var(--failure-red)]/15 text-[var(--failure-red)]';
-  return 'border border-border bg-secondary text-secondary-foreground';
+  if (status === 'active') return 'border border-[var(--healthy-green)]/30 bg-[var(--healthy-green)]/15 text-[var(--healthy-green)] hover:bg-[var(--healthy-green)]/15';
+  if (status === 'revoked') return 'border border-[var(--failure-red)]/30 bg-[var(--failure-red)]/15 text-[var(--failure-red)] hover:bg-[var(--failure-red)]/15';
+  return 'border border-border bg-secondary text-secondary-foreground hover:bg-secondary';
 };
 
 const copyGatewayKey = async (key: GatewayKeyRow): Promise<void> => {
@@ -106,16 +106,16 @@ export function GatewayKeysTable({ rows, onRevoke, onDelete, mutable }: GatewayK
                   <TableCell>
                     <div className="flex flex-wrap justify-end gap-1">
                       <Button variant="ghost" size="sm" disabled={!key.secret} onClick={() => { void handleCopy(key); }}>
-                        {copyFailedId === key.id ? 'Secret unavailable' : copiedId === key.id ? 'Copied' : key.secret ? 'Copy' : 'Secret unavailable'}
+                        {copyFailedId === key.id ? 'Copy failed' : copiedId === key.id ? 'Copied' : key.secret ? 'Copy' : 'Secret unavailable'}
                       </Button>
                       {mutable && onRevoke && key.status === 'active' && (
                         <Button variant="ghost" size="sm" className="text-destructive" disabled={revokingId === key.id || deletingId === key.id} onClick={() => handleRevoke(key.id)}>
-                          {revokingId === key.id ? 'Đang revoke…' : 'Revoke'}
+                          {revokingId === key.id ? 'Revoking...' : 'Revoke'}
                         </Button>
                       )}
                       {mutable && onDelete && (
                         <Button variant="ghost" size="sm" className="text-destructive" disabled={deletingId === key.id || revokingId === key.id} onClick={() => handleDelete(key.id)}>
-                          {deletingId === key.id ? 'Đang xóa…' : 'Delete'}
+                          {deletingId === key.id ? 'Deleting...' : 'Delete'}
                         </Button>
                       )}
                     </div>

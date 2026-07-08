@@ -16,6 +16,7 @@ export interface StitchConsoleShellProps {
 
 export function StitchConsoleShell({ children, rail, activeView = 'dashboard', onViewChange, topActions, onLogout, health = null }: StitchConsoleShellProps) {
   const runtimeBadge = getShellRuntimeBadge(health);
+  const runtimeModeLabel = `Runtime ${health?.runtimeMode ?? 'unknown'}`;
 
   return (
     <main className="min-h-dvh bg-background text-foreground">
@@ -25,7 +26,7 @@ export function StitchConsoleShell({ children, rail, activeView = 'dashboard', o
             <a href="/admin" className="block text-2xl font-semibold tracking-tight text-[var(--operator-teal)]">
               Hệ thống Vertex
             </a>
-            <p className="mt-1 text-xs text-muted-foreground">Môi trường Production</p>
+            <p className="mt-1 text-xs text-muted-foreground">{runtimeModeLabel}</p>
           </div>
           <nav aria-label="Console navigation" className="grid gap-1 text-sm">
             {adminNavItems.map((item) => {
@@ -49,7 +50,7 @@ export function StitchConsoleShell({ children, rail, activeView = 'dashboard', o
               );
             })}
           </nav>
-          {rail ? <div className="mt-6 hidden lg:block">{rail}</div> : null}
+          {rail ? <div className="mt-6">{rail}</div> : null}
           {onLogout ? (
             <div className="mt-6 border-t border-border pt-4">
               <button type="button" className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-[var(--failure-red)] hover:bg-[var(--console-surface-high)]" onClick={onLogout}>

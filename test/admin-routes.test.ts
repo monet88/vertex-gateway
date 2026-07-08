@@ -1245,6 +1245,19 @@ describe('admin routes', () => {
     expect(response.status).toBe(200);
     expect(body.credential.apiKeyMode).toBe('express');
     expect(JSON.stringify(body)).not.toContain('google-secret');
+    expect(runtime.reload).toHaveBeenLastCalledWith(expect.objectContaining({
+      vertexPools: [expect.objectContaining({
+        id: body.credential.id,
+        apiKey: 'google-secret',
+        apiKeyMode: 'express',
+      })],
+      resolvedVertexTargets: [expect.objectContaining({
+        id: body.credential.id,
+        apiKey: 'google-secret',
+        apiKeyMode: 'express',
+        source: 'pool',
+      })],
+    }));
   });
 
   it('updates API-key target connection fields without exposing raw upstream keys', async () => {
@@ -1313,6 +1326,121 @@ describe('admin routes', () => {
     const listBody = await list.json();
     expect(JSON.stringify(listBody)).not.toContain('replacement-secret');
     expect(JSON.stringify(listBody)).not.toContain('google-secret');
+    expect(runtime.reload).toHaveBeenLastCalledWith(expect.objectContaining({
+      vertexPools: [expect.objectContaining({
+        id,
+        project: 'project-b',
+        location: 'us-central1',
+        apiKey: 'replacement-secret',
+        apiKeyMode: 'express',
+      })],
+      resolvedVertexTargets: [expect.objectContaining({
+        id,
+        project: 'project-b',
+        location: 'us-central1',
+        apiKey: 'replacement-secret',
+        apiKeyMode: 'express',
+        source: 'pool',
+      })],
+    }));
+  });
+
+  it('rejects invalid apiKeyMode patches for API-key targets', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+        runtimeMode: 'pool',
+        vertexPools: [],
+        resolvedVertexTargets: [],
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const headers = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+
+    const created = await fetch(`${baseUrl}/admin/api/vertex-credentials/api-key`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ label: 'Global key', project: 'project-a', location: 'global', apiKey: 'google-secret' }),
+    });
+    const createdBody = await created.json();
+    const id = createdBody.credential.id as string;
+
+    const rejected = await fetch(`${baseUrl}/admin/api/vertex-credentials/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ apiKeyMode: 'bogus' }),
+    });
+    const rejectedBody = await rejected.json();
+
+    expect(rejected.status).toBe(400);
+    expect(rejectedBody.error.code).toBe('VALIDATION_FAILED');
+    expect(rejectedBody.error.message).toMatch(/apiKeyMode/i);
+
+    const list = await fetch(`${baseUrl}/admin/api/vertex-credentials`, { headers: { authorization: 'Bearer admin-secret' } });
+    const listBody = await list.json();
+    expect(listBody.vertexPools[0].apiKeyMode).toBe('full');
+    expect(runtime.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects express mode patches for service-account targets without an apiKey', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-admin-'));
+    await seedChangedAdminPassword(dir);
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+        adminAllowMutations: true,
+        adminStoreMode: 'file-store',
+        adminFileStoreDir: dir,
+        runtimeMode: 'pool',
+        vertexPools: [],
+        resolvedVertexTargets: [],
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+    const headers = { authorization: 'Bearer admin-secret', 'content-type': 'application/json' };
+
+    const imported = await fetch(`${baseUrl}/admin/api/vertex-credentials/import`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        project: 'project-a',
+        location: 'global',
+        credential: {
+          type: 'service_account',
+          project_id: 'project-a',
+          client_email: 'svc@example.test',
+          private_key: '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----\n',
+        },
+      }),
+    });
+    const importedBody = await imported.json();
+    const id = importedBody.credential.id as string;
+
+    const rejected = await fetch(`${baseUrl}/admin/api/vertex-credentials/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ apiKeyMode: 'express' }),
+    });
+    const rejectedBody = await rejected.json();
+
+    expect(rejected.status).toBe(400);
+    expect(rejectedBody.error.code).toBe('VALIDATION_FAILED');
+    expect(rejectedBody.error.message).toMatch(/apiKey/i);
+
+    const list = await fetch(`${baseUrl}/admin/api/vertex-credentials`, { headers: { authorization: 'Bearer admin-secret' } });
+    const listBody = await list.json();
+    expect(listBody.vertexPools[0].apiKeyMode).toBe('full');
   });
 
   it('updates file-store pool selection without losing configured targets', async () => {
@@ -1357,6 +1485,30 @@ describe('admin routes', () => {
 
     const persisted = JSON.parse(fs.readFileSync(path.join(dir, 'store.json'), 'utf8'));
     expect(persisted.vertexPoolSelection).toBe('bind-first');
+  });
+
+  it('rejects null runtime config bodies with a client error', async () => {
+    const runtime = createFakeRuntime();
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'admin-secret',
+      }),
+      runtimeFactory: () => runtime,
+    });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/admin/api/runtime-config`, {
+      method: 'PATCH',
+      headers: { authorization: 'Bearer admin-secret', 'content-type': 'application/json' },
+      body: 'null',
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error.code).toBe('VALIDATION_FAILED');
+    expect(body.error.message).toMatch(/json object/i);
+    expect(runtime.reload).not.toHaveBeenCalled();
   });
 
   it('rejects duplicate API-key Vertex targets instead of replacing them', async () => {

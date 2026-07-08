@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AdminError, EmptyState, TableSkeleton } from '@/components/console/AdminState';
 import { VertexTargetsTable } from '@/components/console/VertexTargetsTable';
+import type { VertexTargetTestResult } from '@/components/console/VertexTargetsTable';
 import { VertexTargetDialog } from '@/components/console/VertexTargetDialog';
 import { ServiceAccountTargetDialog } from '@/components/console/ServiceAccountTargetDialog';
 import { StitchPageHeader } from '@/components/stitch/StitchPageHeader';
@@ -21,6 +22,7 @@ interface AuthFilesViewProps {
 export function AuthFilesView({ adminData, token }: AuthFilesViewProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
+  const [testResults, setTestResults] = useState<ReadonlyMap<string, VertexTargetTestResult>>(new Map());
   const apiKeyTargets = adminData.vertexTargets.filter((target) => target.hasApiKey);
   const saTargets = adminData.vertexTargets.filter((target) => target.authType === 'Service Account JSON');
 
@@ -42,7 +44,22 @@ export function AuthFilesView({ adminData, token }: AuthFilesViewProps) {
   };
 
   const handleTest = (id: string) => withPending(id, async () => {
-    await testVertexCredential({ token }, id);
+    try {
+      await testVertexCredential({ token }, id);
+      setTestResults((prev) => new Map(prev).set(id, {
+        status: 'success',
+        message: 'Credential test passed',
+        testedAt: new Date().toLocaleTimeString(),
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Test failed';
+      setTestResults((prev) => new Map(prev).set(id, {
+        status: 'error',
+        message,
+        testedAt: new Date().toLocaleTimeString(),
+      }));
+      throw error;
+    }
     await adminData.refetch();
   });
 
@@ -60,9 +77,9 @@ export function AuthFilesView({ adminData, token }: AuthFilesViewProps) {
     <div className="space-y-8">
       <StitchPageHeader
         title="Agent Platform Manager"
-        description="Quản lý upstream credential dùng cho Gateway đến Google: Agent Platform Apikey và project account JSON."
+        description="Quản lý upstream credential dùng cho Gateway đến Google: Agent Platform API key và project account JSON."
         eyebrow="Gateway -> Google"
-        warning={<span>Agent Platform Apikey và service account private key không bao giờ được hiển thị cho client.</span>}
+        warning={<span>Agent Platform API key và service account private key không bao giờ được hiển thị cho client.</span>}
         actions={
           adminData.mutable && (
             <div className="flex flex-wrap gap-2">
@@ -77,11 +94,11 @@ export function AuthFilesView({ adminData, token }: AuthFilesViewProps) {
         <AdminError message={actionError ?? adminData.error ?? ''} onRetry={() => { setActionError(null); adminData.refetch(); }} />
       )}
 
-      <StitchPanel title="Agent Platform Apikey" description="API key upstream cho Agent Platform targets. Full key chỉ nhập khi tạo hoặc rotate, không hiển thị lại trong UI.">
+      <StitchPanel title="Agent Platform API key" description="API key upstream cho Agent Platform targets. Full key chỉ nhập khi tạo hoặc rotate, không hiển thị lại trong UI.">
         {adminData.loading ? (
           <TableSkeleton rows={3} columns={6} />
         ) : apiKeyTargets.length === 0 ? (
-          <EmptyState title="No Agent Platform Apikey targets" body="Add an Agent Platform Apikey target to route gateway traffic through API-key authentication." />
+          <EmptyState title="No Agent Platform API key targets" body="Add an Agent Platform API key target to route gateway traffic through API-key authentication." />
         ) : (
           <VertexTargetsTable
             rows={apiKeyTargets}
@@ -89,6 +106,7 @@ export function AuthFilesView({ adminData, token }: AuthFilesViewProps) {
             onDelete={adminData.mutable ? handleDelete : undefined}
             onUpdate={adminData.mutable ? handleUpdate : undefined}
             pendingIds={pendingIds}
+            testResults={testResults}
           />
         )}
       </StitchPanel>
@@ -104,6 +122,8 @@ export function AuthFilesView({ adminData, token }: AuthFilesViewProps) {
             onTest={handleTest}
             onDelete={adminData.mutable ? handleDelete : undefined}
             onUpdate={adminData.mutable ? handleUpdate : undefined}
+            pendingIds={pendingIds}
+            testResults={testResults}
           />
         )}
       </StitchPanel>

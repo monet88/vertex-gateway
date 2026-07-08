@@ -47,11 +47,12 @@ export function VertexTargetDialog({ onCreate, initialDraft, mode = 'create', tr
     setPending(true);
     setError(null);
     try {
-      await onCreate({ ...draft, label: draft.label.trim() || 'Agent Platform Apikey' });
+      const label = draft.label.trim();
+      await onCreate({ ...draft, label: mode === 'create' ? label || 'Agent Platform API key' : label });
       setDraft(initialDraft ?? emptyDraft);
       setOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create target');
+      setError(err instanceof Error ? err.message : 'Failed to save target');
     } finally {
       setPending(false);
     }
@@ -59,15 +60,15 @@ export function VertexTargetDialog({ onCreate, initialDraft, mode = 'create', tr
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild><Button variant={mode === 'edit' ? 'ghost' : 'default'} size={mode === 'edit' ? 'sm' : 'default'} disabled={disabled}>{triggerLabel ?? (mode === 'edit' ? 'Edit' : 'Thêm apikey')}</Button></DialogTrigger>
+      <DialogTrigger asChild><Button variant={mode === 'edit' ? 'ghost' : 'default'} size={mode === 'edit' ? 'sm' : 'default'} disabled={disabled}>{triggerLabel ?? (mode === 'edit' ? 'Edit' : 'Add API Key')}</Button></DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{mode === 'edit' ? 'Edit Agent Platform Apikey' : 'Thêm Agent Platform Apikey'}</DialogTitle>
-          <DialogDescription>Upstream credential dùng cho Gateway đến Google. Secret không hiển thị cho client.</DialogDescription>
+          <DialogTitle>{mode === 'edit' ? 'Edit Agent Platform API Key' : 'Add Agent Platform API Key'}</DialogTitle>
+          <DialogDescription>Upstream credential used for Gateway to Google. Secret is not shown to the client.</DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={submit}>
           <div className="grid gap-2">
-            <Label htmlFor="target-label">Tên target</Label>
+            <Label htmlFor="target-label">Target label</Label>
             <Input id="target-label" value={draft.label} onChange={(event) => patch({ label: event.target.value })} placeholder="Global primary" disabled={pending} />
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -90,9 +91,9 @@ export function VertexTargetDialog({ onCreate, initialDraft, mode = 'create', tr
               </SelectContent>
             </Select>
           </div>
-          <SecretInput id="target-api-key" label="Agent Platform API key" value={draft.apiKey} onChange={(apiKey) => patch({ apiKey })} placeholder={mode === 'edit' ? 'Để trống nếu giữ nguyên key hiện tại' : undefined} disabled={pending} required={mode === 'create'} />
+          <SecretInput id="target-api-key" label="Agent Platform API key" value={draft.apiKey} onChange={(apiKey) => patch({ apiKey })} placeholder={mode === 'edit' ? 'Leave blank to keep the current key' : undefined} disabled={pending} required={mode === 'create'} />
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={pending}>{pending ? 'Đang lưu…' : (mode === 'edit' ? 'Lưu thay đổi' : 'Thêm apikey')}</Button>
+          <Button type="submit" disabled={pending}>{pending ? 'Saving...' : (mode === 'edit' ? 'Save Changes' : 'Add API Key')}</Button>
         </form>
       </DialogContent>
     </Dialog>

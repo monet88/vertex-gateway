@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { GatewayKeyRow, RuntimeHealthSummary, VertexTargetRow } from '@/types/admin';
 import { insertCreatedGatewayKey, mergeGatewayKeySecrets } from '@/hooks/gateway-key-secrets';
 import {
@@ -38,12 +38,21 @@ export function useAdminDashboardData(token: string) {
   });
   const refreshSequence = useRef(0);
   const tokenRef = useRef(token);
+  const tokenVersionRef = useRef(0);
   const options = useMemo(() => ({ token }), [token]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     tokenRef.current = token;
+    tokenVersionRef.current += 1;
     refreshSequence.current += 1;
+    return () => {
+      tokenVersionRef.current += 1;
+      refreshSequence.current += 1;
+    };
   }, [token]);
+
+  const isCurrentSession = useCallback((tokenAtStart: string, versionAtStart: number): boolean =>
+    tokenRef.current === tokenAtStart && tokenVersionRef.current === versionAtStart, []);
 
   const refresh = useCallback(async () => {
     const sequence = refreshSequence.current + 1;
@@ -77,8 +86,13 @@ export function useAdminDashboardData(token: string) {
   useEffect(() => { void refresh(); }, [refresh]);
 
   const createKey = useCallback(async (label: string) => {
+    const tokenAtStart = tokenRef.current;
+    const tokenVersionAtStart = tokenVersionRef.current;
     try {
       const created = await createGatewayKey(options, label);
+      if (!isCurrentSession(tokenAtStart, tokenVersionAtStart)) {
+        throw new Error('Admin session changed before key creation completed');
+      }
       setState((current) => ({
         ...current,
         gatewayKeys: insertCreatedGatewayKey(current.gatewayKeys, created.gatewayKey, created.secret),
@@ -86,10 +100,12 @@ export function useAdminDashboardData(token: string) {
       void refresh();
       return created.secret;
     } catch (error) {
-      setState((current) => ({ ...current, error: errorMessage(error, 'Failed to create key') }));
+      if (isCurrentSession(tokenAtStart, tokenVersionAtStart)) {
+        setState((current) => ({ ...current, error: errorMessage(error, 'Failed to create key') }));
+      }
       throw error;
     }
-  }, [options, refresh]);
+  }, [isCurrentSession, options, refresh]);
 
   const revokeKey = useCallback(async (id: string) => {
     try {

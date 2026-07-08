@@ -31,11 +31,11 @@ const columns: Array<{ key: keyof VertexTargetRow; label: string }> = [
 ];
 
 const getHealthColor = (health: string) => {
-  if (health === 'ready') return 'border border-[var(--healthy-green)]/30 bg-[var(--healthy-green)]/15 text-[var(--healthy-green)]';
-  if (health === 'degraded') return 'border border-[var(--warning-amber)]/30 bg-[var(--warning-amber)]/15 text-[var(--warning-amber)]';
-  if (health === 'failed') return 'border border-[var(--failure-red)]/30 bg-[var(--failure-red)]/15 text-[var(--failure-red)]';
-  if (health === 'disabled') return 'border border-border bg-secondary text-secondary-foreground';
-  return 'border border-border bg-muted text-muted-foreground';
+  if (health === 'ready') return 'border border-[var(--healthy-green)]/30 bg-[var(--healthy-green)]/15 text-[var(--healthy-green)] hover:bg-[var(--healthy-green)]/15';
+  if (health === 'degraded') return 'border border-[var(--warning-amber)]/30 bg-[var(--warning-amber)]/15 text-[var(--warning-amber)] hover:bg-[var(--warning-amber)]/15';
+  if (health === 'failed') return 'border border-[var(--failure-red)]/30 bg-[var(--failure-red)]/15 text-[var(--failure-red)] hover:bg-[var(--failure-red)]/15';
+  if (health === 'disabled') return 'border border-border bg-secondary text-secondary-foreground hover:bg-secondary';
+  return 'border border-border bg-muted text-muted-foreground hover:bg-muted';
 };
 
 const hasActions = (props: VertexTargetsTableProps) => Boolean(props.onTest || props.onDelete || props.onUpdate);

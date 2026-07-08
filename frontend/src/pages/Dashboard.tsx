@@ -1,7 +1,6 @@
 import { GatewayKeysTable } from '@/components/console/GatewayKeysTable';
 import { VertexTargetsTable } from '@/components/console/VertexTargetsTable';
 import { GatewayKeyDialog } from '@/components/console/GatewayKeyDialog';
-import { ServiceAccountTargetDialog } from '@/components/console/ServiceAccountTargetDialog';
 import { VertexTargetDialog } from '@/components/console/VertexTargetDialog';
 import { ApiLogsTable } from '@/components/console/ApiLogsTable';
 import { Button } from '@/components/ui/button';
@@ -23,8 +22,8 @@ export function Dashboard({ adminData }: DashboardProps) {
   const failedApiKeyTargets = apiKeyTargets.filter((target) => target.health === 'failed').length;
   const metrics = [
     { id: 'gateway-keys', label: 'Active Gateway Keys', value: String(activeGatewayKeys), icon: 'key', colorScheme: 'primary' as const },
-    { id: 'agent-platform-apikey', label: 'Agent Platform Apikey', value: String(apiKeyTargets.length), icon: 'dns', colorScheme: 'secondary' as const },
-    { id: 'ready-apikey-targets', label: 'Ready Apikey', value: String(readyApiKeyTargets), trendValue: failedApiKeyTargets ? `${failedApiKeyTargets} failed` : 'ready', colorScheme: failedApiKeyTargets ? 'error' as const : 'tertiary' as const },
+    { id: 'agent-platform-api-key', label: 'Agent Platform API key', value: String(apiKeyTargets.length), icon: 'dns', colorScheme: 'secondary' as const },
+    { id: 'ready-api-key-targets', label: 'Ready API key targets', value: String(readyApiKeyTargets), trendValue: failedApiKeyTargets ? `${failedApiKeyTargets} failed` : 'ready', colorScheme: failedApiKeyTargets ? 'error' as const : 'tertiary' as const },
     { id: 'runtime-mode', label: 'Runtime Mode', value: adminData.health?.runtimeMode ?? 'unknown', colorScheme: 'secondary' as const },
   ];
 
@@ -32,14 +31,13 @@ export function Dashboard({ adminData }: DashboardProps) {
     <div className="space-y-8">
       <StitchPageHeader
         title="Bảng điều khiển Admin"
-        description="Runtime posture, gateway keys, and Agent Platform Apikey overview."
+        description="Runtime posture, gateway keys, and Agent Platform API key overview."
         actions={
           <div className="flex flex-wrap items-end gap-2">
             {adminData.mutable && (
               <>
                 <GatewayKeyDialog onCreate={(label) => adminData.createKey(label)} />
                 <VertexTargetDialog onCreate={(draft) => adminData.addTarget(draft)} />
-                <ServiceAccountTargetDialog onCreate={(draft) => adminData.importTarget(draft)} />
               </>
             )}
             <Button variant="secondary" onClick={() => adminData.reload()}>Reload Runtime</Button>
@@ -53,7 +51,7 @@ export function Dashboard({ adminData }: DashboardProps) {
 
       <div className="space-y-6">
         <StitchPanel title="Nhật ký API gần đây" description="Beta — mock data">
-          <ApiLogsTable rows={apiLogs} />
+          <ApiLogsTable rows={apiLogs} standalone={false} />
         </StitchPanel>
 
         <StitchPanel title="Gateway Keys">
@@ -64,7 +62,7 @@ export function Dashboard({ adminData }: DashboardProps) {
           )}
         </StitchPanel>
 
-        <StitchPanel title="Agent Platform Apikey">
+        <StitchPanel title="Agent Platform API key">
           {adminData.loading ? (
             <TableSkeleton rows={3} columns={6} />
           ) : (

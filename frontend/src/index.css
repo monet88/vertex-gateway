@@ -35,7 +35,6 @@
   color-scheme: dark;
   --radius: 0.5rem;
 
-  --console-canvas: #0b1020;
   --console-surface: #0e1513;
   --console-surface-low: #161d1b;
   --console-surface-panel: #1a211f;
@@ -46,9 +45,7 @@
   --console-ink: #e5e7eb;
   --console-ink-soft: #dde4e1;
   --console-muted: #94a3b8;
-  --console-muted-strong: #bacac5;
   --operator-teal: #57f1db;
-  --operator-teal-container: #2dd4bf;
   --healthy-green: #22c55e;
   --warning-amber: #f59e0b;
   --failure-red: #ef4444;
