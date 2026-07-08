@@ -607,21 +607,34 @@ import type { ReactNode } from 'react';
 export interface StitchConsoleShellProps {
   readonly children: ReactNode;
   readonly rail?: ReactNode;
+  readonly activeView?: AdminViewId;
+  readonly onViewChange?: (view: AdminViewId) => void;
 }
 
-export function StitchConsoleShell({ children, rail }: StitchConsoleShellProps) {
+export function StitchConsoleShell({ children, rail, activeView = 'dashboard', onViewChange }: StitchConsoleShellProps) {
   return (
     <main className="min-h-dvh bg-background text-foreground">
       <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[240px_1fr]">
         <aside className="border-b border-border bg-card/90 p-4 lg:border-b-0 lg:border-r">
-          <a href="/admin?view=dashboard" className="block rounded-lg text-lg font-semibold tracking-tight text-foreground">
+          <a href="/admin" className="block rounded-lg text-lg font-semibold tracking-tight text-foreground">
             Vertex Gateway Admin
           </a>
           <nav aria-label="Console navigation" className="mt-8 grid gap-2 text-sm text-muted-foreground">
-            <button type="button" className="rounded-md bg-secondary px-3 py-2 text-left text-foreground">Dashboard</button>
-            <button type="button" className="rounded-md px-3 py-2 text-left hover:bg-secondary hover:text-foreground">AI Providers</button>
-            <button type="button" className="rounded-md px-3 py-2 text-left hover:bg-secondary hover:text-foreground">Auth Files</button>
-            <button type="button" className="rounded-md px-3 py-2 text-left hover:bg-secondary hover:text-foreground">Available Models</button>
+            {adminNavItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`w-full rounded-md px-3 py-2 text-left transition-colors ${
+                  activeView === item.id
+                    ? 'bg-secondary text-foreground'
+                    : 'hover:bg-secondary hover:text-foreground'
+                }`}
+                onClick={() => onViewChange?.(item.id)}
+                aria-current={activeView === item.id ? 'page' : undefined}
+              >
+                {item.label}
+              </button>
+            ))}
           </nav>
         </aside>
         <section className="grid gap-4 p-4 xl:grid-cols-[1fr_340px] xl:p-6">
@@ -932,9 +945,11 @@ export interface SecretInputProps {
   readonly value: string;
   readonly onChange: (value: string) => void;
   readonly placeholder?: string;
+  readonly disabled?: boolean;
+  readonly required?: boolean;
 }
 
-export function SecretInput({ id, label, value, onChange, placeholder }: SecretInputProps) {
+export function SecretInput({ id, label, value, onChange, placeholder, disabled = false, required }: SecretInputProps) {
   const [revealed, setRevealed] = useState(false);
 
   async function copyValue() {
@@ -957,11 +972,13 @@ export function SecretInput({ id, label, value, onChange, placeholder }: SecretI
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           autoComplete="off"
+          disabled={disabled}
+          required={required}
         />
-        <Button type="button" variant="secondary" onClick={() => setRevealed((current) => !current)}>
+        <Button type="button" variant="secondary" onClick={() => setRevealed((current) => !current)} disabled={disabled}>
           {revealed ? 'Ẩn' : 'Hiện'}
         </Button>
-        <Button type="button" variant="secondary" onClick={copyValue} disabled={!value}>
+        <Button type="button" variant="secondary" onClick={copyValue} disabled={!value || disabled}>
           Copy
         </Button>
       </div>

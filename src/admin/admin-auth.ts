@@ -17,17 +17,25 @@ const safeCompare = (left: string, right: string): boolean => {
 };
 
 const clearExpiredAdminSessionIfNeeded = (token: string, config: GatewayConfig): void => {
-  const sessionToken = readPersistedAdminSessionToken(config);
-  if (!sessionToken || !safeCompare(token, sessionToken)) {
+  if (config.adminStoreMode !== 'file-store' || !config.adminFileStoreDir) {
     return;
   }
-  const settings = config.adminStoreMode === 'file-store' && config.adminFileStoreDir
-    ? readAdminFileStoreSettings(config)
-    : null;
+  const sessionToken = readPersistedAdminSessionToken(config);
+  if (!sessionToken) {
+    return;
+  }
+  if (!safeCompare(token, sessionToken)) {
+    return;
+  }
+  const settings = readAdminFileStoreSettings(config);
   if (isFreshAdminSessionToken(settings?.adminSessionTokenCreatedAt)) {
     return;
   }
+  const persistedStaticToken = typeof settings.adminToken === 'string'
+    ? settings.adminToken.trim()
+    : '';
   clearPersistedAdminSessionToken(config);
+  config.adminToken = persistedStaticToken || null;
   throw new GatewayError(401, 'AUTH_INVALID', 'Admin authorization failed.');
 };
 
