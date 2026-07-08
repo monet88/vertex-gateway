@@ -1,0 +1,93 @@
+README.md
+  s_ded525b0031547::t_3dbdfae727c1cd 142-143
+docs/superpowers/plans/2026-07-08-admin-frontend-stitch-redesign.md
+  s_ded525b0031547::t_d3c6083ccb144b 181,193-194,196,200,258,350,356-357,366,369-372,381,405,420,423,567-569,572-573,585,587,621-623,645-649,698,731
+frontend/src/components/console/ApiLogsTable.tsx
+  s_ded525b0031547::t_4a2d42066679da 11,18,22-23,86,88-91
+frontend/src/components/console/GatewayKeysTable.tsx
+  s_ded525b0031547::t_29ed385395cce1 24-26,109,113,118
+frontend/src/components/console/VertexTargetDialog.tsx
+  s_715fece5d3f243::t_2f23d1fa6088e6 50-51,55,63,66-67,71,94,96
+frontend/src/components/console/VertexTargetsTable.tsx
+  s_ded525b0031547::t_34a85d4e57371a 34-38
+frontend/src/components/stitch/StitchConsoleShell.tsx
+  s_ded525b0031547::t_a3fc301dbb2d82 19,29,53
+frontend/src/components/stitch/StitchPanel.tsx
+  s_ded525b0031547::t_ed9abdc3f5a47d 1,13-14,16,20
+frontend/src/components/ui/button-variants.ts
+  s_715fece5d3f243::t_ea95b6903c4605 4
+frontend/src/hooks/gateway-key-secrets.ts
+  s_715fece5d3f243::t_e1b3e5b74e6395 18,23,27
+frontend/src/hooks/useAdminDashboardData.ts
+  s_e8c63ad583e496::t_a14d1550bef9d6 1,41,44,46,48-51,54-56,89-90,93-95,103-105,108
+frontend/src/hooks/useAdminToken.ts
+  s_715fece5d3f243::t_e8208fe9a0cabc 1,5-6,8-11,13-20,22-34,36
+frontend/src/lib/admin-token-storage.ts
+  s_715fece5d3f243::t_829d307367aa56 4,24,31
+frontend/src/pages/AIProvidersView.tsx
+  s_e8c63ad583e496::t_6a1f242d7a93fe 33-41,91,137
+frontend/src/pages/AdminApp.tsx
+  s_715fece5d3f243::t_91ae1ec1f3fc0c 58
+frontend/src/pages/AdminLoginScreen.tsx
+  s_902fac117cbbb5::t_5ff3c34d0ac1a5 118
+frontend/src/pages/AuthFilesView.tsx
+  s_e8c63ad583e496::t_69e75907fb6e54 4,25,47-62,80,82,97,101,109,125-126
+frontend/src/pages/Dashboard.tsx
+  s_ded525b0031547::t_8dcc366ff3da1c 25-26,34,54,65
+src/admin/admin-routes.ts
+  s_715fece5d3f243::t_d5226a3a813e3f 59-65,262-264,268-295
+test/admin-frontend-helpers.test.ts
+  s_e8c63ad583e496::t_3ed1e12fe9eca4 68,71,75-81,86,90-91,134-158,165
+test/admin-routes.test.ts
+  s_fb9c87729aef5f::t_73ba2547cbba18 1248-1260,1329-1443,1490-1513
+test/admin-token-storage.test.ts
+  s_715fece5d3f243::t_34c5dda604f053 26,31-33,63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b2ed03cbc0963fc9c5bfb842ee103d287eda7c2d",
+  "prompts": {},
+  "sessions": {
+    "s_715fece5d3f243": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f42a9-e934-71d3-8126-be39010587db",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_902fac117cbbb5": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "0686861a-f0c9-4588-91da-769db0d56e5a",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_ded525b0031547": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f42aa-02cd-76d1-9a91-64fffc81e395",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_e8c63ad583e496": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f42a6-c374-7721-ad19-cdb275d594d4",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_fb9c87729aef5f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f42a9-bbcd-7640-9854-7cf19d3d476b",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
