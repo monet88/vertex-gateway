@@ -9,17 +9,8 @@ import { AdminError, TableSkeleton } from '@/components/console/AdminState';
 import { StitchPageHeader } from '@/components/stitch/StitchPageHeader';
 import { StitchKpiStrip } from '@/components/stitch/StitchKpiStrip';
 import { StitchPanel } from '@/components/stitch/StitchPanel';
-import { StitchSecurityRail } from '@/components/stitch/StitchSecurityRail';
-import { securityNotices as adminSecurityNotices } from '@/data/admin-static';
 import { apiLogs } from '@/data/mockData';
 import type { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
-
-const securityNotices = adminSecurityNotices.map((message, index) => ({
-  id: `notice-${index}`,
-  message,
-  type: 'info' as const,
-  icon: 'info',
-}));
 
 interface DashboardProps {
   readonly adminData: ReturnType<typeof useAdminDashboardData>;
@@ -59,31 +50,26 @@ export function Dashboard({ adminData }: DashboardProps) {
 
       <StitchKpiStrip metrics={metrics} />
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
-          <StitchPanel title="Nhật ký API gần đây" description="Beta — mock data">
-            <ApiLogsTable rows={apiLogs} />
-          </StitchPanel>
+      <div className="space-y-6">
+        <StitchPanel title="Nhật ký API gần đây" description="Beta — mock data">
+          <ApiLogsTable rows={apiLogs} />
+        </StitchPanel>
 
-          <StitchPanel title="Gateway Keys">
-            {adminData.loading ? (
-              <TableSkeleton rows={3} columns={5} />
-            ) : (
-              <GatewayKeysTable rows={adminData.gatewayKeys} onRevoke={(id) => adminData.revokeKey(id)} onDelete={(id) => adminData.deleteKey(id)} mutable={adminData.mutable} />
-            )}
-          </StitchPanel>
+        <StitchPanel title="Gateway Keys">
+          {adminData.loading ? (
+            <TableSkeleton rows={3} columns={5} />
+          ) : (
+            <GatewayKeysTable rows={adminData.gatewayKeys} onRevoke={(id) => adminData.revokeKey(id)} onDelete={(id) => adminData.deleteKey(id)} mutable={adminData.mutable} />
+          )}
+        </StitchPanel>
 
-          <StitchPanel title="Vertex Targets">
-            {adminData.loading ? (
-              <TableSkeleton rows={3} columns={6} />
-            ) : (
-              <VertexTargetsTable rows={adminData.vertexTargets} />
-            )}
-          </StitchPanel>
-        </div>
-        <aside className="space-y-6">
-          <StitchSecurityRail notices={securityNotices} />
-        </aside>
+        <StitchPanel title="Vertex Targets">
+          {adminData.loading ? (
+            <TableSkeleton rows={3} columns={6} />
+          ) : (
+            <VertexTargetsTable rows={adminData.vertexTargets} />
+          )}
+        </StitchPanel>
       </div>
     </div>
   );

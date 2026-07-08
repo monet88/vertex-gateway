@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { logoutAdminSession } from '../frontend/src/pages/admin-session.js';
 import { parseModelCatalogAliases } from '../frontend/src/components/console/model-catalog-form.js';
@@ -48,6 +49,13 @@ describe('admin frontend helpers', () => {
       healthyTargets: 0,
       degradedTargets: 2,
     })).toEqual({ label: 'Runtime Failed', toneClass: 'bg-[var(--failure-red)]' });
+  });
+
+  it('keeps security notices in the shell rail instead of duplicating them on dashboard', () => {
+    const dashboardSource = readFileSync(new URL('../frontend/src/pages/Dashboard.tsx', import.meta.url), 'utf8');
+
+    expect(dashboardSource).not.toContain('StitchSecurityRail');
+    expect(dashboardSource).not.toContain('adminSecurityNotices');
   });
 
   it('clears local auth before awaiting remote logout', async () => {
