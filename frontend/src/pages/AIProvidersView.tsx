@@ -5,6 +5,8 @@ import { GatewayKeyDialog } from '@/components/console/GatewayKeyDialog';
 import { VertexTargetDialog } from '@/components/console/VertexTargetDialog';
 import { ServiceAccountTargetDialog } from '@/components/console/ServiceAccountTargetDialog';
 import { AdminError, TableSkeleton } from '@/components/console/AdminState';
+import { StitchPageHeader } from '@/components/stitch/StitchPageHeader';
+import { StitchPanel } from '@/components/stitch/StitchPanel';
 import type { VertexTargetTestResult } from '@/components/console/VertexTargetsTable';
 import type { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
 import {
@@ -95,47 +97,47 @@ export function AIProvidersView({ adminData, token }: AIProvidersViewProps) {
 
   return (
     <div className="space-y-8">
-      <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">AI Providers</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Manage Agent Platform Apikey targets and gateway keys.</p>
-        </div>
-        {adminData.mutable && (
-          <div className="flex flex-wrap gap-2">
-            <GatewayKeyDialog onCreate={(label) => adminData.createKey(label)} />
-            <VertexTargetDialog onCreate={(draft) => adminData.addTarget(draft)} />
-            <ServiceAccountTargetDialog onCreate={(draft) => adminData.importTarget(draft)} />
-          </div>
-        )}
-      </section>
+      <StitchPageHeader
+        title="Cấu hình Routing"
+        description="Điều phối Agent Platform API key targets, selection mode, và health probes."
+        actions={
+          adminData.mutable && (
+            <div className="flex flex-wrap gap-2">
+              <GatewayKeyDialog onCreate={(label) => adminData.createKey(label)} />
+              <VertexTargetDialog onCreate={(draft) => adminData.addTarget(draft)} />
+              <ServiceAccountTargetDialog onCreate={(draft) => adminData.importTarget(draft)} />
+            </div>
+          )
+        }
+      />
 
       {(adminData.error || actionError) && (
         <AdminError message={actionError ?? adminData.error ?? ''} onRetry={() => { setActionError(null); adminData.refetch(); }} />
       )}
 
-      <section>
-        <h2 className="mb-4 text-xl font-semibold tracking-tight text-foreground">Gateway Keys</h2>
+      <StitchPanel title="Gateway Keys">
         {adminData.loading ? (
           <TableSkeleton rows={3} columns={5} />
         ) : (
           <GatewayKeysTable rows={adminData.gatewayKeys} onRevoke={(id) => adminData.revokeKey(id)} onDelete={(id) => adminData.deleteKey(id)} mutable={adminData.mutable} />
         )}
-      </section>
+      </StitchPanel>
 
-      <section>
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">Agent Platform Apikey</h2>
-          <div className="grid min-w-52 gap-2">
-            <Label htmlFor="pool-selection">Pool selection</Label>
+      <StitchPanel
+        title="Agent Platform Apikey"
+        actions={
+          <div className="flex items-center gap-3">
+            <Label htmlFor="pool-selection" className="whitespace-nowrap">Pool selection</Label>
             <Select value={adminData.health?.selection ?? 'round-robin'} onValueChange={handleSelectionChange} disabled={!adminData.mutable || adminData.loading}>
-              <SelectTrigger id="pool-selection"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="pool-selection" className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="round-robin">round-robin</SelectItem>
                 <SelectItem value="bind-first">bind-first</SelectItem>
               </SelectContent>
             </Select>
           </div>
-        </div>
+        }
+      >
         {adminData.loading ? (
           <TableSkeleton rows={3} columns={6} />
         ) : (
@@ -148,7 +150,7 @@ export function AIProvidersView({ adminData, token }: AIProvidersViewProps) {
             testResults={testResults}
           />
         )}
-      </section>
+      </StitchPanel>
     </div>
   );
 }

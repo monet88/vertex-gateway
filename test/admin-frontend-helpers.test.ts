@@ -2,8 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { logoutAdminSession } from '../frontend/src/pages/admin-session.js';
 import { parseModelCatalogAliases } from '../frontend/src/components/console/model-catalog-form.js';
 import { buildAvailableModelRows } from '../frontend/src/pages/available-models-data.js';
+import { adminNavItems } from '../frontend/src/data/admin-static.js';
 
 describe('admin frontend helpers', () => {
+  it('exposes a first-class gateway key admin view', () => {
+    expect(adminNavItems.map((item) => item.id)).toContain('gateway-keys');
+    expect(adminNavItems.find((item) => item.id === 'gateway-keys')?.label).toBe('Quản lý Key');
+  });
+
   it('clears local auth before awaiting remote logout', async () => {
     const events: string[] = [];
     let resolveRemote: (() => void) | undefined;

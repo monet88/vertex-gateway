@@ -33,34 +33,40 @@
 
 :root {
   color-scheme: dark;
-  --radius: 0.75rem;
+  --radius: 0.5rem;
 
   --console-canvas: #0b1020;
-  --console-surface: #111827;
+  --console-surface: #0e1513;
+  --console-surface-low: #161d1b;
+  --console-surface-panel: #1a211f;
+  --console-surface-high: #242b2a;
+  --console-surface-highest: #2f3634;
   --console-input: #0f172a;
-  --console-surface-high: #1e293b;
   --console-line: #263244;
   --console-ink: #e5e7eb;
+  --console-ink-soft: #dde4e1;
   --console-muted: #94a3b8;
-  --operator-teal: #2dd4bf;
+  --console-muted-strong: #bacac5;
+  --operator-teal: #57f1db;
+  --operator-teal-container: #2dd4bf;
   --healthy-green: #22c55e;
   --warning-amber: #f59e0b;
   --failure-red: #ef4444;
 
-  --background: var(--console-canvas);
-  --foreground: var(--console-ink);
-  --card: var(--console-surface);
-  --card-foreground: var(--console-ink);
+  --background: var(--console-surface);
+  --foreground: var(--console-ink-soft);
+  --card: var(--console-surface-low);
+  --card-foreground: var(--console-ink-soft);
   --popover: var(--console-surface-high);
-  --popover-foreground: var(--console-ink);
+  --popover-foreground: var(--console-ink-soft);
   --primary: var(--operator-teal);
-  --primary-foreground: var(--console-canvas);
-  --secondary: var(--console-surface-high);
-  --secondary-foreground: var(--console-ink);
+  --primary-foreground: #003731;
+  --secondary: #404758;
+  --secondary-foreground: #aeb5c9;
   --muted: var(--console-input);
   --muted-foreground: var(--console-muted);
   --accent: var(--operator-teal);
-  --accent-foreground: var(--console-canvas);
+  --accent-foreground: #003731;
   --destructive: var(--failure-red);
   --border: var(--console-line);
   --input: var(--console-input);
@@ -76,13 +82,44 @@ body {
   min-height: 100dvh;
   margin: 0;
   background:
-    radial-gradient(circle at top left, rgba(45, 212, 191, 0.08), transparent 34rem),
+    radial-gradient(circle at 0 0, rgba(87, 241, 219, 0.07), transparent 30rem),
     var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+}
+
+.operator-panel {
+  border: 1px solid var(--console-line);
+  background: var(--console-surface-low);
+  border-radius: 0.75rem;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.operator-panel-compact {
+  border: 1px solid var(--console-line);
+  background: var(--console-surface-low);
+  border-radius: 0.5rem;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 button,

@@ -1,5 +1,6 @@
 export type AdminViewId =
   | 'dashboard'
+  | 'gateway-keys'
   | 'ai-providers'
   | 'auth-files'
   | 'available-models'

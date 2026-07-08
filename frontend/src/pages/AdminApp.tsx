@@ -10,6 +10,7 @@ import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
 import { changeAdminPassword, loginAdmin, logoutAdmin } from '@/lib/admin-dashboard-api';
 import { securityNotices as adminSecurityNotices } from '@/data/admin-static';
 import { Dashboard } from '@/pages/Dashboard';
+import { GatewayKeysView } from '@/pages/GatewayKeysView';
 import { AIProvidersView } from '@/pages/AIProvidersView';
 import { AuthFilesView } from '@/pages/AuthFilesView';
 import { AvailableModelsView } from '@/pages/AvailableModelsView';
@@ -29,6 +30,8 @@ function renderView(view: AdminViewId, adminData: ReturnType<typeof useAdminDash
   switch (view) {
     case 'dashboard':
       return <Dashboard adminData={adminData} />;
+    case 'gateway-keys':
+      return <GatewayKeysView adminData={adminData} />;
     case 'ai-providers':
       return <AIProvidersView adminData={adminData} token={token} />;
     case 'auth-files':
@@ -112,6 +115,7 @@ export function AdminApp() {
       rail={<StitchSecurityRail notices={securityNotices} />}
       activeView={view}
       onViewChange={setView}
+      onLogout={isAuthenticated ? () => { void handleLogout(); } : undefined}
     >
       <div className="space-y-8">
         {!isAuthenticated && (
@@ -156,12 +160,6 @@ export function AdminApp() {
               <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{authError}</p>
             )}
           </section>
-        )}
-
-        {isAuthenticated && (
-          <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
-            <Button variant="secondary" size="sm" onClick={() => { void handleLogout(); }}>Logout</Button>
-          </div>
         )}
 
         {isAuthenticated && renderView(view, adminData, token)}

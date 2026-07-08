@@ -20,9 +20,9 @@ const columns: Array<{ key: keyof GatewayKeyRow; label: string }> = [
 ];
 
 const getStatusColor = (status: string) => {
-  if (status === 'active') return 'bg-emerald-500 hover:bg-emerald-600';
-  if (status === 'revoked') return 'bg-red-500 hover:bg-red-600';
-  return 'bg-gray-500 hover:bg-gray-600';
+  if (status === 'active') return 'border border-[var(--healthy-green)]/30 bg-[var(--healthy-green)]/15 text-[var(--healthy-green)]';
+  if (status === 'revoked') return 'border border-[var(--failure-red)]/30 bg-[var(--failure-red)]/15 text-[var(--failure-red)]';
+  return 'border border-border bg-secondary text-secondary-foreground';
 };
 
 const copyPreview = async (preview: string): Promise<void> => {
@@ -70,7 +70,7 @@ export function GatewayKeysTable({ rows, onRevoke, onDelete, mutable }: GatewayK
   }
 
   return (
-    <div className="rounded-md border">
+    <div className="operator-panel-compact overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
@@ -94,24 +94,24 @@ export function GatewayKeysTable({ rows, onRevoke, onDelete, mutable }: GatewayK
             sortedRows.map((key) => (
               <TableRow key={key.id}>
                 <TableCell className="font-medium">{key.label}</TableCell>
-                <TableCell className="font-mono">{key.preview}</TableCell>
+                <TableCell className="font-mono text-sm text-[var(--operator-teal)]">{key.preview}</TableCell>
                 <TableCell>
                   <Badge className={getStatusColor(key.status)}>{key.status}</Badge>
                 </TableCell>
-                <TableCell>{key.createdAt}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{key.createdAt}</TableCell>
                 {showActions && (
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      <Button variant="secondary" size="sm" onClick={() => { void handleCopy(key); }}>
+                    <div className="flex flex-wrap justify-end gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => { void handleCopy(key); }}>
                         {copyFailedId === key.id ? 'Copy failed' : copiedId === key.id ? 'Copied' : 'Copy'}
                       </Button>
                       {mutable && onRevoke && key.status === 'active' && (
-                        <Button variant="destructive" size="sm" disabled={revokingId === key.id || deletingId === key.id} onClick={() => handleRevoke(key.id)}>
+                        <Button variant="ghost" size="sm" className="text-destructive" disabled={revokingId === key.id || deletingId === key.id} onClick={() => handleRevoke(key.id)}>
                           {revokingId === key.id ? 'Đang revoke…' : 'Revoke'}
                         </Button>
                       )}
                       {mutable && onDelete && (
-                        <Button variant="destructive" size="sm" disabled={deletingId === key.id || revokingId === key.id} onClick={() => handleDelete(key.id)}>
+                        <Button variant="ghost" size="sm" className="text-destructive" disabled={deletingId === key.id || revokingId === key.id} onClick={() => handleDelete(key.id)}>
                           {deletingId === key.id ? 'Đang xóa…' : 'Delete'}
                         </Button>
                       )}

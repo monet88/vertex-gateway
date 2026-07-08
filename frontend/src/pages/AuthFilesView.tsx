@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { AdminError, EmptyState, TableSkeleton } from '@/components/console/AdminState';
 import { VertexTargetsTable } from '@/components/console/VertexTargetsTable';
+import { StitchPageHeader } from '@/components/stitch/StitchPageHeader';
+import { StitchPanel } from '@/components/stitch/StitchPanel';
 import type { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
 import {
   deleteVertexCredential,
@@ -53,27 +55,31 @@ export function AuthFilesView({ adminData, token }: AuthFilesViewProps) {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-xl border border-border bg-card p-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Auth Files</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Service account credentials used by the gateway for upstream Google API calls.</p>
-      </section>
+      <StitchPageHeader
+        title="Cấu hình Vertex AI"
+        description="Upstream credential dùng cho Gateway đến Google. Không hiển thị cho client."
+        eyebrow="Gateway -> Google"
+        warning={<span>Service account private key không bao giờ được hiển thị trong UI.</span>}
+      />
 
       {(adminData.error || actionError) && (
         <AdminError message={actionError ?? adminData.error ?? ''} onRetry={() => { setActionError(null); adminData.refetch(); }} />
       )}
 
-      {adminData.loading ? (
-        <TableSkeleton rows={3} columns={6} />
-      ) : saTargets.length === 0 ? (
-        <EmptyState title="No service account targets" body="All targets use API key authentication. Add a service account via AI Providers view." />
-      ) : (
-        <VertexTargetsTable
-          rows={saTargets}
-          onTest={handleTest}
-          onDelete={adminData.mutable ? handleDelete : undefined}
-          onUpdate={adminData.mutable ? handleUpdate : undefined}
-        />
-      )}
+      <StitchPanel title="Danh sách Service Account">
+        {adminData.loading ? (
+          <TableSkeleton rows={3} columns={6} />
+        ) : saTargets.length === 0 ? (
+          <EmptyState title="No service account targets" body="All targets use API key authentication. Add a service account via AI Providers view." />
+        ) : (
+          <VertexTargetsTable
+            rows={saTargets}
+            onTest={handleTest}
+            onDelete={adminData.mutable ? handleDelete : undefined}
+            onUpdate={adminData.mutable ? handleUpdate : undefined}
+          />
+        )}
+      </StitchPanel>
     </div>
   );
 }

@@ -6,11 +6,11 @@ export const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
+          "border-transparent bg-[var(--operator-teal)] text-[#003731] shadow hover:bg-[var(--operator-teal)]/80",
         secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "border-transparent bg-[var(--console-surface-high)] text-[var(--console-ink)] hover:bg-[var(--console-surface-high)]/80",
         destructive:
-          "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
+          "border-transparent bg-[var(--failure-red)] text-white shadow hover:bg-[var(--failure-red)]/80",
         outline: "text-foreground",
       },
     },

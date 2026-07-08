@@ -20,34 +20,30 @@ export function ApiLogsTable({ rows }: ApiLogsTableProps) {
   const nextDirection = sort.direction === 'asc' ? 'desc' : 'asc';
 
   return (
-    <section className="rounded-xl border border-border bg-card shadow-2xl shadow-black/10">
-      <div className="flex flex-col gap-4 border-b border-border p-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">API call logs</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Bảng log đã mask key, lọc theo route family, status và model.</p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-3">
-          <Select
-            value={filters.routeFamily}
-            onValueChange={(value) => setFilters((current) => ({ ...current, routeFamily: value as RouteFamily | 'all' }))}
-          >
-            <SelectTrigger aria-label="Lọc route family"><SelectValue /></SelectTrigger>
-            <SelectContent>{routeFamilies.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select
-            value={filters.status}
-            onValueChange={(value) => setFilters((current) => ({ ...current, status: value as LogStatus | 'all' }))}
-          >
-            <SelectTrigger aria-label="Lọc status"><SelectValue /></SelectTrigger>
-            <SelectContent>{statuses.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
-          </Select>
-          <Input
-            aria-label="Lọc model"
-            value={filters.model}
-            onChange={(event) => setFilters((current) => ({ ...current, model: event.target.value }))}
-            placeholder="gemini"
-          />
-        </div>
+    <section className="operator-panel overflow-hidden">
+      <div className="grid gap-3 border-b border-border p-4 md:grid-cols-5">
+        <Select
+          value={filters.routeFamily}
+          onValueChange={(value) => setFilters((current) => ({ ...current, routeFamily: value as RouteFamily | 'all' }))}
+        >
+          <SelectTrigger aria-label="Lọc route family"><SelectValue /></SelectTrigger>
+          <SelectContent>{routeFamilies.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
+        </Select>
+        <Select
+          value={filters.status}
+          onValueChange={(value) => setFilters((current) => ({ ...current, status: value as LogStatus | 'all' }))}
+        >
+          <SelectTrigger aria-label="Lọc status"><SelectValue /></SelectTrigger>
+          <SelectContent>{statuses.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
+        </Select>
+        <Input
+          aria-label="Lọc model"
+          value={filters.model}
+          onChange={(event) => setFilters((current) => ({ ...current, model: event.target.value }))}
+          placeholder="gemini"
+        />
+        <Input aria-label="Khoảng thời gian" value="1 giờ qua" disabled />
+        <Input aria-label="Search logs" value="" placeholder="request id, key alias" disabled />
       </div>
       <Table id="api-log-table">
         <TableHeader>
@@ -75,14 +71,14 @@ export function ApiLogsTable({ rows }: ApiLogsTableProps) {
         <TableBody>
           {visibleRows.map((row) => (
             <TableRow key={row.id}>
-              <TableCell className="tabular-data">{row.time}</TableCell>
+              <TableCell className="font-mono tabular-nums">{row.time}</TableCell>
               <TableCell>{row.routeFamily}</TableCell>
-              <TableCell className="tabular-data">{row.model}</TableCell>
-              <TableCell className="tabular-data">{row.latencyMs}ms</TableCell>
-              <TableCell><Badge variant={row.status === '2xx' ? 'default' : 'destructive'}>{row.status}</Badge></TableCell>
+              <TableCell className="font-mono tabular-nums">{row.model}</TableCell>
+              <TableCell className="font-mono tabular-nums">{row.latencyMs}ms</TableCell>
+              <TableCell className="font-mono tabular-nums"><Badge variant={row.status === '2xx' ? 'default' : 'destructive'}>{row.status}</Badge></TableCell>
               <TableCell>{row.operation}</TableCell>
-              <TableCell className="tabular-data">{row.gatewayKey}</TableCell>
-              <TableCell>{row.upstreamTarget}</TableCell>
+              <TableCell className="font-mono tabular-nums">{row.gatewayKey}</TableCell>
+              <TableCell className="font-mono tabular-nums">{row.upstreamTarget}</TableCell>
             </TableRow>
           ))}
         </TableBody>

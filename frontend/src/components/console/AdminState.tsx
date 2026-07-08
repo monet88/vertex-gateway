@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 
 export function AdminError({ message, onRetry }: { readonly message: string; readonly onRetry?: () => void }) {
   return (
-    <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+    <div className="operator-panel-compact border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
       <p>{message}</p>
       {onRetry ? <Button className="mt-3" variant="secondary" size="sm" onClick={onRetry}>Retry</Button> : null}
     </div>
@@ -11,7 +11,7 @@ export function AdminError({ message, onRetry }: { readonly message: string; rea
 
 export function EmptyState({ title, body }: { readonly title: string; readonly body: string }) {
   return (
-    <div className="rounded-md border border-dashed border-border bg-muted/40 p-4 text-sm">
+    <div className="operator-panel-compact border-dashed border-border bg-muted/40 p-4 text-sm">
       <h3 className="font-medium text-foreground">{title}</h3>
       <p className="mt-1 text-muted-foreground">{body}</p>
     </div>
@@ -20,7 +20,7 @@ export function EmptyState({ title, body }: { readonly title: string; readonly b
 
 export function BetaState({ title, body }: { readonly title: string; readonly body: string }) {
   return (
-    <div className="rounded-md border border-[var(--warning-amber)]/40 bg-[var(--warning-amber)]/10 p-4 text-sm">
+    <div className="operator-panel-compact border-[var(--warning-amber)]/40 bg-[var(--warning-amber)]/10 p-4 text-sm">
       <h3 className="font-medium text-foreground">{title}</h3>
       <p className="mt-1 text-muted-foreground">{body}</p>
     </div>

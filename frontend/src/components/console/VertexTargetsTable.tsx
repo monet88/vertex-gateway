@@ -31,11 +31,11 @@ const columns: Array<{ key: keyof VertexTargetRow; label: string }> = [
 ];
 
 const getHealthColor = (health: string) => {
-  if (health === 'ready') return 'bg-emerald-500 hover:bg-emerald-600';
-  if (health === 'degraded') return 'bg-amber-500 hover:bg-amber-600 text-amber-950';
-  if (health === 'failed') return 'bg-red-500 hover:bg-red-600';
-  if (health === 'disabled') return 'bg-slate-500 hover:bg-slate-600';
-  return 'bg-gray-500 hover:bg-gray-600';
+  if (health === 'ready') return 'border border-[var(--healthy-green)]/30 bg-[var(--healthy-green)]/15 text-[var(--healthy-green)]';
+  if (health === 'degraded') return 'border border-[var(--warning-amber)]/30 bg-[var(--warning-amber)]/15 text-[var(--warning-amber)]';
+  if (health === 'failed') return 'border border-[var(--failure-red)]/30 bg-[var(--failure-red)]/15 text-[var(--failure-red)]';
+  if (health === 'disabled') return 'border border-border bg-secondary text-secondary-foreground';
+  return 'border border-border bg-muted text-muted-foreground';
 };
 
 const hasActions = (props: VertexTargetsTableProps) => Boolean(props.onTest || props.onDelete || props.onUpdate);
@@ -62,7 +62,7 @@ export function VertexTargetsTable(props: VertexTargetsTableProps) {
   const showActions = hasActions(props);
 
   return (
-    <div className="rounded-md border">
+    <div className="operator-panel-compact overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
@@ -90,10 +90,10 @@ export function VertexTargetsTable(props: VertexTargetsTableProps) {
               return (
                 <TableRow key={target.id}>
                   <TableCell className="font-medium">{target.label}</TableCell>
-                  <TableCell>{target.project}</TableCell>
-                  <TableCell>{target.location}</TableCell>
-                  <TableCell>{target.authType}</TableCell>
-                  <TableCell>{target.apiKeyMode}</TableCell>
+                  <TableCell className="font-mono text-sm text-[var(--operator-teal)]">{target.project}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{target.location}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{target.authType}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{target.apiKeyMode}</TableCell>
                   <TableCell>
                     <Badge className={getHealthColor(target.health)}>{target.health}</Badge>
                     {isPending && (
@@ -113,7 +113,7 @@ export function VertexTargetsTable(props: VertexTargetsTableProps) {
                   </TableCell>
                   {showActions && (
                     <TableCell>
-                      <div className="flex gap-1">
+                      <div className="flex flex-wrap justify-end gap-1">
                         {onTest && (
                           <Button
                             variant="ghost"
