@@ -1,0 +1,21 @@
+frontend/src/pages/Dashboard.tsx
+  s_902fac117cbbb5::t_f6669db3b882f6 53-56,58-64,66-72
+test/admin-frontend-helpers.test.ts
+  s_902fac117cbbb5::t_33e049c680bc1c 1,54-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3b5827869429a48462774ed2d5312688581064b9",
+  "prompts": {},
+  "sessions": {
+    "s_902fac117cbbb5": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "0686861a-f0c9-4588-91da-769db0d56e5a",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
