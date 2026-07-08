@@ -34,6 +34,12 @@ import {
   isValidNewAdminPassword,
   verifyAdminPassword,
 } from './admin-password.js';
+import {
+  ADMIN_SESSION_TTL_MS,
+  clearPersistedAdminSessionToken,
+  isFreshAdminSessionToken,
+  readPersistedAdminSessionToken,
+} from './admin-session.js';
 
 // Response-only shape: the raw express-mode `apiKey` is stripped and replaced
 // with a boolean presence flag. Runtime health is attached for the admin UI.
@@ -56,23 +62,31 @@ const createAdminSessionToken = (): string => `adm_${randomBytes(32).toString('b
 
 const ADMIN_LOGIN_WINDOW_MS = 60_000;
 const ADMIN_LOGIN_MAX_FAILURES = 5;
-const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
-const adminLoginRateLimiter = createAdminLoginRateLimiter({
-  windowMs: ADMIN_LOGIN_WINDOW_MS,
-  maxFailures: ADMIN_LOGIN_MAX_FAILURES,
-});
+const adminLoginRateLimiters = new WeakMap<GatewayConfig, ReturnType<typeof createAdminLoginRateLimiter>>();
 
-const assertAdminLoginAllowed = (req: IncomingMessage, username: string): void => {
-  adminLoginRateLimiter.assertAllowed(req, username);
+const getAdminLoginRateLimiter = (config: GatewayConfig) => {
+  let limiter = adminLoginRateLimiters.get(config);
+  if (!limiter) {
+    limiter = createAdminLoginRateLimiter({
+      windowMs: ADMIN_LOGIN_WINDOW_MS,
+      maxFailures: ADMIN_LOGIN_MAX_FAILURES,
+    });
+    adminLoginRateLimiters.set(config, limiter);
+  }
+  return limiter;
 };
 
-const recordAdminLoginFailure = (req: IncomingMessage, username: string): void => {
-  adminLoginRateLimiter.recordFailure(req, username);
+const assertAdminLoginAllowed = (config: GatewayConfig, req: IncomingMessage, username: string): void => {
+  getAdminLoginRateLimiter(config).assertAllowed(req, username);
 };
 
-const clearAdminLoginFailures = (req: IncomingMessage, username: string): void => {
-  adminLoginRateLimiter.clearFailures(req, username);
+const recordAdminLoginFailure = (config: GatewayConfig, req: IncomingMessage, username: string): void => {
+  getAdminLoginRateLimiter(config).recordFailure(req, username);
+};
+
+const clearAdminLoginFailures = (config: GatewayConfig, req: IncomingMessage, username: string): void => {
+  getAdminLoginRateLimiter(config).clearFailures(req, username);
 };
 
 const configuredAdminUsername = (config: GatewayConfig): string => {
@@ -136,12 +150,6 @@ const isAdminPasswordChangeRequired = (config: GatewayConfig): boolean => {
   return Boolean(configuredToken || staticToken || sessionToken) && !settings.adminPasswordHash;
 };
 
-const isFreshAdminSessionToken = (createdAt: string | null | undefined): boolean => {
-  if (!createdAt) return false;
-  const createdMs = Date.parse(createdAt);
-  return Number.isFinite(createdMs) && Date.now() - createdMs <= ADMIN_SESSION_TTL_MS;
-};
-
 const activateNullableAdminToken = (
   config: GatewayConfig,
   adminToken: string | null,
@@ -158,16 +166,34 @@ const ensureAdminSessionToken = (
   runtime?: GenAiRuntimeLike,
   onConfigReload?: (nextConfig: GatewayConfig) => void,
 ): string => {
-  if (config.adminToken) return config.adminToken;
   const settings = readAdminFileStoreSettings(config);
-  const existingSessionToken = typeof settings.adminSessionToken === 'string'
-    ? settings.adminSessionToken.trim()
+  const existingSessionToken = readPersistedAdminSessionToken(config);
+  const persistedStaticToken = typeof settings.adminToken === 'string'
+    ? settings.adminToken.trim()
     : '';
+  const configToken = typeof config.adminToken === 'string' ? config.adminToken.trim() : '';
+  const isPersistedSessionActive = existingSessionToken
+    && configToken
+    && configToken === existingSessionToken
+    && configToken !== persistedStaticToken;
+
+  if (configToken && !isPersistedSessionActive) {
+    return configToken;
+  }
   if (existingSessionToken && isFreshAdminSessionToken(settings.adminSessionTokenCreatedAt)) {
     activateAdminToken(config, existingSessionToken, runtime, onConfigReload);
     return existingSessionToken;
   }
-  if (!canBootstrapAdminToken(config)) {
+  if (existingSessionToken) {
+    clearPersistedAdminSessionToken(config);
+    if (isPersistedSessionActive) {
+      activateNullableAdminToken(config, persistedStaticToken || null, runtime, onConfigReload);
+    }
+  }
+  const canIssueSessionToken = config.adminStoreMode === 'file-store'
+    && config.adminAllowMutations
+    && Boolean(config.adminFileStoreDir);
+  if (!canIssueSessionToken) {
     throw new GatewayError(409, 'VALIDATION_FAILED', 'Admin session token bootstrap is not available.');
   }
   const adminSessionToken = createAdminSessionToken();
@@ -309,13 +335,13 @@ export const maybeHandleAdminRoute = async (
     const body = await parseJsonBody(req, config.maxJsonBytes);
     const username = typeof body.username === 'string' ? body.username.trim() : '';
     const password = typeof body.password === 'string' ? body.password : '';
-    assertAdminLoginAllowed(req, username);
+    assertAdminLoginAllowed(config, req, username);
     const login = await verifyAdminPasswordLogin(config, username, password);
     if (!login) {
-      recordAdminLoginFailure(req, username);
+      recordAdminLoginFailure(config, req, username);
       throw new GatewayError(401, 'AUTH_INVALID', 'Admin login failed.');
     }
-    clearAdminLoginFailures(req, username);
+    clearAdminLoginFailures(config, req, username);
     const token = ensureAdminSessionToken(config, runtime, onConfigReload);
     sendJson(res, 200, {
       ok: true,

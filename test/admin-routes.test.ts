@@ -484,6 +484,41 @@ describe('admin routes', () => {
     expect(settings.adminSessionTokenCreatedAt).toBeNull();
   });
 
+  it('issues a fresh admin session token after an expired file-store session is rejected', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'admin-expired-login-'));
+    const expiredAt = new Date(Date.now() - (13 * 60 * 60 * 1000)).toISOString();
+    await seedChangedAdminPassword(dir);
+    fs.writeFileSync(path.join(dir, 'admin-settings.json'), JSON.stringify({
+      ...JSON.parse(fs.readFileSync(path.join(dir, 'admin-settings.json'), 'utf8')),
+      adminSessionToken: 'expired-session-token',
+      adminSessionTokenCreatedAt: expiredAt,
+    }));
+    server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminToken: 'expired-session-token',
+        adminStoreMode: 'file-store',
+        adminAllowMutations: true,
+        adminFileStoreDir: dir,
+      }),
+      runtimeFactory: () => createFakeRuntime(),
+    });
+    const baseUrl = await listen(server);
+
+    const login = await fetch(`${baseUrl}/admin/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'changed-admin-password' }),
+    });
+    const body = await login.json();
+
+    expect(login.status).toBe(200);
+    expect(body.token).toMatch(/^adm_/);
+    expect(body.token).not.toBe('expired-session-token');
+    const settings = JSON.parse(fs.readFileSync(path.join(dir, 'admin-settings.json'), 'utf8'));
+    expect(settings.adminSessionToken).toBe(body.token);
+  });
+
   it('prunes stale admin login failure windows before recording new usernames', async () => {
     const { createAdminLoginRateLimiter } = await import('../src/admin/admin-login-rate-limit.js');
     const limiter = createAdminLoginRateLimiter({
@@ -497,7 +532,7 @@ describe('admin routes', () => {
     limiter.recordFailure(req, 'stale-user-1');
     limiter.recordFailure(req, 'stale-user-2');
     limiter.recordFailure(req, 'stale-user-3');
-    expect(limiter.size()).toBe(3);
+    expect(limiter.size()).toBe(1);
 
     currentTime = 61_000;
     limiter.recordFailure(req, 'fresh-user');
@@ -519,7 +554,7 @@ describe('admin routes', () => {
 
     limiter.recordFailure(req, 'stale-user-1');
     limiter.recordFailure(req, 'stale-user-2');
-    expect(limiter.size()).toBe(2);
+    expect(limiter.size()).toBe(1);
 
     currentTime = 61_000;
     await vi.advanceTimersByTimeAsync(5_000);
@@ -527,6 +562,23 @@ describe('admin routes', () => {
     expect(limiter.size()).toBe(0);
     limiter.dispose?.();
     vi.useRealTimers();
+  });
+
+  it('rate-limits repeated failures from one IP even when usernames rotate', async () => {
+    const { createAdminLoginRateLimiter } = await import('../src/admin/admin-login-rate-limit.js');
+    const limiter = createAdminLoginRateLimiter({
+      windowMs: 60_000,
+      maxFailures: 5,
+      cleanupIntervalMs: 0,
+    });
+    const req = { socket: { remoteAddress: '127.0.0.1' } } as Pick<Parameters<typeof limiter.assertAllowed>[0], 'socket'>;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      limiter.recordFailure(req, `user-${attempt}`);
+    }
+
+    expect(() => limiter.assertAllowed(req, 'fresh-username')).toThrow('Too many failed admin login attempts');
+    limiter.dispose?.();
   });
 
   it('accepts trailing slashes on admin API routes', async () => {

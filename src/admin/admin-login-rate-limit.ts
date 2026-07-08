@@ -13,8 +13,8 @@ interface AdminLoginRateLimiterOptions {
   readonly cleanupIntervalMs?: number;
 }
 
-const loginRateLimitKey = (req: Pick<IncomingMessage, 'socket'>, username: string): string =>
-  `${req.socket.remoteAddress ?? 'unknown'}:${username}`;
+const loginRateLimitKey = (req: Pick<IncomingMessage, 'socket'>): string =>
+  req.socket.remoteAddress ?? 'unknown';
 
 export interface AdminLoginRateLimiter {
   assertAllowed: (req: Pick<IncomingMessage, 'socket'>, username: string) => void;
@@ -42,7 +42,7 @@ export const createAdminLoginRateLimiter = (
   const assertAllowed = (req: Pick<IncomingMessage, 'socket'>, username: string): void => {
     const currentTime = now();
     pruneExpired(currentTime);
-    const current = attempts.get(loginRateLimitKey(req, username));
+    const current = attempts.get(loginRateLimitKey(req));
     if (!current) {
       return;
     }
@@ -54,7 +54,7 @@ export const createAdminLoginRateLimiter = (
   const recordFailure = (req: Pick<IncomingMessage, 'socket'>, username: string): void => {
     const currentTime = now();
     pruneExpired(currentTime);
-    const key = loginRateLimitKey(req, username);
+    const key = loginRateLimitKey(req);
     const current = attempts.get(key);
     if (!current) {
       attempts.set(key, { firstFailureAt: currentTime, failures: 1 });
@@ -64,7 +64,7 @@ export const createAdminLoginRateLimiter = (
   };
 
   const clearFailures = (req: Pick<IncomingMessage, 'socket'>, username: string): void => {
-    attempts.delete(loginRateLimitKey(req, username));
+    attempts.delete(loginRateLimitKey(req));
   };
 
   const cleanupTimer = cleanupIntervalMs > 0
