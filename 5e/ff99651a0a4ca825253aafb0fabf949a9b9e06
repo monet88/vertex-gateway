@@ -1,0 +1,48 @@
+test/available-models-data.test.ts
+  s_f1dd3b40a3b257::t_2c29ef20d7c255 1-28
+frontend/src/pages/available-models-data.ts
+  s_f1dd3b40a3b257::t_c4c8c67ad15772 1-44
+frontend/src/components/console/model-catalog-form.ts
+  s_f1dd3b40a3b257::t_6f9d1444c02d57 2-6,9
+frontend/src/lib/admin-dashboard-api.ts
+  s_f1dd3b40a3b257::t_1d62b30cdb738e 4-6
+  s_f1dd3b40a3b257::t_aef67983ec1d43 7
+  s_f1dd3b40a3b257::t_747d139a988d62 180-181
+frontend/src/pages/ModelManagementView.tsx
+  s_f1dd3b40a3b257::t_786b8fbe099ff5 8,64
+src/admin/admin-login-rate-limit.ts
+  s_f1dd3b40a3b257::t_292274ae64beef 13,24,32,70-76,82-86
+test/model-store.test.ts
+  s_f1dd3b40a3b257::t_c3d67ddbd776fa 2
+  s_f1dd3b40a3b257::t_49a1c73ff375d2 23-27
+test/admin-frontend-helpers.test.ts
+  s_f1dd3b40a3b257::t_18c6b110cd2d94 4,60-89
+frontend/src/pages/AvailableModelsView.tsx
+  s_f1dd3b40a3b257::t_b8dc445a4996de 5-6,15,37
+README.md
+  s_f1dd3b40a3b257::t_2750708eb90ae5 136-142,156
+package.json
+  s_f1dd3b40a3b257::t_4e3db73f7fc945 11-12
+src/admin/admin-routes.ts
+  s_f1dd3b40a3b257::t_4733fba82b9765 22,516-519
+src/admin/model-store.ts
+  s_f1dd3b40a3b257::t_23a7f55da6fd70 20-23,72
+test/admin-routes.test.ts
+  s_f1dd3b40a3b257::t_c2e07912a65240 508-531,709-710
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5eff99651a0a4ca825253aafb0fabf949a9b9e06",
+  "prompts": {},
+  "sessions": {
+    "s_f1dd3b40a3b257": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3d39-c521-7c3a-b444-0c0ad13c415e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
