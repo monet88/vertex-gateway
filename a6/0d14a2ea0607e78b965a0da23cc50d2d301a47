@@ -1,0 +1,19 @@
+test/available-models-view.test.ts
+  s_dc99d2ddddbb95::t_6cf3022ec13948 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a60d14a2ea0607e78b965a0da23cc50d2d301a47",
+  "prompts": {},
+  "sessions": {
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
