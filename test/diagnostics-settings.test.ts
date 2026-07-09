@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  createDiagnosticsFlagsCache,
   isDiagnosticsGateEnabled,
   isDiagnosticsWritable,
   readDiagnosticsFlags,
@@ -53,5 +54,39 @@ describe('diagnostics-settings', () => {
     expect(isDiagnosticsWritable(config)).toBe(false);
     expect(resolveApiCallLogFilePath(config)).toBeNull();
     expect(() => writeDiagnosticsFlags(config, { debugMode: true })).toThrow(/not writable/i);
+  });
+
+  it('returns defaults when admin-settings.json is corrupt', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vg-diag-'));
+    dirs.push(dir);
+    fs.writeFileSync(path.join(dir, 'admin-settings.json'), '{not-json', 'utf8');
+    const config = testConfig({
+      adminStoreMode: 'file-store',
+      adminAllowMutations: true,
+      adminFileStoreDir: dir,
+    });
+    expect(readDiagnosticsFlags(config)).toEqual({ debugMode: false, logToFile: false });
+  });
+
+  it('caches flags in memory and does not re-read disk on get', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vg-diag-'));
+    dirs.push(dir);
+    const config = testConfig({
+      adminStoreMode: 'file-store',
+      adminAllowMutations: true,
+      adminFileStoreDir: dir,
+    });
+    const settingsPath = path.join(dir, 'admin-settings.json');
+    writeDiagnosticsFlags(config, { debugMode: true, logToFile: true });
+    const cache = createDiagnosticsFlagsCache(config);
+    expect(cache.isGateEnabled()).toBe(true);
+
+    fs.writeFileSync(settingsPath, JSON.stringify({ debugMode: false, logToFile: false }), 'utf8');
+    expect(cache.get()).toEqual({ debugMode: true, logToFile: true });
+    expect(cache.isGateEnabled()).toBe(true);
+
+    cache.set({ debugMode: false, logToFile: true });
+    expect(cache.isGateEnabled()).toBe(false);
+    expect(cache.get()).toEqual({ debugMode: false, logToFile: true });
   });
 });

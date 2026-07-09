@@ -198,6 +198,29 @@ describe('admin frontend helpers', () => {
     expect(targetsTableSource).not.toContain('text-emerald-700');
   });
 
+  it('hides the upstream target column when no rows have a real target', () => {
+    const tableSource = readFileSync(new URL('../frontend/src/components/console/ApiLogsTable.tsx', import.meta.url), 'utf8');
+    expect(tableSource).toContain('showUpstreamTarget');
+    expect(tableSource).toMatch(/upstreamTarget[\s\S]*!==\s*'—'/);
+  });
+
+  it('exposes clear retained logs from diagnostics settings even when gate is off', () => {
+    const diagnosticsSource = readFileSync(
+      new URL('../frontend/src/components/console/DiagnosticsSettingsPanel.tsx', import.meta.url),
+      'utf8',
+    );
+    expect(diagnosticsSource).toContain('Xóa log đã lưu');
+    expect(diagnosticsSource).toContain('clearApiLogs');
+    expect(diagnosticsSource).toContain('entryCount');
+  });
+
+  it('includes 3xx in API log status class filters', () => {
+    const typesSource = readFileSync(new URL('../frontend/src/types/admin.ts', import.meta.url), 'utf8');
+    const tableSource = readFileSync(new URL('../frontend/src/components/console/ApiLogsTable.tsx', import.meta.url), 'utf8');
+    expect(typesSource).toContain("'1xx' | '2xx' | '3xx' | '4xx' | '5xx' | 'other'");
+    expect(tableSource).toContain("'3xx'");
+  });
+
   it('clears local auth before awaiting remote logout', async () => {
     const events: string[] = [];
     let resolveRemote: (() => void) | undefined;

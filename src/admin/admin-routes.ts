@@ -42,29 +42,27 @@ import {
 } from './admin-session.js';
 import { createApiCallLogStore, type ApiCallLogStore } from './api-call-log-store.js';
 import {
+  createDiagnosticsFlagsCache,
   isDiagnosticsGateEnabled,
   isDiagnosticsWritable,
   readDiagnosticsFlags,
   resolveApiCallLogFilePath,
   writeDiagnosticsFlags,
+  type DiagnosticsFlagsCache,
 } from './diagnostics-settings.js';
 
 export interface AdminRouteDeps {
   apiCallLogStore: ApiCallLogStore;
+  diagnosticsFlagsCache: DiagnosticsFlagsCache;
 }
 
-// Reused only when callers omit deps (e.g. isolated route tests). Production
-// createApp always injects a process-scoped store via AdminRouteDeps.
-let fallbackApiCallLogStore: ApiCallLogStore | null = null;
-const getFallbackApiCallLogStore = (): ApiCallLogStore => {
-  if (!fallbackApiCallLogStore) {
-    fallbackApiCallLogStore = createApiCallLogStore({
-      maxEntries: 500,
-      logFilePath: null,
-    });
-  }
-  return fallbackApiCallLogStore;
-};
+// Isolated route tests may omit deps. Production createApp always injects
+// process-scoped store + flags cache. Keep fallbacks ephemeral (no module
+// singleton) so concurrent test servers never share log state.
+const createFallbackApiCallLogStore = (): ApiCallLogStore => createApiCallLogStore({
+  maxEntries: 500,
+  logFilePath: null,
+});
 
 // Response-only shape: the raw express-mode `apiKey` is stripped and replaced
 // with a boolean presence flag. Runtime health is attached for the admin UI.
@@ -473,10 +471,11 @@ export const maybeHandleAdminRoute = async (
     onConfigReload?.(nextConfig);
     if (!onConfigReload) runtime.reload(nextConfig);
   });
-  const apiCallLogStore = deps?.apiCallLogStore ?? getFallbackApiCallLogStore();
+  const apiCallLogStore = deps?.apiCallLogStore ?? createFallbackApiCallLogStore();
+  const diagnosticsFlagsCache = deps?.diagnosticsFlagsCache ?? createDiagnosticsFlagsCache(config);
 
   if (req.method === 'GET' && normalizedPathname === '/admin/api/diagnostics') {
-    const flags = readDiagnosticsFlags(config);
+    const flags = diagnosticsFlagsCache.get();
     sendJson(res, 200, {
       debugMode: flags.debugMode,
       logToFile: flags.logToFile,
@@ -494,6 +493,7 @@ export const maybeHandleAdminRoute = async (
       debugMode: typeof body.debugMode === 'boolean' ? body.debugMode : undefined,
       logToFile: typeof body.logToFile === 'boolean' ? body.logToFile : undefined,
     });
+    diagnosticsFlagsCache.set(flags);
     sendJson(res, 200, {
       ok: true,
       debugMode: flags.debugMode,
@@ -507,7 +507,7 @@ export const maybeHandleAdminRoute = async (
     return true;
   }
   if (req.method === 'GET' && normalizedPathname === '/admin/api/logs') {
-    const flags = readDiagnosticsFlags(config);
+    const flags = diagnosticsFlagsCache.get();
     if (!isDiagnosticsGateEnabled(flags)) {
       throw new GatewayError(409, 'VALIDATION_FAILED', 'Enable Debug Mode and Log to File to view API logs.');
     }
@@ -519,10 +519,18 @@ export const maybeHandleAdminRoute = async (
     const search = url.searchParams.get('search') ?? undefined;
     const limitRaw = url.searchParams.get('limit');
     const limit = limitRaw ? Number(limitRaw) : undefined;
+    const allowedStatusClass = statusClass === '1xx'
+      || statusClass === '2xx'
+      || statusClass === '3xx'
+      || statusClass === '4xx'
+      || statusClass === '5xx'
+      || statusClass === 'other'
+      ? statusClass
+      : undefined;
     sendJson(res, 200, {
       entries: apiCallLogStore.list({
         limit: Number.isFinite(limit) ? limit : undefined,
-        statusClass: statusClass === '2xx' || statusClass === '4xx' || statusClass === '5xx' ? statusClass : undefined,
+        statusClass: allowedStatusClass,
         routeFamily,
         method,
         search: search || undefined,

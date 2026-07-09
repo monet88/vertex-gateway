@@ -16,9 +16,8 @@ import { createGenAiRuntime, type GenAiRuntimeLike } from './lib/genai-runtime.j
 import { maybeHandleAdminRoute } from './admin/admin-routes.js';
 import { createApiCallLogStore, maskGatewayKeyPreview } from './admin/api-call-log-store.js';
 import {
-  isDiagnosticsGateEnabled,
+  createDiagnosticsFlagsCache,
   isDiagnosticsWritable,
-  readDiagnosticsFlags,
   resolveApiCallLogFilePath,
 } from './admin/diagnostics-settings.js';
 import { getProviderModelCatalog, listProviderRouteModels, resolveProviderModel } from './admin/model-store.js';
@@ -92,6 +91,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
     maxEntries: 500,
     logFilePath: isDiagnosticsWritable(activeConfig) ? resolveApiCallLogFilePath(activeConfig) : null,
   });
+  const diagnosticsFlagsCache = createDiagnosticsFlagsCache(activeConfig);
 
   const reloadActiveConfig = (nextConfig: GatewayConfig) => {
     const candidate = hydrateManagedGatewayKeyHashes(nextConfig);
@@ -115,8 +115,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
     errorCode?: string | null;
     model?: string;
   }) => {
-    const flags = readDiagnosticsFlags(activeConfig);
-    if (!isDiagnosticsGateEnabled(flags)) return;
+    if (!diagnosticsFlagsCache.isGateEnabled()) return;
     if (args.route.family !== 'gemini' && args.route.family !== 'openai') return;
     apiCallLogStore.record({
       requestId: args.requestId,
@@ -128,6 +127,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
       operation: args.route.operation,
       model: args.model ?? args.route.model,
       gatewayKeyPreview: maskGatewayKeyPreview(args.gatewayKey),
+      // Pool target selection is not plumbed through request handlers in v1.
       upstreamTarget: null,
       errorCode: args.errorCode ?? null,
     });
@@ -151,7 +151,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
         activeConfig,
         runtime ?? undefined,
         reloadActiveConfig,
-        { apiCallLogStore },
+        { apiCallLogStore, diagnosticsFlagsCache },
       )) {
         return;
       }
@@ -298,20 +298,24 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
       sendError(res, ctx.id, error, errorFormat);
     } finally {
       if (classified && (classified.family === 'gemini' || classified.family === 'openai')) {
-        const recordedStatus = (captureErrorCode && res.statusCode < 400)
-          ? 500
-          : (res.statusCode || (captureErrorCode ? 500 : 200));
-        maybeRecordApiCall({
-          route: classified,
-          method: req.method ?? 'GET',
-          path: capturePath,
-          statusCode: recordedStatus,
-          startedAt: ctx.startedAt,
-          requestId: ctx.id,
-          gatewayKey,
-          errorCode: captureErrorCode,
-          model: captureModel ?? classified.model,
-        });
+        try {
+          const recordedStatus = (captureErrorCode && res.statusCode < 400)
+            ? 500
+            : (res.statusCode || (captureErrorCode ? 500 : 200));
+          maybeRecordApiCall({
+            route: classified,
+            method: req.method ?? 'GET',
+            path: capturePath,
+            statusCode: recordedStatus,
+            startedAt: ctx.startedAt,
+            requestId: ctx.id,
+            gatewayKey,
+            errorCode: captureErrorCode,
+            model: captureModel ?? classified.model,
+          });
+        } catch {
+          // Capture is best-effort and must never replace the client response path.
+        }
       }
       ctx.log('request.complete', { status: res.statusCode, latencyMs: Date.now() - ctx.startedAt });
     }

@@ -13,7 +13,7 @@ export interface ApiLogsTableProps {
 }
 
 const routeFamilies: Array<RouteFamily | 'all'> = ['all', 'gemini', 'openai'];
-const statuses: Array<ApiCallStatusClass | 'all'> = ['all', '2xx', '4xx', '5xx'];
+const statuses: Array<ApiCallStatusClass | 'all'> = ['all', '1xx', '2xx', '3xx', '4xx', '5xx', 'other'];
 const methods = ['all', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
 const sortableColumns = ['time', 'routeFamily', 'model', 'latencyMs', 'status'] as const;
 
@@ -23,6 +23,11 @@ export function ApiLogsTable({
   emptyMessage = 'Chưa có API call nào được ghi.',
 }: ApiLogsTableProps) {
   const { filters, setFilters, sort, setSort, visibleRows } = useLogTable(rows);
+  const showUpstreamTarget = rows.some((row) => {
+    const value = row.upstreamTarget?.trim();
+    return Boolean(value) && value !== '—';
+  });
+  const emptyColSpan = showUpstreamTarget ? 8 : 7;
 
   const nextDirection = sort.direction === 'asc' ? 'desc' : 'asc';
   const content = (
@@ -82,13 +87,13 @@ export function ApiLogsTable({
             ))}
             <TableHead>operation</TableHead>
             <TableHead>gateway key</TableHead>
-            <TableHead>target</TableHead>
+            {showUpstreamTarget ? <TableHead>target</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
           {visibleRows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+              <TableCell colSpan={emptyColSpan} className="py-8 text-center text-sm text-muted-foreground">
                 {emptyMessage}
               </TableCell>
             </TableRow>
@@ -101,7 +106,9 @@ export function ApiLogsTable({
               <TableCell className="font-mono tabular-nums"><Badge variant={row.status === '2xx' ? 'default' : 'destructive'}>{row.status}</Badge></TableCell>
               <TableCell>{row.operation}</TableCell>
               <TableCell className="font-mono tabular-nums">{row.gatewayKey}</TableCell>
-              <TableCell className="font-mono tabular-nums">{row.upstreamTarget}</TableCell>
+              {showUpstreamTarget ? (
+                <TableCell className="font-mono tabular-nums">{row.upstreamTarget}</TableCell>
+              ) : null}
             </TableRow>
           ))}
         </TableBody>

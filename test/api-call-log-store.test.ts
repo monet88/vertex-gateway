@@ -29,9 +29,13 @@ describe('api-call-log-store helpers', () => {
   });
 
   it('maps status classes and masks gateway keys', () => {
+    expect(statusClassForCode(101)).toBe('1xx');
     expect(statusClassForCode(204)).toBe('2xx');
+    expect(statusClassForCode(302)).toBe('3xx');
     expect(statusClassForCode(404)).toBe('4xx');
     expect(statusClassForCode(503)).toBe('5xx');
+    expect(statusClassForCode(0)).toBe('other');
+    expect(statusClassForCode(999)).toBe('other');
     expect(maskGatewayKeyPreview('vgw_abcdefghijklmnop1234')).toMatch(/^vgw_abcd\.\.\./);
     expect(maskGatewayKeyPreview(null)).toBeNull();
   });

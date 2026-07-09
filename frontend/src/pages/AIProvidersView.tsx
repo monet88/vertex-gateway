@@ -165,7 +165,7 @@ export function AIProvidersView({ adminData, token, diagnostics }: AIProvidersVi
         )}
       </StitchPanel>
 
-      <DiagnosticsSettingsPanel diagnostics={diagnostics} />
+      <DiagnosticsSettingsPanel diagnostics={diagnostics} token={token} />
     </div>
   );
 }

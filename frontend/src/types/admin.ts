@@ -62,7 +62,7 @@ export interface AdminScopedError {
   readonly message: string;
 }
 
-export type ApiCallStatusClass = '2xx' | '4xx' | '5xx';
+export type ApiCallStatusClass = '1xx' | '2xx' | '3xx' | '4xx' | '5xx' | 'other';
 export type RouteFamily = 'gemini' | 'openai';
 
 export interface DiagnosticsSnapshot {

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export type ApiCallStatusClass = '2xx' | '4xx' | '5xx';
+export type ApiCallStatusClass = '1xx' | '2xx' | '3xx' | '4xx' | '5xx' | 'other';
 
 export interface ApiCallLogEntry {
   id: string;
@@ -53,9 +53,12 @@ export const redactLogPath = (rawPath: string): string => {
 };
 
 export const statusClassForCode = (statusCode: number): ApiCallStatusClass => {
+  if (statusCode >= 100 && statusCode < 200) return '1xx';
   if (statusCode >= 200 && statusCode < 300) return '2xx';
+  if (statusCode >= 300 && statusCode < 400) return '3xx';
   if (statusCode >= 400 && statusCode < 500) return '4xx';
-  return '5xx';
+  if (statusCode >= 500 && statusCode < 600) return '5xx';
+  return 'other';
 };
 
 export const maskGatewayKeyPreview = (secret: string | null | undefined): string | null => {

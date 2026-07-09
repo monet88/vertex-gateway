@@ -1,8 +1,12 @@
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { clearApiLogs } from '@/lib/admin-dashboard-api';
 import type { useDiagnostics } from '@/hooks/useDiagnostics';
 
 interface DiagnosticsSettingsPanelProps {
   readonly diagnostics: ReturnType<typeof useDiagnostics>;
+  readonly token: string;
 }
 
 function SwitchRow({
@@ -48,13 +52,31 @@ function SwitchRow({
   );
 }
 
-export function DiagnosticsSettingsPanel({ diagnostics }: DiagnosticsSettingsPanelProps) {
+export function DiagnosticsSettingsPanel({ diagnostics, token }: DiagnosticsSettingsPanelProps) {
+  const [clearing, setClearing] = useState(false);
+  const [clearError, setClearError] = useState<string | null>(null);
   const writable = diagnostics.data?.writable === true;
   const showNotWritable = diagnostics.data?.writable === false;
   const disabled = !writable || diagnostics.loading || diagnostics.updating;
   const debugMode = diagnostics.data?.debugMode === true;
   const logToFile = diagnostics.data?.logToFile === true;
   const gateEnabled = diagnostics.data?.gateEnabled === true;
+  const entryCount = diagnostics.data?.entryCount ?? 0;
+  const canClearRetained = writable && Boolean(token) && (entryCount > 0 || !gateEnabled);
+
+  const handleClearRetained = async () => {
+    if (!window.confirm('Xóa toàn bộ log trong bộ nhớ và file log hiện tại?')) return;
+    setClearing(true);
+    setClearError(null);
+    try {
+      await clearApiLogs({ token });
+      await diagnostics.refetch();
+    } catch (err) {
+      setClearError(err instanceof Error ? err.message : 'Failed to clear logs');
+    } finally {
+      setClearing(false);
+    }
+  };
 
   return (
     <section className="operator-panel space-y-4 p-4">
@@ -72,6 +94,11 @@ export function DiagnosticsSettingsPanel({ diagnostics }: DiagnosticsSettingsPan
       {diagnostics.error && (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {diagnostics.error}
+        </p>
+      )}
+      {clearError && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {clearError}
         </p>
       )}
       <SwitchRow
@@ -94,12 +121,27 @@ export function DiagnosticsSettingsPanel({ diagnostics }: DiagnosticsSettingsPan
           void diagnostics.setFlags({ logToFile: next }).catch(() => {});
         }}
       />
-      <p className="font-mono text-xs text-muted-foreground">
-        Gate: {gateEnabled ? 'ON' : 'OFF'}
-        {typeof diagnostics.data?.entryCount === 'number'
-          ? ` · entries ${diagnostics.data.entryCount}/${diagnostics.data.ringSize}`
-          : ''}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="font-mono text-xs text-muted-foreground">
+          Gate: {gateEnabled ? 'ON' : 'OFF'}
+          {typeof diagnostics.data?.entryCount === 'number'
+            ? ` · entries ${diagnostics.data.entryCount}/${diagnostics.data.ringSize}`
+            : ''}
+        </p>
+        {canClearRetained ? (
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            disabled={clearing || diagnostics.loading || diagnostics.updating}
+            onClick={() => {
+              void handleClearRetained();
+            }}
+          >
+            {clearing ? 'Đang xóa...' : 'Xóa log đã lưu'}
+          </Button>
+        ) : null}
+      </div>
     </section>
   );
 }

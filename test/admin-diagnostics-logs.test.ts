@@ -151,4 +151,101 @@ describe('admin diagnostics and logs routes', () => {
     });
     expect(res.status).toBe(409);
   });
+
+  it('allows clearing logs while gate is OFF and keeps capture best-effort on corrupt settings', async () => {
+    const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vg-admin-diag-'));
+    dirs.push(storeDir);
+    await seedAdmin(storeDir);
+    const server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminStoreMode: 'file-store',
+        adminAllowMutations: true,
+        adminFileStoreDir: storeDir,
+        adminToken: null,
+        gatewayKeys: ['test-key'],
+      }),
+      genAiFactory: () => ({ models: { generateContent: vi.fn(async () => ({})) } }),
+      runtimeFactory: () => fakeRuntime(),
+    });
+    servers.push(server);
+    const baseUrl = await listen(server);
+    const token = await login(baseUrl);
+
+    await fetch(`${baseUrl}/admin/api/diagnostics`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ debugMode: true, logToFile: true }),
+    });
+    await fetch(`${baseUrl}/openai/v1/models`, {
+      headers: { authorization: 'Bearer test-key' },
+    });
+
+    await fetch(`${baseUrl}/admin/api/diagnostics`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ debugMode: false, logToFile: false }),
+    });
+
+    const cleared = await fetch(`${baseUrl}/admin/api/logs`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(cleared.status).toBe(200);
+
+    fs.writeFileSync(path.join(storeDir, 'admin-settings.json'), '{broken', 'utf8');
+    const modelsRes = await fetch(`${baseUrl}/openai/v1/models`, {
+      headers: { authorization: 'Bearer test-key' },
+    });
+    expect(modelsRes.status).toBeLessThan(500);
+  });
+
+  it('does not re-read admin-settings.json on every public request after gate is cached', async () => {
+    const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vg-admin-diag-'));
+    dirs.push(storeDir);
+    await seedAdmin(storeDir);
+    const server = createApp({
+      config: testConfig({
+        enableAdminRoutes: true,
+        adminStoreMode: 'file-store',
+        adminAllowMutations: true,
+        adminFileStoreDir: storeDir,
+        adminToken: null,
+        gatewayKeys: ['test-key'],
+      }),
+      genAiFactory: () => ({ models: { generateContent: vi.fn(async () => ({})) } }),
+      runtimeFactory: () => fakeRuntime(),
+    });
+    servers.push(server);
+    const baseUrl = await listen(server);
+    const token = await login(baseUrl);
+
+    await fetch(`${baseUrl}/admin/api/diagnostics`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ debugMode: true, logToFile: true }),
+    });
+
+    const settingsPath = path.join(storeDir, 'admin-settings.json');
+    const originalRead = fs.readFileSync;
+    let settingsReads = 0;
+    const spy = vi.spyOn(fs, 'readFileSync').mockImplementation(((...args: Parameters<typeof fs.readFileSync>) => {
+      const target = String(args[0] ?? '');
+      if (target === settingsPath || target.endsWith(`${path.sep}admin-settings.json`)) {
+        settingsReads += 1;
+      }
+      return originalRead(...args);
+    }) as typeof fs.readFileSync);
+
+    try {
+      for (let i = 0; i < 5; i += 1) {
+        await fetch(`${baseUrl}/openai/v1/models`, {
+          headers: { authorization: 'Bearer test-key' },
+        });
+      }
+      expect(settingsReads).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });

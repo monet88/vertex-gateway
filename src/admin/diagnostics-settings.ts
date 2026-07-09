@@ -11,6 +11,17 @@ export interface DiagnosticsFlags {
   logToFile: boolean;
 }
 
+export interface DiagnosticsFlagsCache {
+  get(): DiagnosticsFlags;
+  set(flags: DiagnosticsFlags): void;
+  isGateEnabled(): boolean;
+}
+
+const DEFAULT_DIAGNOSTICS_FLAGS: DiagnosticsFlags = {
+  debugMode: false,
+  logToFile: false,
+};
+
 export const isDiagnosticsWritable = (config: GatewayConfig): boolean =>
   config.adminStoreMode === 'file-store'
   && config.adminAllowMutations
@@ -25,11 +36,16 @@ export const isDiagnosticsGateEnabled = (flags: DiagnosticsFlags): boolean =>
   flags.debugMode && flags.logToFile;
 
 export const readDiagnosticsFlags = (config: GatewayConfig): DiagnosticsFlags => {
-  const settings = readAdminFileStoreSettings(config);
-  return {
-    debugMode: settings.debugMode === true,
-    logToFile: settings.logToFile === true,
-  };
+  try {
+    const settings = readAdminFileStoreSettings(config);
+    return {
+      debugMode: settings.debugMode === true,
+      logToFile: settings.logToFile === true,
+    };
+  } catch {
+    // Corrupt settings must not break request capture or admin reads.
+    return { ...DEFAULT_DIAGNOSTICS_FLAGS };
+  }
 };
 
 export const writeDiagnosticsFlags = (
@@ -49,4 +65,19 @@ export const writeDiagnosticsFlags = (
     logToFile: next.logToFile,
   });
   return next;
+};
+
+/** Process-scoped cache so hot-path capture never re-reads admin-settings.json. */
+export const createDiagnosticsFlagsCache = (config: GatewayConfig): DiagnosticsFlagsCache => {
+  let flags = readDiagnosticsFlags(config);
+  return {
+    get: () => ({ ...flags }),
+    set: (next) => {
+      flags = {
+        debugMode: next.debugMode === true,
+        logToFile: next.logToFile === true,
+      };
+    },
+    isGateEnabled: () => isDiagnosticsGateEnabled(flags),
+  };
 };
