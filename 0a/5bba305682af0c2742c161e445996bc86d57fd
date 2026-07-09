@@ -1,0 +1,45 @@
+frontend/src/lib/admin-dashboard-api.ts
+  s_350e22a90b4abf::t_9aabd3b13fedbc 2-9
+  s_350e22a90b4abf::t_b189c52037f634 10
+  s_dc99d2ddddbb95::t_04ff3ed8a78598 220-281
+frontend/src/components/stitch/StitchConsoleShell.tsx
+  s_dc99d2ddddbb95::t_6c5723bc753235 15,18-27,30,43
+frontend/src/data/admin-static.ts
+  s_dc99d2ddddbb95::t_11f4a0facb0d12 16
+frontend/src/data/mockData.ts
+  s_dc99d2ddddbb95::t_e5a82375c6fe01 1-2
+frontend/src/pages/AIProvidersView.tsx
+  s_dc99d2ddddbb95::t_5393e472826c96 7,13,28,31,167-168
+frontend/src/pages/AdminApp.tsx
+  s_dc99d2ddddbb95::t_9dbc4892cecbc3 1,10,31-38,41-48,52,58,62-69,84,87-95,194,196-203
+frontend/src/pages/Dashboard.tsx
+  s_dc99d2ddddbb95::t_a17c512503cd6a 1,12-13,15,19-21,24-26,38-41,65-87
+frontend/src/pages/LogsViewerView.tsx
+  s_dc99d2ddddbb95::t_0f577e955049a7 1,3,5-17,24-51,53-68
+frontend/src/types/admin.ts
+  s_dc99d2ddddbb95::t_c8837ac86118a7 64-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0a5bba305682af0c2742c161e445996bc86d57fd",
+  "prompts": {},
+  "sessions": {
+    "s_350e22a90b4abf": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3cda-f822-7e6b-972a-a5b228bbd978",
+        "model": "gpt-5.4"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
