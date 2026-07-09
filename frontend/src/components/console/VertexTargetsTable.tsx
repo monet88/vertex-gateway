@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useSortableTable } from '@/hooks/useSortableTable';
 import type { VertexTargetRow } from '@/types/admin';
 import type { VertexTargetPatchPayload } from '@/lib/admin-dashboard-api';
+import { VertexTargetDialog, type VertexTargetDraft } from './VertexTargetDialog';
 
 export interface VertexTargetsTableProps {
   readonly rows: readonly VertexTargetRow[];
@@ -11,6 +12,13 @@ export interface VertexTargetsTableProps {
   readonly onDelete?: (id: string) => Promise<void>;
   readonly onUpdate?: (id: string, patch: VertexTargetPatchPayload) => Promise<void>;
   readonly pendingIds?: ReadonlySet<string>;
+  readonly testResults?: ReadonlyMap<string, VertexTargetTestResult>;
+}
+
+export interface VertexTargetTestResult {
+  readonly status: 'success' | 'error';
+  readonly message: string;
+  readonly testedAt: string;
 }
 
 const columns: Array<{ key: keyof VertexTargetRow; label: string }> = [
@@ -23,22 +31,38 @@ const columns: Array<{ key: keyof VertexTargetRow; label: string }> = [
 ];
 
 const getHealthColor = (health: string) => {
-  if (health === 'ready') return 'bg-emerald-500 hover:bg-emerald-600';
-  if (health === 'degraded') return 'bg-amber-500 hover:bg-amber-600 text-amber-950';
-  if (health === 'failed') return 'bg-red-500 hover:bg-red-600';
-  if (health === 'disabled') return 'bg-slate-500 hover:bg-slate-600';
-  return 'bg-gray-500 hover:bg-gray-600';
+  if (health === 'ready') return 'border border-[var(--healthy-green)]/30 bg-[var(--healthy-green)]/15 text-[var(--healthy-green)] hover:bg-[var(--healthy-green)]/15';
+  if (health === 'degraded') return 'border border-[var(--warning-amber)]/30 bg-[var(--warning-amber)]/15 text-[var(--warning-amber)] hover:bg-[var(--warning-amber)]/15';
+  if (health === 'failed') return 'border border-[var(--failure-red)]/30 bg-[var(--failure-red)]/15 text-[var(--failure-red)] hover:bg-[var(--failure-red)]/15';
+  if (health === 'disabled') return 'border border-border bg-secondary text-secondary-foreground hover:bg-secondary';
+  return 'border border-border bg-muted text-muted-foreground hover:bg-muted';
 };
 
 const hasActions = (props: VertexTargetsTableProps) => Boolean(props.onTest || props.onDelete || props.onUpdate);
 
+const toEditDraft = (target: VertexTargetRow): VertexTargetDraft => ({
+  label: target.label,
+  project: target.project,
+  location: target.location,
+  apiKey: '',
+  apiKeyMode: target.apiKeyMode,
+});
+
+const toPatchPayload = (draft: VertexTargetDraft): VertexTargetPatchPayload => ({
+  label: draft.label,
+  project: draft.project,
+  location: draft.location,
+  apiKeyMode: draft.apiKeyMode,
+  ...(draft.apiKey.trim() ? { apiKey: draft.apiKey.trim() } : {}),
+});
+
 export function VertexTargetsTable(props: VertexTargetsTableProps) {
-  const { rows, onTest, onDelete, onUpdate, pendingIds } = props;
+  const { rows, onTest, onDelete, onUpdate, pendingIds, testResults } = props;
   const { sortKey, direction, handleSort, ariaSort, sortedRows } = useSortableTable(rows, 'label', 'asc');
   const showActions = hasActions(props);
 
   return (
-    <div className="rounded-md border">
+    <div className="operator-panel-compact overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
@@ -59,55 +83,85 @@ export function VertexTargetsTable(props: VertexTargetsTableProps) {
         </TableHeader>
         <TableBody>
           {sortedRows.length > 0 ? (
-            sortedRows.map((target) => (
-              <TableRow key={target.id}>
-                <TableCell className="font-medium">{target.label}</TableCell>
-                <TableCell>{target.project}</TableCell>
-                <TableCell>{target.location}</TableCell>
-                <TableCell>{target.authType}</TableCell>
-                <TableCell>{target.apiKeyMode}</TableCell>
-                <TableCell>
-                  <Badge className={getHealthColor(target.health)}>{target.health}</Badge>
-                </TableCell>
-                {showActions && (
+            sortedRows.map((target) => {
+              const isPending = pendingIds?.has(target.id) ?? false;
+              const testResult = testResults?.get(target.id);
+
+              return (
+                <TableRow key={target.id}>
+                  <TableCell className="font-medium">{target.label}</TableCell>
+                  <TableCell className="font-mono text-sm text-[var(--operator-teal)]">{target.project}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{target.location}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{target.authType}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{target.apiKeyMode}</TableCell>
                   <TableCell>
-                    <div className="flex gap-1">
-                      {onTest && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={pendingIds?.has(target.id)}
-                          onClick={() => onTest(target.id)}
-                        >
-                          Test
-                        </Button>
-                      )}
-                      {onUpdate && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={pendingIds?.has(target.id)}
-                          onClick={() => onUpdate(target.id, { enabled: !target.enabled })}
-                        >
-                          {target.enabled ? 'Disable' : 'Enable'}
-                        </Button>
-                      )}
-                      {onDelete && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive"
-                          disabled={pendingIds?.has(target.id)}
-                          onClick={() => onDelete(target.id)}
-                        >
-                          Delete
-                        </Button>
-                      )}
-                    </div>
+                    <Badge className={getHealthColor(target.health)}>{target.health}</Badge>
+                    {isPending && (
+                      <div className="mt-1 text-xs text-muted-foreground" role="status" aria-live="polite">
+                        Testing upstream...
+                      </div>
+                    )}
+                    {testResult && !isPending && (
+                      <div
+                        className={testResult.status === 'success' ? 'mt-1 text-xs text-[var(--healthy-green)]' : 'mt-1 text-xs text-destructive'}
+                        role="status"
+                        aria-live="polite"
+                      >
+                        {testResult.message} · {testResult.testedAt}
+                      </div>
+                    )}
                   </TableCell>
-                )}
-              </TableRow>
-            ))
+                  {showActions && (
+                    <TableCell>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        {onTest && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={isPending}
+                            onClick={() => onTest(target.id)}
+                          >
+                            {isPending ? 'Testing...' : 'Test'}
+                          </Button>
+                        )}
+                        {onUpdate && (
+                          <>
+                            {target.hasApiKey && (
+                              <VertexTargetDialog
+                                mode="edit"
+                                triggerLabel="Edit"
+                                initialDraft={toEditDraft(target)}
+                                disabled={isPending}
+                                onCreate={(draft) => onUpdate(target.id, toPatchPayload(draft))}
+                              />
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={isPending}
+                              onClick={() => onUpdate(target.id, { enabled: !target.enabled })}
+                            >
+                              {target.enabled ? 'Disable' : 'Enable'}
+                            </Button>
+                          </>
+                        )}
+                        {onDelete && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive"
+                            disabled={isPending}
+                            onClick={() => onDelete(target.id)}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  )}
+                </TableRow>
+              );
+            })
           ) : (
             <TableRow>
               <TableCell colSpan={showActions ? 7 : 6} className="h-24 text-center">

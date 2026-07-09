@@ -48,7 +48,7 @@ export function ModelCatalogEditor({ catalog, onSave, provider }: ModelCatalogEd
   }, [defaultModel, aliasesJson, allowlistCsv, disabledCsv, onSave]);
 
   return (
-    <div className="space-y-4 rounded-md border border-border bg-card p-4">
+    <div className="operator-panel-compact space-y-4 p-4">
       <h3 className="text-lg font-semibold tracking-tight">{provider} catalog</h3>
       {error && <AdminError message={error} />}
       <div className="grid gap-4 sm:grid-cols-2">

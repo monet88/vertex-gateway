@@ -37,6 +37,18 @@ describe('gateway key store', () => {
     expect(verifyManagedGatewayKey(created.secret, store.getActiveHashes())).toBe(false);
   });
 
+  it('deletes a managed key and removes it from active hashes', () => {
+    const config = tempStoreConfig();
+    const store = createGatewayKeyStore(config);
+    const created = store.create({ label: 'Temporary key' });
+
+    const deleted = store.delete(created.gatewayKey.id);
+
+    expect(deleted.gatewayKey.id).toBe(created.gatewayKey.id);
+    expect(store.getSnapshot().gatewayKeys).toEqual([]);
+    expect(verifyManagedGatewayKey(created.secret, store.getActiveHashes())).toBe(false);
+  });
+
   it('does not create the file-store directory for read-only snapshots', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-keys-'));
     const storeDir = path.join(root, 'missing-store');

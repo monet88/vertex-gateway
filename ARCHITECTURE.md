@@ -3,7 +3,7 @@
 This document orients a newcomer to `vertex-gateway`: where things live, and
 what is deliberately true about the design. For the endpoint reference and
 SDK usage examples, see `README.md`. For agent-facing conventions, see
-`AGENTS.md`.
+`AGENTS.md`. For UI/UX direction, see the root `DESIGN.md` design system.
 
 ## Bird's Eye View
 
@@ -217,6 +217,32 @@ restart.
 **Architecture Invariant:** file-store admin mutations assume a writable,
 persistent local disk and are unsupported on Cloud Run; validation rejects that
 deployment combination.
+
+### `frontend/` (React admin application)
+
+`frontend/` is a Vite/React single-page admin console that is built separately
+and served by the Node process from `frontend/dist`. `src/admin/admin-spa.ts`
+returns the built `index.html` for `/admin` and serves hashed assets from
+`/admin/assets/*`, while the Dockerfile builds the frontend in a dedicated
+stage and copies only the static `dist` output into the runtime image.
+
+`frontend/src/pages/AdminApp.tsx` owns the admin auth gate, view routing, and
+data loading hooks. Unauthenticated operators see the standalone
+`AdminLoginScreen` before the dashboard shell exists; authenticated operators
+enter `StitchConsoleShell`, which provides the left navigation, top runtime
+badges, logout action, and rail content for the current view.
+
+The root `DESIGN.md` is the canonical UI/UX source of truth for this React
+admin surface. `frontend/src/index.css` encodes that design system as CSS custom
+properties and shared utility classes such as `operator-panel` and
+`operator-panel-compact`. React components should consume those tokens and
+local shadcn-style primitives rather than scattering one-off colors, spacing,
+or generic dashboard patterns.
+
+**Architecture Invariant:** admin UI/UX work must read and follow root
+`DESIGN.md` before changing screens, layout, copy, visual tokens, interactions,
+or accessibility behavior. The design system is repository-level, not a
+frontend-private file.
 
 ## Cross-Cutting Concerns
 

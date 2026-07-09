@@ -56,7 +56,13 @@ interface SanitizedCredentialSnapshot extends Omit<AdminCredentialStoreSnapshot,
 const parseJsonBody = async (
   req: IncomingMessage,
   maxBytes: number,
-): Promise<Record<string, unknown>> => readJsonBody<Record<string, unknown>>(req, maxBytes);
+): Promise<Record<string, unknown>> => {
+  const body = await readJsonBody<unknown>(req, maxBytes);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new GatewayError(400, 'VALIDATION_FAILED', 'Request body must be a JSON object.');
+  }
+  return body as Record<string, unknown>;
+};
 
 const createAdminSessionToken = (): string => `adm_${randomBytes(32).toString('base64url')}`;
 
@@ -253,23 +259,40 @@ const buildHealthResponse = (runtime: GenAiRuntimeLike, config: GatewayConfig) =
   mode: config.adminStoreMode,
 });
 
+const isApiKeyMode = (value: unknown): value is VertexPoolConfig['apiKeyMode'] =>
+  value === 'full' || value === 'express';
+
 const toPoolPatch = (
   current: VertexPoolConfig,
   body: Record<string, unknown>,
-): VertexPoolConfig => ({
-  ...current,
-  ...(typeof body.label === 'string' ? { label: body.label.trim() || undefined } : {}),
-  ...(typeof body.project === 'string' ? { project: body.project.trim() } : {}),
-  ...(typeof body.location === 'string' ? { location: body.location.trim() } : {}),
-  ...(typeof body.enabled === 'boolean' ? { enabled: body.enabled } : {}),
-  ...(typeof body.weight === 'number' && body.weight > 0 ? { weight: body.weight } : {}),
-  ...(Array.isArray(body.modelAllowlist)
-    ? { modelAllowlist: body.modelAllowlist.filter((value): value is string => typeof value === 'string') }
-    : {}),
-  ...(Array.isArray(body.modelExclusions)
-    ? { modelExclusions: body.modelExclusions.filter((value): value is string => typeof value === 'string') }
-    : {}),
-});
+): VertexPoolConfig => {
+  if (body.apiKeyMode !== undefined && !isApiKeyMode(body.apiKeyMode)) {
+    throw new GatewayError(400, 'VALIDATION_FAILED', 'apiKeyMode must be "full" or "express".');
+  }
+  const nextApiKey = typeof body.apiKey === 'string' && body.apiKey.trim()
+    ? body.apiKey.trim()
+    : current.apiKey;
+  const nextApiKeyMode = isApiKeyMode(body.apiKeyMode) ? body.apiKeyMode : current.apiKeyMode;
+  if (nextApiKeyMode === 'express' && !nextApiKey) {
+    throw new GatewayError(400, 'VALIDATION_FAILED', 'apiKeyMode "express" requires apiKey.');
+  }
+  return {
+    ...current,
+    ...(typeof body.label === 'string' ? { label: body.label.trim() || undefined } : {}),
+    ...(typeof body.project === 'string' ? { project: body.project.trim() } : {}),
+    ...(typeof body.location === 'string' ? { location: body.location.trim() } : {}),
+    ...(nextApiKey !== current.apiKey ? { apiKey: nextApiKey } : {}),
+    ...(nextApiKeyMode !== current.apiKeyMode ? { apiKeyMode: nextApiKeyMode } : {}),
+    ...(typeof body.enabled === 'boolean' ? { enabled: body.enabled } : {}),
+    ...(typeof body.weight === 'number' && body.weight > 0 ? { weight: body.weight } : {}),
+    ...(Array.isArray(body.modelAllowlist)
+      ? { modelAllowlist: body.modelAllowlist.filter((value): value is string => typeof value === 'string') }
+      : {}),
+    ...(Array.isArray(body.modelExclusions)
+      ? { modelExclusions: body.modelExclusions.filter((value): value is string => typeof value === 'string') }
+      : {}),
+  };
+};
 
 export const maybeHandleAdminRoute = async (
   req: IncomingMessage,
@@ -450,8 +473,28 @@ export const maybeHandleAdminRoute = async (
     sendJson(res, 200, { ok: true, ...revoked });
     return true;
   }
+  const gatewayKeyDeleteMatch = normalizedPathname.match(/^\/admin\/api\/gateway-keys\/([^/]+)$/);
+  if (gatewayKeyDeleteMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(gatewayKeyDeleteMatch[1]);
+    const deleted = gatewayKeyStore.delete(id);
+    sendJson(res, 200, { ok: true, ...deleted });
+    return true;
+  }
   if (req.method === 'GET' && normalizedPathname === '/admin/api/vertex-credentials') {
     sendJson(res, 200, withRuntimeHealth(credentialStore.getSnapshot(), runtime));
+    return true;
+  }
+  if (req.method === 'PATCH' && normalizedPathname === '/admin/api/runtime-config') {
+    const body = await parseJsonBody(req, config.maxJsonBytes);
+    const vertexPoolSelection = body.vertexPoolSelection;
+    if (vertexPoolSelection !== 'round-robin' && vertexPoolSelection !== 'bind-first') {
+      throw new GatewayError(400, 'VALIDATION_FAILED', 'vertexPoolSelection must be "round-robin" or "bind-first".');
+    }
+    const snapshot = credentialStore.updateVertexPools((state) => ({
+      ...state,
+      vertexPoolSelection,
+    }));
+    sendJson(res, 200, { ok: true, ...withRuntimeHealth(snapshot, runtime) });
     return true;
   }
   if (req.method === 'POST' && normalizedPathname === '/admin/api/vertex-credentials/import') {

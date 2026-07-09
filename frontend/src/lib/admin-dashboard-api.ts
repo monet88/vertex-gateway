@@ -1,5 +1,5 @@
 import { adminFetch, type AdminApiOptions } from './admin-api';
-import type { GatewayKeyRow, ProviderModelCatalog, RuntimeHealthSummary, VertexTargetRow } from '@/types/admin';
+import type { GatewayKeyRow, ProviderModelCatalog, RuntimeHealthSummary, VertexPoolSelection, VertexTargetRow } from '@/types/admin';
 
 export interface AdminProviderModelCatalog extends ProviderModelCatalog {
   readonly builtInModels?: readonly string[];
@@ -21,7 +21,7 @@ interface AdminVertexCredentialRecord {
   readonly location: string;
   readonly credentialsFile: string | null;
   readonly hasApiKey: boolean;
-  readonly apiKeyMode: 'full' | 'express';
+  readonly apiKeyMode?: VertexTargetRow['apiKeyMode'];
   readonly enabled?: boolean;
   readonly weight?: number;
   readonly modelAllowlist?: readonly string[];
@@ -30,6 +30,7 @@ interface AdminVertexCredentialRecord {
   readonly health?: { readonly status?: string };
 }
 interface VertexCredentialsResponse {
+  readonly vertexPoolSelection?: VertexPoolSelection;
   readonly vertexPools: AdminVertexCredentialRecord[];
 }
 
@@ -53,8 +54,8 @@ export const mapVertexTarget = (record: AdminVertexCredentialRecord): VertexTarg
   label: record.label ?? record.id,
   project: record.project,
   location: record.location,
-  authType: record.hasApiKey ? 'Google Cloud API key' : 'Service Account JSON',
-  apiKeyMode: record.apiKeyMode,
+  authType: record.hasApiKey ? 'Agent Platform API key' : 'Service Account JSON',
+  apiKeyMode: record.apiKeyMode ?? 'full',
   enabled: record.enabled !== false,
   weight: record.weight ?? 1,
   modelAllowlist: record.modelAllowlist ?? [],
@@ -87,6 +88,12 @@ export async function revokeGatewayKey(options: AdminApiOptions, id: string) {
   });
 }
 
+export async function deleteGatewayKey(options: AdminApiOptions, id: string) {
+  return adminFetch<{ ok: true; gatewayKey: AdminGatewayKeyRecord }>(`/admin/api/gateway-keys/${encodeURIComponent(id)}`, options, {
+    method: 'DELETE',
+  });
+}
+
 export async function loginAdmin(username: string, password: string): Promise<AdminLoginResponse> {
   return adminFetch<AdminLoginResponse>('/admin/api/auth/login', { token: '' }, {
     method: 'POST',
@@ -105,7 +112,7 @@ export async function logoutAdmin(options: AdminApiOptions): Promise<void> {
   await adminFetch<{ ok: true }>('/admin/api/auth/logout', options, { method: 'POST' });
 }
 
-export interface VertexTargetDraftPayload { readonly label: string; readonly project: string; readonly location: string; readonly apiKey: string; }
+export interface VertexTargetDraftPayload { readonly label: string; readonly project: string; readonly location: string; readonly apiKey: string; readonly apiKeyMode: VertexTargetRow['apiKeyMode']; }
 export interface ServiceAccountTargetDraftPayload { readonly label: string; readonly project: string; readonly location: string; readonly credential: Record<string, unknown>; }
 
 export async function createVertexTarget(options: AdminApiOptions, draft: VertexTargetDraftPayload): Promise<VertexTargetRow> {
@@ -132,7 +139,7 @@ export async function fetchAdminHealth(options: AdminApiOptions): Promise<Runtim
     ok: true;
     service: string;
     mode: RuntimeHealthSummary['mode'];
-    runtime: { mode?: string; active?: { targets?: Array<{ health?: { status?: string } }> } };
+    runtime: { mode?: string; active?: { selection?: VertexPoolSelection; targets?: Array<{ health?: { status?: string } }> } };
   }>('/admin/api/health', options);
   const targets = response.runtime.active?.targets ?? [];
   return {
@@ -140,6 +147,7 @@ export async function fetchAdminHealth(options: AdminApiOptions): Promise<Runtim
     service: response.service,
     mode: response.mode,
     runtimeMode: response.runtime.mode ?? 'unknown',
+    selection: response.runtime.active?.selection ?? 'round-robin',
     targetCount: targets.length,
     healthyTargets: targets.filter((target) => target.health?.status === 'healthy').length,
     degradedTargets: targets.filter((target) => isActionableDegradedStatus(target.health?.status)).length,
@@ -155,6 +163,8 @@ export interface VertexTargetPatchPayload {
   readonly label?: string;
   readonly project?: string;
   readonly location?: string;
+  readonly apiKey?: string;
+  readonly apiKeyMode?: VertexTargetRow['apiKeyMode'];
   readonly enabled?: boolean;
   readonly weight?: number;
   readonly modelAllowlist?: readonly string[];
@@ -177,6 +187,13 @@ export async function testVertexCredential(options: AdminApiOptions, id: string)
   return adminFetch<{ ok: true; id: string; response: unknown }>(`/admin/api/vertex-credentials/${encodeURIComponent(id)}/test`, options, { method: 'POST' });
 }
 
+export async function updateRuntimeConfig(options: AdminApiOptions, patch: { readonly vertexPoolSelection: VertexPoolSelection }) {
+  return adminFetch<{ ok: true; vertexPoolSelection: VertexPoolSelection }>('/admin/api/runtime-config', options, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
 export async function fetchModelCatalog(options: AdminApiOptions, provider = 'gemini'): Promise<AdminProviderModelCatalog> {
   return adminFetch<AdminProviderModelCatalog>(`/admin/api/models?provider=${encodeURIComponent(provider)}`, options);
 }
@@ -189,7 +206,6 @@ export async function saveModelCatalog(options: AdminApiOptions, provider: strin
   return response.modelCatalog;
 }
 
-export async function reloadRuntime(options: AdminApiOptions): Promise<RuntimeHealthSummary> {
+export async function triggerRuntimeReload(options: AdminApiOptions): Promise<void> {
   await adminFetch<{ ok: true; runtime: unknown }>('/admin/api/runtime/reload', options, { method: 'POST' });
-  return fetchAdminHealth(options);
 }

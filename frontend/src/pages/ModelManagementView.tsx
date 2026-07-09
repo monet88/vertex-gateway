@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ModelCatalogEditor } from '@/components/console/ModelCatalogEditor';
 import { AdminError, TableSkeleton } from '@/components/console/AdminState';
+import { StitchPageHeader } from '@/components/stitch/StitchPageHeader';
 import { fetchModelCatalog, saveModelCatalog } from '@/lib/admin-dashboard-api';
 import type { ProviderModelCatalog } from '@/types/admin';
 
@@ -47,24 +48,26 @@ export function ModelManagementView({ token }: ModelManagementViewProps) {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-xl border border-border bg-card p-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Model Management</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Edit routing policy: default model, aliases, allowlist, and disabled models per provider.</p>
-      </section>
+      <StitchPageHeader
+        title="Model Management"
+        description="Edit routing policy: default model, aliases, allowlist, and disabled models per provider."
+      />
 
       {error && <AdminError message={error} onRetry={load} />}
 
       {loading ? (
         <TableSkeleton rows={4} columns={2} />
       ) : error ? null : (
-        PROVIDERS.map((provider) => (
-          <ModelCatalogEditor
-            key={provider}
-            provider={provider}
-            catalog={catalogs[provider] ?? EMPTY_CATALOG}
-            onSave={(catalog) => handleSave(provider, catalog)}
-          />
-        ))
+        <div className="grid gap-4 xl:grid-cols-2">
+          {PROVIDERS.map((provider) => (
+            <ModelCatalogEditor
+              key={provider}
+              provider={provider}
+              catalog={catalogs[provider] ?? EMPTY_CATALOG}
+              onSave={(catalog) => handleSave(provider, catalog)}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

@@ -930,6 +930,7 @@ export const createDerivedConfig = (
       | "vertexPools"
       | "modelCatalog"
       | "runtimeMode"
+      | "vertexPoolSelection"
       | "resolvedVertexTargets"
       | "managedGatewayKeyHashes"
       | "adminToken"
@@ -947,6 +948,9 @@ export const createDerivedConfig = (
       : {}),
     ...(overrides.modelCatalog
       ? { modelCatalog: normalizeModelCatalog(overrides.modelCatalog) }
+      : {}),
+    ...(overrides.vertexPoolSelection
+      ? { vertexPoolSelection: overrides.vertexPoolSelection }
       : {}),
     runtimeMode: overrides.vertexPools
       ? overrides.vertexPools.length > 0

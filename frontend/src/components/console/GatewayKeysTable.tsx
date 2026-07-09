@@ -4,10 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import type { GatewayKeyRow } from '@/types/admin';
+import { getGatewayKeyCopyValue } from './gateway-key-copy';
 
 export interface GatewayKeysTableProps {
   readonly rows: readonly GatewayKeyRow[];
   readonly onRevoke?: (id: string) => Promise<void>;
+  readonly onDelete?: (id: string) => Promise<void>;
   readonly mutable?: boolean;
 }
 
@@ -19,15 +21,25 @@ const columns: Array<{ key: keyof GatewayKeyRow; label: string }> = [
 ];
 
 const getStatusColor = (status: string) => {
-  if (status === 'active') return 'bg-emerald-500 hover:bg-emerald-600';
-  if (status === 'revoked') return 'bg-red-500 hover:bg-red-600';
-  return 'bg-gray-500 hover:bg-gray-600';
+  if (status === 'active') return 'border border-[var(--healthy-green)]/30 bg-[var(--healthy-green)]/15 text-[var(--healthy-green)] hover:bg-[var(--healthy-green)]/15';
+  if (status === 'revoked') return 'border border-[var(--failure-red)]/30 bg-[var(--failure-red)]/15 text-[var(--failure-red)] hover:bg-[var(--failure-red)]/15';
+  return 'border border-border bg-secondary text-secondary-foreground hover:bg-secondary';
 };
 
-export function GatewayKeysTable({ rows, onRevoke, mutable }: GatewayKeysTableProps) {
+const copyGatewayKey = async (key: GatewayKeyRow): Promise<void> => {
+  if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+  const copyValue = getGatewayKeyCopyValue(key);
+  if (!copyValue) throw new Error('Gateway key secret is unavailable');
+  await navigator.clipboard.writeText(copyValue);
+};
+
+export function GatewayKeysTable({ rows, onRevoke, onDelete, mutable }: GatewayKeysTableProps) {
   const { sortKey, direction, handleSort, ariaSort, sortedRows } = useSortableTable(rows, 'createdAt', 'desc');
   const [revokingId, setRevokingId] = useState<string | null>(null);
-  const showActions = mutable && onRevoke;
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copyFailedId, setCopyFailedId] = useState<string | null>(null);
+  const showActions = Boolean(onRevoke || onDelete || rows.length > 0);
 
   async function handleRevoke(id: string) {
     setRevokingId(id);
@@ -38,8 +50,30 @@ export function GatewayKeysTable({ rows, onRevoke, mutable }: GatewayKeysTablePr
     }
   }
 
+  async function handleDelete(id: string) {
+    setDeletingId(id);
+    try {
+      await onDelete?.(id);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function handleCopy(key: GatewayKeyRow) {
+    try {
+      await copyGatewayKey(key);
+      setCopyFailedId(null);
+      setCopiedId(key.id);
+      window.setTimeout(() => setCopiedId((current) => (current === key.id ? null : current)), 1600);
+    } catch {
+      setCopiedId(null);
+      setCopyFailedId(key.id);
+      window.setTimeout(() => setCopyFailedId((current) => (current === key.id ? null : current)), 2000);
+    }
+  }
+
   return (
-    <div className="rounded-md border">
+    <div className="operator-panel-compact overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
@@ -63,18 +97,28 @@ export function GatewayKeysTable({ rows, onRevoke, mutable }: GatewayKeysTablePr
             sortedRows.map((key) => (
               <TableRow key={key.id}>
                 <TableCell className="font-medium">{key.label}</TableCell>
-                <TableCell className="font-mono">{key.preview}</TableCell>
+                <TableCell className="font-mono text-sm text-[var(--operator-teal)]">{key.preview}</TableCell>
                 <TableCell>
                   <Badge className={getStatusColor(key.status)}>{key.status}</Badge>
                 </TableCell>
-                <TableCell>{key.createdAt}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{key.createdAt}</TableCell>
                 {showActions && (
                   <TableCell>
-                    {key.status === 'active' && (
-                      <Button variant="destructive" size="sm" disabled={revokingId === key.id} onClick={() => handleRevoke(key.id)}>
-                        {revokingId === key.id ? 'Đang revoke…' : 'Revoke'}
+                    <div className="flex flex-wrap justify-end gap-1">
+                      <Button variant="ghost" size="sm" disabled={!key.secret} onClick={() => { void handleCopy(key); }}>
+                        {copyFailedId === key.id ? 'Copy failed' : copiedId === key.id ? 'Copied' : key.secret ? 'Copy' : 'Secret unavailable'}
                       </Button>
-                    )}
+                      {mutable && onRevoke && key.status === 'active' && (
+                        <Button variant="ghost" size="sm" className="text-destructive" disabled={revokingId === key.id || deletingId === key.id} onClick={() => handleRevoke(key.id)}>
+                          {revokingId === key.id ? 'Revoking...' : 'Revoke'}
+                        </Button>
+                      )}
+                      {mutable && onDelete && (
+                        <Button variant="ghost" size="sm" className="text-destructive" disabled={deletingId === key.id || revokingId === key.id} onClick={() => handleDelete(key.id)}>
+                          {deletingId === key.id ? 'Deleting...' : 'Delete'}
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 )}
               </TableRow>

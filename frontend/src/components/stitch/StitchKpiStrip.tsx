@@ -41,12 +41,12 @@ export function StitchKpiStrip({ metrics }: StitchKpiStripProps) {
         return (
           <div
             key={metric.id}
-            className="relative flex flex-col gap-2 overflow-hidden rounded-xl bg-[var(--console-surface)] p-4 shadow-lg"
+            className="operator-panel-compact relative flex min-h-28 flex-col justify-between overflow-hidden p-4"
           >
             <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent ${accent.gradient} to-transparent`} />
-            <span className="text-xs font-bold uppercase tracking-wide text-[var(--console-muted)]">{metric.label}</span>
+            <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">{metric.label}</span>
             <div className="flex items-end justify-between">
-              <span className="font-mono text-2xl tabular-nums text-[var(--console-ink)]">{metric.value}</span>
+              <span className="font-mono text-2xl font-semibold tabular-nums text-foreground">{metric.value}</span>
               {(metric.trendValue || Icon) && (
                 <div className={`flex items-center gap-1 ${accent.text}`}>
                   {Icon ? <Icon className="h-4 w-4" aria-hidden /> : null}

@@ -26,9 +26,9 @@ const iconColorByType: Record<SecurityNotice['type'], string> = {
 
 export function StitchSecurityRail({ notices }: StitchSecurityRailProps) {
   return (
-    <div className="relative rounded-xl bg-[var(--console-surface)] p-6 shadow-lg">
-      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-[var(--console-ink)]">
-        <ShieldAlert className="h-5 w-5 text-[var(--console-muted)]" aria-hidden /> Security notices
+    <div className="operator-panel p-4">
+      <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
+        <ShieldAlert className="h-5 w-5 text-[var(--operator-teal)]" aria-hidden /> Bảo mật
       </h2>
       <ul className="flex flex-col gap-3 text-sm text-[var(--console-muted)]">
         {notices.map((notice) => {

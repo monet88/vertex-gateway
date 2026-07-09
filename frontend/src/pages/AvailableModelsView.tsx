@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AdminError, TableSkeleton } from '@/components/console/AdminState';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { StitchPageHeader } from '@/components/stitch/StitchPageHeader';
+import { StitchPanel } from '@/components/stitch/StitchPanel';
 import { fetchModelCatalog, type AdminProviderModelCatalog } from '@/lib/admin-dashboard-api';
 import { buildAvailableModelRows } from '@/pages/available-models-data';
 
@@ -57,49 +59,51 @@ export function AvailableModelsView({ token }: AvailableModelsViewProps) {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-xl border border-border bg-card p-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Available Models</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Read-only inventory of the current model catalog.</p>
-      </section>
+      <StitchPageHeader
+        title="Available Models"
+        description="Read-only inventory of the current model catalog."
+      />
 
       {error && <AdminError message={error} onRetry={load} />}
 
-      {loading ? (
-        <TableSkeleton rows={5} columns={5} />
-      ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Provider</TableHead>
-                <TableHead>Model</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Default</TableHead>
-                <TableHead>Aliases</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length > 0 ? (
-                rows.map((row) => (
-                  <TableRow key={`${row.provider}:${row.model}`}>
-                    <TableCell className="font-medium">{row.provider}</TableCell>
-                    <TableCell className="font-mono text-sm">{row.model}</TableCell>
-                    <TableCell>
-                      <Badge variant={row.status === 'allowed' ? 'default' : 'destructive'}>{row.status}</Badge>
-                    </TableCell>
-                    <TableCell>{row.isDefault ? 'Yes' : '-'}</TableCell>
-                    <TableCell className="text-muted-foreground">{row.aliases.join(', ') || '-'}</TableCell>
-                  </TableRow>
-                ))
-              ) : (
+      <StitchPanel title="Model catalog">
+        {loading ? (
+          <TableSkeleton rows={5} columns={5} />
+        ) : (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">No catalog rules configured.</TableCell>
+                  <TableHead>Provider</TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Default</TableHead>
+                  <TableHead>Aliases</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+              </TableHeader>
+              <TableBody>
+                {rows.length > 0 ? (
+                  rows.map((row) => (
+                    <TableRow key={`${row.provider}:${row.model}`}>
+                      <TableCell className="font-medium">{row.provider}</TableCell>
+                      <TableCell className="font-mono text-sm">{row.model}</TableCell>
+                      <TableCell>
+                        <Badge variant={row.status === 'allowed' ? 'default' : 'destructive'}>{row.status}</Badge>
+                      </TableCell>
+                      <TableCell>{row.isDefault ? 'Yes' : '-'}</TableCell>
+                      <TableCell className="text-muted-foreground">{row.aliases.join(', ') || '-'}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-24 text-center">No catalog rules configured.</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </StitchPanel>
     </div>
   );
 }

@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useSyncExternalStore } from 'react';
+import {
+  getAdminTokenSnapshot,
+  getServerAdminTokenSnapshot,
+  setSharedAdminToken,
+  subscribeAdminToken,
+} from '@/lib/admin-token-session';
 
 /**
- * Admin token is kept in memory only for the lifetime of the tab.
- * It is intentionally NOT persisted to sessionStorage/localStorage so that
- * an XSS payload cannot read a long-lived admin credential from Web Storage.
- * Reloading the page clears the token and the operator re-enters it.
+ * A module-scoped store keeps all hook consumers on the same admin session.
+ * Browser persistence is explicit opt-in via setToken(token, { persist: true }).
  */
 export function useAdminToken() {
-  const [token, setToken] = useState('');
+  const token = useSyncExternalStore(subscribeAdminToken, getAdminTokenSnapshot, getServerAdminTokenSnapshot);
 
-  return { token, setToken };
+  return { token, setToken: setSharedAdminToken };
 }
