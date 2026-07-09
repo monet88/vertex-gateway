@@ -95,7 +95,10 @@ export interface ApiCallLogEntry {
 /** Table-friendly projection used by ApiLogsTable. */
 export interface ApiLogRow {
   readonly id: string;
+  /** Display-only local time string. */
   readonly time: string;
+  /** ISO timestamp used for chronological sorting. */
+  readonly timestamp: string;
   readonly routeFamily: RouteFamily | string;
   readonly operation: string;
   readonly model: string;

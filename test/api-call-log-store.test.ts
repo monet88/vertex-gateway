@@ -23,6 +23,8 @@ const tempLogPath = (): string => {
 describe('api-call-log-store helpers', () => {
   it('redacts sensitive query params', () => {
     expect(redactLogPath('/openai/v1/models?api_key=secret&x=1')).toBe('/openai/v1/models?[redacted]');
+    expect(redactLogPath('/openai/v1/models?x-api-key=secret')).toBe('/openai/v1/models?[redacted]');
+    expect(redactLogPath('/openai/v1/models?x-goog-api-key=secret')).toBe('/openai/v1/models?[redacted]');
     expect(redactLogPath('/openai/v1/models')).toBe('/openai/v1/models');
   });
 

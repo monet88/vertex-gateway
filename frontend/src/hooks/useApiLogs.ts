@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { clearApiLogs, fetchApiLogs } from '@/lib/admin-dashboard-api';
 import type { ApiCallLogEntry } from '@/types/admin';
 
@@ -15,18 +15,25 @@ export function useApiLogs(token: string, enabled: boolean, query: ApiLogsQuery 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const refreshSequence = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!token || !enabled) return;
+    const sequence = refreshSequence.current + 1;
+    refreshSequence.current = sequence;
     setLoading(true);
     setError(null);
     try {
       const res = await fetchApiLogs({ token }, query);
+      if (refreshSequence.current !== sequence) return;
       setEntries(res.entries);
     } catch (err) {
+      if (refreshSequence.current !== sequence) return;
       setError(err instanceof Error ? err.message : 'Failed to load logs');
     } finally {
-      setLoading(false);
+      if (refreshSequence.current === sequence) {
+        setLoading(false);
+      }
     }
   }, [token, enabled, query.statusClass, query.routeFamily, query.method, query.search, query.limit]);
 

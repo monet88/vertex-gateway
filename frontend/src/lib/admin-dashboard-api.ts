@@ -267,6 +267,7 @@ export function mapApiCallLogEntryToRow(entry: ApiCallLogEntry): import('@/types
   return {
     id: entry.id,
     time,
+    timestamp: entry.timestamp,
     routeFamily: entry.routeFamily,
     operation: entry.operation,
     model: entry.model ?? '—',

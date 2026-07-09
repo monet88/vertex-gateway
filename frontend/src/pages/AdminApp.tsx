@@ -92,6 +92,9 @@ export function AdminApp() {
       setView('dashboard');
       setGateBanner('Bật Debug Mode và Log to File trong Cấu hình để xem Nhật ký API.');
     }
+    if (gateEnabled) {
+      setGateBanner(null);
+    }
   }, [view, gateEnabled, diagnostics.data, setView]);
 
   const handleLogin = async (event: FormEvent) => {

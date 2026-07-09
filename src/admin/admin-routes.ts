@@ -53,6 +53,19 @@ export interface AdminRouteDeps {
   apiCallLogStore: ApiCallLogStore;
 }
 
+// Reused only when callers omit deps (e.g. isolated route tests). Production
+// createApp always injects a process-scoped store via AdminRouteDeps.
+let fallbackApiCallLogStore: ApiCallLogStore | null = null;
+const getFallbackApiCallLogStore = (): ApiCallLogStore => {
+  if (!fallbackApiCallLogStore) {
+    fallbackApiCallLogStore = createApiCallLogStore({
+      maxEntries: 500,
+      logFilePath: null,
+    });
+  }
+  return fallbackApiCallLogStore;
+};
+
 // Response-only shape: the raw express-mode `apiKey` is stripped and replaced
 // with a boolean presence flag. Runtime health is attached for the admin UI.
 type SanitizedCredentialRecord = Omit<AdminVertexCredentialRecord, 'apiKey' | 'credentialsFile'> & {
@@ -460,10 +473,7 @@ export const maybeHandleAdminRoute = async (
     onConfigReload?.(nextConfig);
     if (!onConfigReload) runtime.reload(nextConfig);
   });
-  const apiCallLogStore = deps?.apiCallLogStore ?? createApiCallLogStore({
-    maxEntries: 500,
-    logFilePath: isDiagnosticsWritable(config) ? resolveApiCallLogFilePath(config) : null,
-  });
+  const apiCallLogStore = deps?.apiCallLogStore ?? getFallbackApiCallLogStore();
 
   if (req.method === 'GET' && normalizedPathname === '/admin/api/diagnostics') {
     const flags = readDiagnosticsFlags(config);

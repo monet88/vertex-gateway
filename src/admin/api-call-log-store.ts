@@ -44,7 +44,7 @@ export interface ApiCallLogStore {
   readonly logFilePath: string | null;
 }
 
-const SENSITIVE_QUERY = /[?&](api_key|key|token|authorization)=/i;
+const SENSITIVE_QUERY = /[?&](api_key|key|token|authorization|x-api-key|x-goog-api-key)=/i;
 
 export const redactLogPath = (rawPath: string): string => {
   if (!SENSITIVE_QUERY.test(rawPath)) return rawPath;

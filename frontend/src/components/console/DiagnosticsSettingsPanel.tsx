@@ -50,6 +50,7 @@ function SwitchRow({
 
 export function DiagnosticsSettingsPanel({ diagnostics }: DiagnosticsSettingsPanelProps) {
   const writable = diagnostics.data?.writable === true;
+  const showNotWritable = diagnostics.data?.writable === false;
   const disabled = !writable || diagnostics.loading || diagnostics.updating;
   const debugMode = diagnostics.data?.debugMode === true;
   const logToFile = diagnostics.data?.logToFile === true;
@@ -63,7 +64,7 @@ export function DiagnosticsSettingsPanel({ diagnostics }: DiagnosticsSettingsPan
           Bật cả Debug Mode và Log to File để ghi và xem Nhật ký API.
         </p>
       </div>
-      {!writable && (
+      {showNotWritable && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
           Cần admin file-store (ghi được) để dùng diagnostics.
         </p>
@@ -80,7 +81,7 @@ export function DiagnosticsSettingsPanel({ diagnostics }: DiagnosticsSettingsPan
         checked={debugMode}
         disabled={disabled}
         onCheckedChange={(next) => {
-          void diagnostics.setFlags({ debugMode: next });
+          void diagnostics.setFlags({ debugMode: next }).catch(() => {});
         }}
       />
       <SwitchRow
@@ -90,7 +91,7 @@ export function DiagnosticsSettingsPanel({ diagnostics }: DiagnosticsSettingsPan
         checked={logToFile}
         disabled={disabled}
         onCheckedChange={(next) => {
-          void diagnostics.setFlags({ logToFile: next });
+          void diagnostics.setFlags({ logToFile: next }).catch(() => {});
         }}
       />
       <p className="font-mono text-xs text-muted-foreground">

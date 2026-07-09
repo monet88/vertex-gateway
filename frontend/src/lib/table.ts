@@ -45,6 +45,9 @@ export function sortLogs(rows: readonly ApiLogRow[], sort: LogTableSort): ApiLog
   const multiplier = sort.direction === 'asc' ? 1 : -1;
   return [...rows].sort((left, right) => {
     if (sort.key === 'latencyMs') return (left.latencyMs - right.latencyMs) * multiplier;
+    if (sort.key === 'time') {
+      return compareText(left.timestamp || left.time, right.timestamp || right.time) * multiplier;
+    }
     return compareText(String(left[sort.key]), String(right[sort.key])) * multiplier;
   });
 }
