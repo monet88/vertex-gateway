@@ -12,6 +12,8 @@ export interface AdminFileStoreSettings {
   adminUsername?: string | null;
   adminPasswordHash?: string | null;
   adminPasswordChangedAt?: string | null;
+  debugMode?: boolean | null;
+  logToFile?: boolean | null;
 }
 
 const settingsPath = (dir: string): string => path.join(dir, SETTINGS_FILE);

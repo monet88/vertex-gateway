@@ -61,3 +61,52 @@ export interface AdminScopedError {
   readonly area: string;
   readonly message: string;
 }
+
+export type ApiCallStatusClass = '1xx' | '2xx' | '3xx' | '4xx' | '5xx' | 'other';
+export type RouteFamily = 'gemini' | 'openai';
+
+export interface DiagnosticsSnapshot {
+  readonly debugMode: boolean;
+  readonly logToFile: boolean;
+  readonly gateEnabled: boolean;
+  readonly writable: boolean;
+  readonly logFilePath?: string | null;
+  readonly ringSize: number;
+  readonly entryCount: number;
+}
+
+export interface ApiCallLogEntry {
+  readonly id: string;
+  readonly timestamp: string;
+  readonly requestId: string;
+  readonly method: string;
+  readonly path: string;
+  readonly statusCode: number;
+  readonly statusClass: ApiCallStatusClass;
+  readonly latencyMs: number;
+  readonly routeFamily: string;
+  readonly operation: string;
+  readonly model?: string;
+  readonly gatewayKeyPreview?: string | null;
+  readonly upstreamTarget?: string | null;
+  readonly errorCode?: string | null;
+}
+
+/** Table-friendly projection used by ApiLogsTable. */
+export interface ApiLogRow {
+  readonly id: string;
+  /** Display-only local time string. */
+  readonly time: string;
+  /** ISO timestamp used for chronological sorting. */
+  readonly timestamp: string;
+  readonly routeFamily: RouteFamily | string;
+  readonly operation: string;
+  readonly model: string;
+  readonly gatewayKey: string;
+  readonly upstreamTarget: string;
+  readonly latencyMs: number;
+  readonly status: ApiCallStatusClass;
+  readonly method?: string;
+  readonly path?: string;
+  readonly requestId?: string;
+}

@@ -198,6 +198,51 @@ describe('admin frontend helpers', () => {
     expect(targetsTableSource).not.toContain('text-emerald-700');
   });
 
+  it('hides the upstream target column when no rows have a real target', () => {
+    const tableSource = readFileSync(new URL('../frontend/src/components/console/ApiLogsTable.tsx', import.meta.url), 'utf8');
+    expect(tableSource).toContain('showUpstreamTarget');
+    expect(tableSource).toMatch(/upstreamTarget[\s\S]*!==\s*'—'/);
+  });
+
+  it('exposes clear retained logs whenever diagnostics storage is writable', () => {
+    const diagnosticsSource = readFileSync(
+      new URL('../frontend/src/components/console/DiagnosticsSettingsPanel.tsx', import.meta.url),
+      'utf8',
+    );
+    expect(diagnosticsSource).toContain('Xóa log đã lưu');
+    expect(diagnosticsSource).toContain('clearApiLogs');
+    // Clear must not depend on memory entryCount/gate — file logs survive restart with empty ring.
+    expect(diagnosticsSource).toContain('const canClearRetained = writable && Boolean(token)');
+    expect(diagnosticsSource).not.toContain('entryCount > 0');
+  });
+
+  it('includes 3xx in API log status class filters', () => {
+    const typesSource = readFileSync(new URL('../frontend/src/types/admin.ts', import.meta.url), 'utf8');
+    const tableSource = readFileSync(new URL('../frontend/src/components/console/ApiLogsTable.tsx', import.meta.url), 'utf8');
+    expect(typesSource).toContain("'1xx' | '2xx' | '3xx' | '4xx' | '5xx' | 'other'");
+    expect(tableSource).toContain("'3xx'");
+  });
+
+  it('maps non-error API status classes away from destructive badges', async () => {
+    const { statusBadgeVariant } = await import('../frontend/src/lib/table.ts');
+    expect(statusBadgeVariant('2xx')).toBe('default');
+    expect(statusBadgeVariant('4xx')).toBe('destructive');
+    expect(statusBadgeVariant('5xx')).toBe('destructive');
+    expect(statusBadgeVariant('1xx')).toBe('secondary');
+    expect(statusBadgeVariant('3xx')).toBe('secondary');
+    expect(statusBadgeVariant('other')).toBe('secondary');
+
+    const tableSource = readFileSync(new URL('../frontend/src/components/console/ApiLogsTable.tsx', import.meta.url), 'utf8');
+    expect(tableSource).toContain('statusBadgeVariant(row.status)');
+    expect(tableSource).not.toContain("row.status === '2xx' ? 'default' : 'destructive'");
+  });
+
+  it('memoizes upstream target column visibility for large log tables', () => {
+    const tableSource = readFileSync(new URL('../frontend/src/components/console/ApiLogsTable.tsx', import.meta.url), 'utf8');
+    expect(tableSource).toContain('useMemo');
+    expect(tableSource).toMatch(/const showUpstreamTarget = useMemo\(/);
+  });
+
   it('clears local auth before awaiting remote logout', async () => {
     const events: string[] = [];
     let resolveRemote: (() => void) | undefined;

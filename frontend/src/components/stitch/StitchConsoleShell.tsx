@@ -12,11 +12,22 @@ export interface StitchConsoleShellProps {
   readonly topActions?: ReactNode;
   readonly onLogout?: () => void;
   readonly health?: RuntimeHealthSummary | null;
+  readonly gateEnabled?: boolean;
 }
 
-export function StitchConsoleShell({ children, rail, activeView = 'dashboard', onViewChange, topActions, onLogout, health = null }: StitchConsoleShellProps) {
+export function StitchConsoleShell({
+  children,
+  rail,
+  activeView = 'dashboard',
+  onViewChange,
+  topActions,
+  onLogout,
+  health = null,
+  gateEnabled = false,
+}: StitchConsoleShellProps) {
   const runtimeBadge = getShellRuntimeBadge(health);
   const runtimeModeLabel = `Runtime ${health?.runtimeMode ?? 'unknown'}`;
+  const visibleNav = adminNavItems.filter((item) => item.id !== 'logs-viewer' || gateEnabled);
 
   return (
     <main className="min-h-dvh bg-background text-foreground">
@@ -29,7 +40,7 @@ export function StitchConsoleShell({ children, rail, activeView = 'dashboard', o
             <p className="mt-1 text-xs text-muted-foreground">{runtimeModeLabel}</p>
           </div>
           <nav aria-label="Console navigation" className="grid gap-1 text-sm">
-            {adminNavItems.map((item) => {
+            {visibleNav.map((item) => {
               const Icon = item.icon;
               const isActive = activeView === item.id;
               return (

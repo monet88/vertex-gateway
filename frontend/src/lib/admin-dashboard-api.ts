@@ -1,5 +1,13 @@
 import { adminFetch, type AdminApiOptions } from './admin-api';
-import type { GatewayKeyRow, ProviderModelCatalog, RuntimeHealthSummary, VertexPoolSelection, VertexTargetRow } from '@/types/admin';
+import type {
+  ApiCallLogEntry,
+  DiagnosticsSnapshot,
+  GatewayKeyRow,
+  ProviderModelCatalog,
+  RuntimeHealthSummary,
+  VertexPoolSelection,
+  VertexTargetRow,
+} from '@/types/admin';
 
 export interface AdminProviderModelCatalog extends ProviderModelCatalog {
   readonly builtInModels?: readonly string[];
@@ -208,4 +216,67 @@ export async function saveModelCatalog(options: AdminApiOptions, provider: strin
 
 export async function triggerRuntimeReload(options: AdminApiOptions): Promise<void> {
   await adminFetch<{ ok: true; runtime: unknown }>('/admin/api/runtime/reload', options, { method: 'POST' });
+}
+
+export async function fetchDiagnostics(options: AdminApiOptions): Promise<DiagnosticsSnapshot> {
+  return adminFetch<DiagnosticsSnapshot>('/admin/api/diagnostics', options);
+}
+
+export async function updateDiagnostics(
+  options: AdminApiOptions,
+  patch: { debugMode?: boolean; logToFile?: boolean },
+): Promise<DiagnosticsSnapshot> {
+  return adminFetch<DiagnosticsSnapshot>('/admin/api/diagnostics', options, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function fetchApiLogs(
+  options: AdminApiOptions,
+  query: {
+    limit?: number;
+    statusClass?: string;
+    routeFamily?: string;
+    method?: string;
+    search?: string;
+  } = {},
+): Promise<{ entries: ApiCallLogEntry[] }> {
+  const params = new URLSearchParams();
+  if (query.limit) params.set('limit', String(query.limit));
+  if (query.statusClass) params.set('statusClass', query.statusClass);
+  if (query.routeFamily) params.set('routeFamily', query.routeFamily);
+  if (query.method) params.set('method', query.method);
+  if (query.search) params.set('search', query.search);
+  const qs = params.toString();
+  return adminFetch<{ entries: ApiCallLogEntry[] }>(`/admin/api/logs${qs ? `?${qs}` : ''}`, options);
+}
+
+export async function clearApiLogs(options: AdminApiOptions): Promise<{ ok: true; cleared: true }> {
+  return adminFetch<{ ok: true; cleared: true }>('/admin/api/logs', options, { method: 'DELETE' });
+}
+
+export function mapApiCallLogEntryToRow(entry: ApiCallLogEntry): import('@/types/admin').ApiLogRow {
+  const time = (() => {
+    try {
+      return new Date(entry.timestamp).toLocaleTimeString();
+    } catch {
+      return entry.timestamp;
+    }
+  })();
+  return {
+    id: entry.id,
+    time,
+    timestamp: entry.timestamp,
+    routeFamily: entry.routeFamily,
+    operation: entry.operation,
+    model: entry.model ?? '—',
+    gatewayKey: entry.gatewayKeyPreview ?? '—',
+    upstreamTarget: entry.upstreamTarget ?? '—',
+    latencyMs: entry.latencyMs,
+    status: entry.statusClass,
+    method: entry.method,
+    path: entry.path,
+    requestId: entry.requestId,
+  };
 }
