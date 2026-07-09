@@ -1,0 +1,28 @@
+src/admin/admin-routes.ts
+  s_350e22a90b4abf::t_e47462001ba6de 43-54
+  s_dc99d2ddddbb95::t_50670c52aaa74f 316,463-528
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f10dd380fce9ed07c35db1bb2c8851ab258b3706",
+  "prompts": {},
+  "sessions": {
+    "s_350e22a90b4abf": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3cda-f822-7e6b-972a-a5b228bbd978",
+        "model": "gpt-5.4"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
