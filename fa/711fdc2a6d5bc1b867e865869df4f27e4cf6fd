@@ -1,0 +1,19 @@
+docs/superpowers/specs/2026-07-09-backend-hot-path-throughput-design.md
+  s_251f7d31bfe372::t_7471dc9915d8c8 1-335
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fa711fdc2a6d5bc1b867e865869df4f27e4cf6fd",
+  "prompts": {},
+  "sessions": {
+    "s_251f7d31bfe372": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "6ffc704d-0fcf-4c03-99e7-1fe897dd4b53",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
