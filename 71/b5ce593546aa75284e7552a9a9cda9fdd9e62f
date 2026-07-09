@@ -1,0 +1,33 @@
+frontend/src/components/console/VertexTargetsTable.tsx
+  s_1f26db6f1212da::t_9268d323b51596 106
+frontend/src/hooks/useAdminDashboardData.ts
+  s_1f26db6f1212da::t_7f4a35735615e5 1,4,14,31-33,46,53-67,76-77,85,95,98,103-106,109,114-115,118,123,126-127,130,132,134,136,138,141-142,145,147,149,151,153,156-157,160,162,164,168,171-172,175,177,179,183,188-189,192-196,199,201,203,205
+frontend/src/hooks/useAdminToken.ts
+  s_1f26db6f1212da::t_3dc8800c812d0e 2-7,14
+frontend/src/lib/admin-dashboard-api.ts
+  s_1f26db6f1212da::t_7a78536b0c27d2 209
+frontend/src/lib/admin-token-session.ts
+  s_1f26db6f1212da::t_7c1de5fbecec0a 1-39
+frontend/src/pages/Dashboard.tsx
+  s_1f26db6f1212da::t_da10dc84031918 43
+test/admin-frontend-helpers.test.ts
+  s_1f26db6f1212da::t_7d32d60ee8424e 188-200
+test/admin-token-storage.test.ts
+  s_1f26db6f1212da::t_5f7cc3ec617789 2-5,27,68-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "71b5ce593546aa75284e7552a9a9cda9fdd9e62f",
+  "prompts": {},
+  "sessions": {
+    "s_1f26db6f1212da": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "fcc34cda-5f28-45a4-ac35-3f5e4a9d3d52",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
