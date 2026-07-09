@@ -1,0 +1,45 @@
+frontend/src/components/console/DiagnosticsSettingsPanel.tsx
+  s_5fe0903cabaa8a::t_01b43e0d71c683 1-2,4,9,55-57,64-79,99-103,124-144
+frontend/src/pages/AIProvidersView.tsx
+  s_dc99d2ddddbb95::t_517f741421b28b 168
+frontend/src/types/admin.ts
+  s_dc99d2ddddbb95::t_814d54fca574c9 65
+src/admin/admin-routes.ts
+  s_dc99d2ddddbb95::t_6f4f24092c3951 45,51,56,59-65,474-475,478,496,510,522-529,533
+src/admin/api-call-log-store.ts
+  s_5fe0903cabaa8a::t_d5aa3839eb3a35 5,56,58,60-61
+src/admin/diagnostics-settings.ts
+  s_5fe0903cabaa8a::t_8c2c2e1cde0cc8 14-24,39-48,69-83
+test/admin-diagnostics-logs.test.ts
+  s_5fe0903cabaa8a::t_604bce83ddb5dc 154-250
+test/admin-frontend-helpers.test.ts
+  s_dc99d2ddddbb95::t_55fb80ed5cd97a 201-223
+test/api-call-log-store.test.ts
+  s_5fe0903cabaa8a::t_7e023ab274d713 32,34,37-38
+test/diagnostics-settings.test.ts
+  s_5fe0903cabaa8a::t_140d8f62ffce56 6,58-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f309a634d28f38e25ad3f997b50ab1ea661fe939",
+  "prompts": {},
+  "sessions": {
+    "s_5fe0903cabaa8a": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "96abb899-9c74-4faf-81cf-194b762343f0",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
