@@ -14,10 +14,18 @@ import type { GenAiFactory } from './lib/google-genai-client.js';
 import { createGoogleGenAiClient } from './lib/google-genai-client.js';
 import { createGenAiRuntime, type GenAiRuntimeLike } from './lib/genai-runtime.js';
 import { maybeHandleAdminRoute } from './admin/admin-routes.js';
+import { createApiCallLogStore, maskGatewayKeyPreview } from './admin/api-call-log-store.js';
+import {
+  isDiagnosticsGateEnabled,
+  isDiagnosticsWritable,
+  readDiagnosticsFlags,
+  resolveApiCallLogFilePath,
+} from './admin/diagnostics-settings.js';
 import { getProviderModelCatalog, listProviderRouteModels, resolveProviderModel } from './admin/model-store.js';
 import { renderDocsUi, renderLlmsTxt } from './routes/docs-ui.js';
 import { healthResponse, readyResponse, rootResponse } from './routes/health-routes.js';
 import { ImageWorkloads } from './workloads/image-workloads.js';
+import type { ClassifiedRoute } from './http/request-classifier.js';
 
 export interface AppOptions {
   config: GatewayConfig;
@@ -80,6 +88,10 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
     : (genAiFactory === createGoogleGenAiClient ? createGenAiRuntime(activeConfig) : null);
   const ai = runtime?.client ?? genAiFactory(activeConfig);
   const workloads = new ImageWorkloads(ai, activeConfig);
+  const apiCallLogStore = createApiCallLogStore({
+    maxEntries: 500,
+    logFilePath: isDiagnosticsWritable(activeConfig) ? resolveApiCallLogFilePath(activeConfig) : null,
+  });
 
   const reloadActiveConfig = (nextConfig: GatewayConfig) => {
     const candidate = hydrateManagedGatewayKeyHashes(nextConfig);
@@ -92,12 +104,55 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
     maxDurationMs: config.streamMaxDurationMs,
   };
 
+  const maybeRecordApiCall = (args: {
+    route: ClassifiedRoute;
+    method: string;
+    path: string;
+    statusCode: number;
+    startedAt: number;
+    requestId: string;
+    gatewayKey: string | null;
+    errorCode?: string | null;
+    model?: string;
+  }) => {
+    const flags = readDiagnosticsFlags(activeConfig);
+    if (!isDiagnosticsGateEnabled(flags)) return;
+    if (args.route.family !== 'gemini' && args.route.family !== 'openai') return;
+    apiCallLogStore.record({
+      requestId: args.requestId,
+      method: args.method,
+      path: args.path,
+      statusCode: args.statusCode || 500,
+      latencyMs: Date.now() - args.startedAt,
+      routeFamily: args.route.family,
+      operation: args.route.operation,
+      model: args.model ?? args.route.model,
+      gatewayKeyPreview: maskGatewayKeyPreview(args.gatewayKey),
+      upstreamTarget: null,
+      errorCode: args.errorCode ?? null,
+    });
+  };
+
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const ctx = createRequestContext(req, res);
     let errorFormat: 'gateway' | 'openai' = 'gateway';
+    let classified: ClassifiedRoute | null = null;
+    let gatewayKey: string | null = null;
+    let captureModel: string | undefined;
+    let captureErrorCode: string | null = null;
+    let capturePath = req.url ?? '/';
     try {
       const url = new URL(req.url ?? '/', 'http://gateway.local');
-      if (await maybeHandleAdminRoute(req, res, url, activeConfig, runtime ?? undefined, reloadActiveConfig)) {
+      capturePath = `${url.pathname}${url.search}`;
+      if (await maybeHandleAdminRoute(
+        req,
+        res,
+        url,
+        activeConfig,
+        runtime ?? undefined,
+        reloadActiveConfig,
+        { apiCallLogStore },
+      )) {
         return;
       }
 
@@ -135,18 +190,18 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
         return;
       }
 
-      const route = classifyRoute(req.method ?? 'GET', url.pathname);
-      errorFormat = errorFormatForFamily(route.family);
+      classified = classifyRoute(req.method ?? 'GET', url.pathname);
+      errorFormat = errorFormatForFamily(classified.family);
       requireGatewayAuth(req, activeConfig);
-      const gatewayKey = extractGatewayKey(req);
-      const expectsMultipartOpenAiEdit = route.family === 'openai'
-        && route.operation === 'openaiImageEdits'
+      gatewayKey = extractGatewayKey(req);
+      const expectsMultipartOpenAiEdit = classified.family === 'openai'
+        && classified.operation === 'openaiImageEdits'
         && typeof req.headers['content-type'] === 'string'
         && req.headers['content-type'].includes('multipart/form-data');
       const body = req.method === 'GET' || expectsMultipartOpenAiEdit
         ? {}
         : await readJsonBody<Record<string, unknown>>(req, config.maxJsonBytes);
-      const resolvedRoute = { ...route };
+      const resolvedRoute = { ...classified };
       const resolvedBody = { ...body };
       const geminiModel = (value: unknown) => resolveProviderModel(activeConfig.modelCatalog, 'gemini', value);
       const openAiModel = (value: unknown) => {
@@ -171,6 +226,9 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
           resolvedBody.model = nextModel;
         }
       }
+      captureModel = typeof resolvedBody.model === 'string'
+        ? resolvedBody.model
+        : resolvedRoute.model;
       const streaming = isStreamingRequest(resolvedRoute, resolvedBody);
       const streamAbortController = new AbortController();
       const abortQueuedStream = () => {
@@ -219,6 +277,11 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
 
       throw new GatewayError(404, 'NOT_FOUND', 'Route is not implemented.');
     } catch (error) {
+      if (error instanceof GatewayError) {
+        captureErrorCode = error.code;
+      } else if (error) {
+        captureErrorCode = 'INTERNAL';
+      }
       if (error instanceof GatewayError && error.code === 'PAYLOAD_TOO_LARGE') {
         res.once('finish', () => req.destroy());
       }
@@ -234,6 +297,19 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
       }
       sendError(res, ctx.id, error, errorFormat);
     } finally {
+      if (classified && (classified.family === 'gemini' || classified.family === 'openai')) {
+        maybeRecordApiCall({
+          route: classified,
+          method: req.method ?? 'GET',
+          path: capturePath,
+          statusCode: res.statusCode || (captureErrorCode ? 500 : 200),
+          startedAt: ctx.startedAt,
+          requestId: ctx.id,
+          gatewayKey,
+          errorCode: captureErrorCode,
+          model: captureModel ?? classified.model,
+        });
+      }
       ctx.log('request.complete', { status: res.statusCode, latencyMs: Date.now() - ctx.startedAt });
     }
   });

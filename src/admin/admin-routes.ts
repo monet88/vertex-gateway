@@ -40,6 +40,18 @@ import {
   isFreshAdminSessionToken,
   readPersistedAdminSessionToken,
 } from './admin-session.js';
+import { createApiCallLogStore, type ApiCallLogStore } from './api-call-log-store.js';
+import {
+  isDiagnosticsGateEnabled,
+  isDiagnosticsWritable,
+  readDiagnosticsFlags,
+  resolveApiCallLogFilePath,
+  writeDiagnosticsFlags,
+} from './diagnostics-settings.js';
+
+export interface AdminRouteDeps {
+  apiCallLogStore: ApiCallLogStore;
+}
 
 // Response-only shape: the raw express-mode `apiKey` is stripped and replaced
 // with a boolean presence flag. Runtime health is attached for the admin UI.
@@ -301,6 +313,7 @@ export const maybeHandleAdminRoute = async (
   config: GatewayConfig,
   runtime?: GenAiRuntimeLike,
   onConfigReload?: (nextConfig: GatewayConfig) => void,
+  deps?: AdminRouteDeps,
 ): Promise<boolean> => {
   const rawPathname = (req.url ?? '/').split('?', 1)[0] || '/';
   const normalizedPathname = url.pathname === '/' ? '/' : (url.pathname.replace(/\/+$/, '') || '/');
@@ -447,6 +460,72 @@ export const maybeHandleAdminRoute = async (
     onConfigReload?.(nextConfig);
     if (!onConfigReload) runtime.reload(nextConfig);
   });
+  const apiCallLogStore = deps?.apiCallLogStore ?? createApiCallLogStore({
+    maxEntries: 500,
+    logFilePath: isDiagnosticsWritable(config) ? resolveApiCallLogFilePath(config) : null,
+  });
+
+  if (req.method === 'GET' && normalizedPathname === '/admin/api/diagnostics') {
+    const flags = readDiagnosticsFlags(config);
+    sendJson(res, 200, {
+      debugMode: flags.debugMode,
+      logToFile: flags.logToFile,
+      gateEnabled: isDiagnosticsGateEnabled(flags),
+      writable: isDiagnosticsWritable(config),
+      logFilePath: resolveApiCallLogFilePath(config),
+      ringSize: apiCallLogStore.maxEntries,
+      entryCount: apiCallLogStore.size(),
+    });
+    return true;
+  }
+  if (req.method === 'PATCH' && normalizedPathname === '/admin/api/diagnostics') {
+    const body = await parseJsonBody(req, config.maxJsonBytes);
+    const flags = writeDiagnosticsFlags(config, {
+      debugMode: typeof body.debugMode === 'boolean' ? body.debugMode : undefined,
+      logToFile: typeof body.logToFile === 'boolean' ? body.logToFile : undefined,
+    });
+    sendJson(res, 200, {
+      ok: true,
+      debugMode: flags.debugMode,
+      logToFile: flags.logToFile,
+      gateEnabled: isDiagnosticsGateEnabled(flags),
+      writable: isDiagnosticsWritable(config),
+      logFilePath: resolveApiCallLogFilePath(config),
+      ringSize: apiCallLogStore.maxEntries,
+      entryCount: apiCallLogStore.size(),
+    });
+    return true;
+  }
+  if (req.method === 'GET' && normalizedPathname === '/admin/api/logs') {
+    const flags = readDiagnosticsFlags(config);
+    if (!isDiagnosticsGateEnabled(flags)) {
+      throw new GatewayError(409, 'VALIDATION_FAILED', 'Enable Debug Mode and Log to File to view API logs.');
+    }
+    const statusClass = url.searchParams.get('statusClass') ?? undefined;
+    const routeFamily = url.searchParams.get('routeFamily') ?? undefined;
+    const method = url.searchParams.get('method') ?? undefined;
+    const search = url.searchParams.get('search') ?? undefined;
+    const limitRaw = url.searchParams.get('limit');
+    const limit = limitRaw ? Number(limitRaw) : undefined;
+    sendJson(res, 200, {
+      entries: apiCallLogStore.list({
+        limit: Number.isFinite(limit) ? limit : undefined,
+        statusClass: statusClass === '2xx' || statusClass === '4xx' || statusClass === '5xx' ? statusClass : undefined,
+        routeFamily: routeFamily || undefined,
+        method: method || undefined,
+        search: search || undefined,
+      }),
+    });
+    return true;
+  }
+  if (req.method === 'DELETE' && normalizedPathname === '/admin/api/logs') {
+    if (!isDiagnosticsWritable(config)) {
+      throw new GatewayError(409, 'VALIDATION_FAILED', 'Diagnostics log store is not writable.');
+    }
+    apiCallLogStore.clear();
+    sendJson(res, 200, { ok: true, cleared: true });
+    return true;
+  }
 
   if (req.method === 'GET' && normalizedPathname === '/admin/api/health') {
     sendJson(res, 200, buildHealthResponse(runtime, config));
