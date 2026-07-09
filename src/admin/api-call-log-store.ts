@@ -168,12 +168,21 @@ export const createApiCallLogStore = (options: {
       return entries.filter((entry) => matchesFilter(entry, filter)).slice(0, limit).map((e) => ({ ...e }));
     },
     async clear() {
+      // Bump epoch first so in-flight/queued writes from the previous generation
+      // are skipped. File removal must stay on writeChain so any record() that
+      // lands after the bump is appended after rm, not deleted by a free-running rm.
       writeEpoch += 1;
       entries.length = 0;
+      writeChain = writeChain
+        .then(async () => {
+          if (!logFilePath) return;
+          try { await fs.promises.rm(logFilePath, { force: true }); } catch { /* ignore */ }
+          try { await fs.promises.rm(`${logFilePath}.1`, { force: true }); } catch { /* ignore */ }
+        })
+        .catch(() => {
+          // best-effort file clear
+        });
       await writeChain;
-      if (!logFilePath) return;
-      try { await fs.promises.rm(logFilePath, { force: true }); } catch { /* ignore */ }
-      try { await fs.promises.rm(`${logFilePath}.1`, { force: true }); } catch { /* ignore */ }
     },
   };
 };

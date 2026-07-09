@@ -86,6 +86,40 @@ describe('createApiCallLogStore', () => {
     expect(fs.existsSync(`${logFilePath}.1`)).toBe(false);
   });
 
+  it('keeps file writes that arrive while clear is in progress', async () => {
+    const logFilePath = tempLogPath();
+    const store = createApiCallLogStore({ maxEntries: 10, logFilePath });
+    store.record({
+      requestId: 'old',
+      method: 'GET',
+      path: '/openai/v1/models',
+      statusCode: 200,
+      latencyMs: 1,
+      routeFamily: 'openai',
+      operation: 'models',
+    });
+    await store.flush();
+
+    const clearPromise = store.clear();
+    store.record({
+      requestId: 'during-clear',
+      method: 'POST',
+      path: '/openai/v1/chat/completions',
+      statusCode: 200,
+      latencyMs: 5,
+      routeFamily: 'openai',
+      operation: 'chatCompletions',
+    });
+    await clearPromise;
+    await store.flush();
+
+    expect(store.list().map((entry) => entry.requestId)).toEqual(['during-clear']);
+    expect(fs.existsSync(logFilePath)).toBe(true);
+    const lines = fs.readFileSync(logFilePath, 'utf8').trim().split('\n');
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]!).requestId).toBe('during-clear');
+  });
+
   it('rotates active file when maxFileBytes exceeded', async () => {
     const logFilePath = tempLogPath();
     const store = createApiCallLogStore({ maxEntries: 50, logFilePath, maxFileBytes: 200 });

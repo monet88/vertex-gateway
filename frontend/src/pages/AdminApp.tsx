@@ -95,7 +95,7 @@ export function AdminApp() {
     if (gateEnabled) {
       setGateBanner(null);
     }
-  }, [view, gateEnabled, diagnostics.data, setView]);
+  }, [view, gateEnabled, diagnostics.data, setView, setGateBanner]);
 
   const handleLogin = async (event: FormEvent) => {
     event.preventDefault();
