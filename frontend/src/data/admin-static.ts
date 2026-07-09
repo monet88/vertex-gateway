@@ -13,7 +13,7 @@ export const adminNavItems: readonly AdminNavItem[] = [
   { id: 'dashboard', label: 'Bảng điều khiển', description: 'Runtime posture', icon: BarChart3 },
   { id: 'gateway-keys', label: 'Quản lý Key', description: 'Client to Gateway credentials', icon: KeyRound },
   { id: 'auth-files', label: 'Agent Platform Manager', description: 'API keys and project account JSON', icon: Terminal },
-  { id: 'logs-viewer', label: 'Nhật ký API', description: 'Telemetry beta', icon: ListTree },
+  { id: 'logs-viewer', label: 'Nhật ký API', description: 'Live API call metadata', icon: ListTree },
   { id: 'ai-providers', label: 'Cấu hình', description: 'Routing and targets', icon: Settings2 },
   { id: 'model-management', label: 'Model Policy', description: 'Model policy controls', icon: Shield },
   { id: 'available-models', label: 'Model Catalog', description: 'Read-only inventory', icon: ListTree },

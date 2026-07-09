@@ -1,4 +1,4 @@
-import type { ApiLogRow, LogStatus, RouteFamily } from '@/data/mockData';
+import type { ApiCallStatusClass, ApiLogRow, RouteFamily } from '@/types/admin';
 import { useLogTable } from '@/hooks/useLogTable';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,13 +9,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 export interface ApiLogsTableProps {
   readonly rows: readonly ApiLogRow[];
   readonly standalone?: boolean;
+  readonly emptyMessage?: string;
 }
 
 const routeFamilies: Array<RouteFamily | 'all'> = ['all', 'gemini', 'openai'];
-const statuses: Array<LogStatus | 'all'> = ['all', '2xx', '4xx', '5xx'];
+const statuses: Array<ApiCallStatusClass | 'all'> = ['all', '2xx', '4xx', '5xx'];
+const methods = ['all', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
 const sortableColumns = ['time', 'routeFamily', 'model', 'latencyMs', 'status'] as const;
 
-export function ApiLogsTable({ rows, standalone = true }: ApiLogsTableProps) {
+export function ApiLogsTable({
+  rows,
+  standalone = true,
+  emptyMessage = 'Chưa có API call nào được ghi.',
+}: ApiLogsTableProps) {
   const { filters, setFilters, sort, setSort, visibleRows } = useLogTable(rows);
 
   const nextDirection = sort.direction === 'asc' ? 'desc' : 'asc';
@@ -23,18 +29,25 @@ export function ApiLogsTable({ rows, standalone = true }: ApiLogsTableProps) {
     <>
       <div className="grid gap-3 border-b border-border p-4 md:grid-cols-5">
         <Select
-          value={filters.routeFamily}
-          onValueChange={(value) => setFilters((current) => ({ ...current, routeFamily: value as RouteFamily | 'all' }))}
+          value={String(filters.routeFamily)}
+          onValueChange={(value) => setFilters((current) => ({ ...current, routeFamily: value }))}
         >
           <SelectTrigger aria-label="Lọc route family"><SelectValue /></SelectTrigger>
           <SelectContent>{routeFamilies.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
         </Select>
         <Select
           value={filters.status}
-          onValueChange={(value) => setFilters((current) => ({ ...current, status: value as LogStatus | 'all' }))}
+          onValueChange={(value) => setFilters((current) => ({ ...current, status: value as ApiCallStatusClass | 'all' }))}
         >
           <SelectTrigger aria-label="Lọc status"><SelectValue /></SelectTrigger>
           <SelectContent>{statuses.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
+        </Select>
+        <Select
+          value={filters.method ?? 'all'}
+          onValueChange={(value) => setFilters((current) => ({ ...current, method: value }))}
+        >
+          <SelectTrigger aria-label="Lọc method"><SelectValue /></SelectTrigger>
+          <SelectContent>{methods.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
         </Select>
         <Input
           aria-label="Lọc model"
@@ -42,8 +55,12 @@ export function ApiLogsTable({ rows, standalone = true }: ApiLogsTableProps) {
           onChange={(event) => setFilters((current) => ({ ...current, model: event.target.value }))}
           placeholder="gemini"
         />
-        <Input aria-label="Khoảng thời gian" value="1 giờ qua" disabled />
-        <Input aria-label="Search logs" value="" placeholder="request id, key alias" disabled />
+        <Input
+          aria-label="Search logs"
+          value={filters.search ?? ''}
+          onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
+          placeholder="request id, path, key"
+        />
       </div>
       <Table id="api-log-table">
         <TableHeader>
@@ -69,7 +86,13 @@ export function ApiLogsTable({ rows, standalone = true }: ApiLogsTableProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {visibleRows.map((row) => (
+          {visibleRows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                {emptyMessage}
+              </TableCell>
+            </TableRow>
+          ) : visibleRows.map((row) => (
             <TableRow key={row.id}>
               <TableCell className="font-mono tabular-nums">{row.time}</TableCell>
               <TableCell>{row.routeFamily}</TableCell>

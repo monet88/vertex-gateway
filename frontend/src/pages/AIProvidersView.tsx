@@ -4,11 +4,13 @@ import { VertexTargetsTable } from '@/components/console/VertexTargetsTable';
 import { GatewayKeyDialog } from '@/components/console/GatewayKeyDialog';
 import { VertexTargetDialog } from '@/components/console/VertexTargetDialog';
 import { ServiceAccountTargetDialog } from '@/components/console/ServiceAccountTargetDialog';
+import { DiagnosticsSettingsPanel } from '@/components/console/DiagnosticsSettingsPanel';
 import { AdminError, TableSkeleton } from '@/components/console/AdminState';
 import { StitchPageHeader } from '@/components/stitch/StitchPageHeader';
 import { StitchPanel } from '@/components/stitch/StitchPanel';
 import type { VertexTargetTestResult } from '@/components/console/VertexTargetsTable';
 import type { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
+import type { useDiagnostics } from '@/hooks/useDiagnostics';
 import {
   deleteVertexCredential,
   testVertexCredential,
@@ -23,9 +25,10 @@ import type { VertexPoolSelection } from '@/types/admin';
 interface AIProvidersViewProps {
   readonly adminData: ReturnType<typeof useAdminDashboardData>;
   readonly token: string;
+  readonly diagnostics: ReturnType<typeof useDiagnostics>;
 }
 
-export function AIProvidersView({ adminData, token }: AIProvidersViewProps) {
+export function AIProvidersView({ adminData, token, diagnostics }: AIProvidersViewProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
   const [testResults, setTestResults] = useState<ReadonlyMap<string, VertexTargetTestResult>>(new Map());
@@ -161,6 +164,8 @@ export function AIProvidersView({ adminData, token }: AIProvidersViewProps) {
           />
         )}
       </StitchPanel>
+
+      <DiagnosticsSettingsPanel diagnostics={diagnostics} />
     </div>
   );
 }

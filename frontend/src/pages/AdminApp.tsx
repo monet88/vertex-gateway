@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { StitchConsoleShell } from '@/components/stitch/StitchConsoleShell';
 import { StitchSecurityRail } from '@/components/stitch/StitchSecurityRail';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useAdminToken } from '@/hooks/useAdminToken';
 import { useAdminView } from '@/hooks/useAdminView';
 import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
+import { useDiagnostics } from '@/hooks/useDiagnostics';
 import { changeAdminPassword, loginAdmin, logoutAdmin } from '@/lib/admin-dashboard-api';
 import { securityNotices as adminSecurityNotices } from '@/data/admin-static';
 import { AdminLoginScreen } from '@/pages/AdminLoginScreen';
@@ -27,24 +28,45 @@ const securityNotices = adminSecurityNotices.map((message, index) => ({
   icon: 'info',
 }));
 
-function renderView(view: AdminViewId, adminData: ReturnType<typeof useAdminDashboardData>, token: string) {
+function renderView(
+  view: AdminViewId,
+  adminData: ReturnType<typeof useAdminDashboardData>,
+  token: string,
+  diagnostics: ReturnType<typeof useDiagnostics>,
+  gateEnabled: boolean,
+  setView: (view: AdminViewId) => void,
+) {
   switch (view) {
     case 'dashboard':
-      return <Dashboard adminData={adminData} />;
+      return (
+        <Dashboard
+          adminData={adminData}
+          token={token}
+          gateEnabled={gateEnabled}
+          onNavigate={setView}
+        />
+      );
     case 'gateway-keys':
       return <GatewayKeysView adminData={adminData} />;
     case 'ai-providers':
-      return <AIProvidersView adminData={adminData} token={token} />;
+      return <AIProvidersView adminData={adminData} token={token} diagnostics={diagnostics} />;
     case 'auth-files':
       return <AuthFilesView adminData={adminData} token={token} />;
     case 'available-models':
       return <AvailableModelsView token={token} />;
     case 'logs-viewer':
-      return <LogsViewerView />;
+      return gateEnabled ? <LogsViewerView token={token} enabled={gateEnabled} /> : null;
     case 'model-management':
       return <ModelManagementView token={token} />;
     default:
-      return <Dashboard adminData={adminData} />;
+      return (
+        <Dashboard
+          adminData={adminData}
+          token={token}
+          gateEnabled={gateEnabled}
+          onNavigate={setView}
+        />
+      );
   }
 }
 
@@ -59,8 +81,18 @@ export function AdminApp() {
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [gateBanner, setGateBanner] = useState<string | null>(null);
   const dataToken = mustChangePassword ? '' : token;
   const adminData = useAdminDashboardData(dataToken);
+  const diagnostics = useDiagnostics(dataToken);
+  const gateEnabled = diagnostics.data?.gateEnabled === true;
+
+  useEffect(() => {
+    if (view === 'logs-viewer' && diagnostics.data && !gateEnabled) {
+      setView('dashboard');
+      setGateBanner('Bật Debug Mode và Log to File trong Cấu hình để xem Nhật ký API.');
+    }
+  }, [view, gateEnabled, diagnostics.data, setView]);
 
   const handleLogin = async (event: FormEvent) => {
     event.preventDefault();
@@ -159,8 +191,16 @@ export function AdminApp() {
       onViewChange={setView}
       onLogout={isAuthenticated ? () => { void handleLogout(); } : undefined}
       health={isAuthenticated ? adminData.health : null}
+      gateEnabled={gateEnabled}
     >
-      <div className="space-y-8">{renderView(view, adminData, token)}</div>
+      <div className="space-y-8">
+        {gateBanner && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+            {gateBanner}
+          </div>
+        )}
+        {renderView(view, adminData, token, diagnostics, gateEnabled, setView)}
+      </div>
     </StitchConsoleShell>
   );
 }
