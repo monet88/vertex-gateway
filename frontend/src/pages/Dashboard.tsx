@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { GatewayKeysTable } from '@/components/console/GatewayKeysTable';
 import { VertexTargetsTable } from '@/components/console/VertexTargetsTable';
 import { GatewayKeyDialog } from '@/components/console/GatewayKeyDialog';
@@ -34,10 +34,6 @@ export function Dashboard({ adminData, token, gateEnabled, onNavigate }: Dashboa
     { id: 'ready-api-key-targets', label: 'Ready API key targets', value: String(readyApiKeyTargets), trendValue: failedApiKeyTargets ? `${failedApiKeyTargets} failed` : 'ready', colorScheme: failedApiKeyTargets ? 'error' as const : 'tertiary' as const },
     { id: 'runtime-mode', label: 'Runtime Mode', value: adminData.health?.runtimeMode ?? 'unknown', colorScheme: 'secondary' as const },
   ];
-
-  useEffect(() => {
-    if (gateEnabled) void logs.refresh();
-  }, [gateEnabled]);
 
   return (
     <div className="space-y-8">

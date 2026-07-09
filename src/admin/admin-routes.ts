@@ -502,8 +502,10 @@ export const maybeHandleAdminRoute = async (
       throw new GatewayError(409, 'VALIDATION_FAILED', 'Enable Debug Mode and Log to File to view API logs.');
     }
     const statusClass = url.searchParams.get('statusClass') ?? undefined;
-    const routeFamily = url.searchParams.get('routeFamily') ?? undefined;
-    const method = url.searchParams.get('method') ?? undefined;
+    const routeFamilyRaw = url.searchParams.get('routeFamily');
+    const routeFamily = routeFamilyRaw && routeFamilyRaw !== 'all' ? routeFamilyRaw : undefined;
+    const methodRaw = url.searchParams.get('method');
+    const method = methodRaw && methodRaw !== 'all' ? methodRaw : undefined;
     const search = url.searchParams.get('search') ?? undefined;
     const limitRaw = url.searchParams.get('limit');
     const limit = limitRaw ? Number(limitRaw) : undefined;
@@ -511,8 +513,8 @@ export const maybeHandleAdminRoute = async (
       entries: apiCallLogStore.list({
         limit: Number.isFinite(limit) ? limit : undefined,
         statusClass: statusClass === '2xx' || statusClass === '4xx' || statusClass === '5xx' ? statusClass : undefined,
-        routeFamily: routeFamily || undefined,
-        method: method || undefined,
+        routeFamily,
+        method,
         search: search || undefined,
       }),
     });
@@ -522,7 +524,7 @@ export const maybeHandleAdminRoute = async (
     if (!isDiagnosticsWritable(config)) {
       throw new GatewayError(409, 'VALIDATION_FAILED', 'Diagnostics log store is not writable.');
     }
-    apiCallLogStore.clear();
+    await apiCallLogStore.clear();
     sendJson(res, 200, { ok: true, cleared: true });
     return true;
   }

@@ -298,11 +298,14 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
       sendError(res, ctx.id, error, errorFormat);
     } finally {
       if (classified && (classified.family === 'gemini' || classified.family === 'openai')) {
+        const recordedStatus = (captureErrorCode && res.statusCode < 400)
+          ? 500
+          : (res.statusCode || (captureErrorCode ? 500 : 200));
         maybeRecordApiCall({
           route: classified,
           method: req.method ?? 'GET',
           path: capturePath,
-          statusCode: res.statusCode || (captureErrorCode ? 500 : 200),
+          statusCode: recordedStatus,
           startedAt: ctx.startedAt,
           requestId: ctx.id,
           gatewayKey,

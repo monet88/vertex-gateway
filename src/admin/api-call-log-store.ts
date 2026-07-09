@@ -37,7 +37,8 @@ export interface ApiCallLogListFilter {
 export interface ApiCallLogStore {
   record(input: ApiCallLogInput): ApiCallLogEntry | null;
   list(filter?: ApiCallLogListFilter): ApiCallLogEntry[];
-  clear(): void;
+  clear(): Promise<void>;
+  flush(): Promise<void>;
   size(): number;
   readonly maxEntries: number;
   readonly logFilePath: string | null;
@@ -66,8 +67,8 @@ export const maskGatewayKeyPreview = (secret: string | null | undefined): string
 
 const matchesFilter = (entry: ApiCallLogEntry, filter: ApiCallLogListFilter): boolean => {
   if (filter.statusClass && entry.statusClass !== filter.statusClass) return false;
-  if (filter.routeFamily && entry.routeFamily !== filter.routeFamily) return false;
-  if (filter.method && entry.method.toUpperCase() !== filter.method.toUpperCase()) return false;
+  if (filter.routeFamily && filter.routeFamily !== 'all' && entry.routeFamily !== filter.routeFamily) return false;
+  if (filter.method && filter.method !== 'all' && entry.method.toUpperCase() !== filter.method.toUpperCase()) return false;
   const search = filter.search?.trim().toLowerCase();
   if (!search) return true;
   const haystack = [
@@ -81,20 +82,28 @@ const matchesFilter = (entry: ApiCallLogEntry, filter: ApiCallLogListFilter): bo
   return haystack.includes(search);
 };
 
-const appendJsonl = (filePath: string, entry: ApiCallLogEntry, maxFileBytes: number): void => {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
+const appendJsonl = async (
+  filePath: string,
+  entry: ApiCallLogEntry,
+  maxFileBytes: number,
+): Promise<void> => {
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
   let size = 0;
   try {
-    size = fs.statSync(filePath).size;
+    const stat = await fs.promises.stat(filePath);
+    size = stat.size;
   } catch {
     size = 0;
   }
   if (size >= maxFileBytes) {
     const backup = `${filePath}.1`;
-    try { fs.rmSync(backup, { force: true }); } catch { /* ignore */ }
-    try { fs.renameSync(filePath, backup); } catch { /* ignore */ }
+    try { await fs.promises.rm(backup, { force: true }); } catch { /* ignore */ }
+    try { await fs.promises.rename(filePath, backup); } catch { /* ignore */ }
   }
-  fs.appendFileSync(filePath, `${JSON.stringify(entry)}\n`, { encoding: 'utf8', mode: 0o600 });
+  await fs.promises.appendFile(filePath, `${JSON.stringify(entry)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
 };
 
 export const createApiCallLogStore = (options: {
@@ -106,11 +115,28 @@ export const createApiCallLogStore = (options: {
   const maxFileBytes = options.maxFileBytes ?? 10 * 1024 * 1024;
   const logFilePath = options.logFilePath;
   const entries: ApiCallLogEntry[] = [];
+  let writeEpoch = 0;
+  let writeChain: Promise<void> = Promise.resolve();
+
+  const enqueueWrite = (task: (epoch: number) => Promise<void>): void => {
+    const epoch = writeEpoch;
+    writeChain = writeChain
+      .then(async () => {
+        if (epoch !== writeEpoch) return;
+        await task(epoch);
+      })
+      .catch(() => {
+        // best-effort file write; memory already updated
+      });
+  };
 
   return {
     maxEntries,
     logFilePath,
     size: () => entries.length,
+    flush: async () => {
+      await writeChain;
+    },
     record(input) {
       const entry: ApiCallLogEntry = {
         id: randomUUID(),
@@ -131,11 +157,9 @@ export const createApiCallLogStore = (options: {
       entries.unshift(entry);
       if (entries.length > maxEntries) entries.length = maxEntries;
       if (logFilePath) {
-        try {
-          appendJsonl(logFilePath, entry, maxFileBytes);
-        } catch {
-          // best-effort file write; memory already updated
-        }
+        enqueueWrite(async () => {
+          await appendJsonl(logFilePath, entry, maxFileBytes);
+        });
       }
       return entry;
     },
@@ -143,11 +167,13 @@ export const createApiCallLogStore = (options: {
       const limit = Math.min(Math.max(filter.limit ?? 100, 1), maxEntries);
       return entries.filter((entry) => matchesFilter(entry, filter)).slice(0, limit).map((e) => ({ ...e }));
     },
-    clear() {
+    async clear() {
+      writeEpoch += 1;
       entries.length = 0;
+      await writeChain;
       if (!logFilePath) return;
-      try { fs.rmSync(logFilePath, { force: true }); } catch { /* ignore */ }
-      try { fs.rmSync(`${logFilePath}.1`, { force: true }); } catch { /* ignore */ }
+      try { await fs.promises.rm(logFilePath, { force: true }); } catch { /* ignore */ }
+      try { await fs.promises.rm(`${logFilePath}.1`, { force: true }); } catch { /* ignore */ }
     },
   };
 };

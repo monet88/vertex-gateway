@@ -36,7 +36,7 @@ describe('api-call-log-store helpers', () => {
 });
 
 describe('createApiCallLogStore', () => {
-  it('dual-writes to memory and JSONL and lists newest first', () => {
+  it('dual-writes to memory and JSONL and lists newest first', async () => {
     const logFilePath = tempLogPath();
     const store = createApiCallLogStore({ maxEntries: 3, logFilePath });
     store.record({
@@ -53,6 +53,7 @@ describe('createApiCallLogStore', () => {
     expect(rows[0]?.requestId).toBe('r2');
     expect(rows[1]?.path).toBe('/openai/v1/models?[redacted]');
     expect(rows[0]?.statusClass).toBe('5xx');
+    await store.flush();
     const lines = fs.readFileSync(logFilePath, 'utf8').trim().split('\n');
     expect(lines).toHaveLength(2);
     expect(JSON.parse(lines[1]!).requestId).toBe('r2');
@@ -64,24 +65,26 @@ describe('createApiCallLogStore', () => {
     store.record({ requestId: 'b', method: 'POST', path: '/gemini/v1beta/models/x:generateContent', statusCode: 404, latencyMs: 2, routeFamily: 'gemini', operation: 'generateContent' });
     expect(store.list({ statusClass: '4xx' })).toHaveLength(1);
     expect(store.list({ method: 'GET' })[0]?.requestId).toBe('a');
+    expect(store.list({ method: 'all' })).toHaveLength(2);
     expect(store.list({ routeFamily: 'gemini' })[0]?.requestId).toBe('b');
+    expect(store.list({ routeFamily: 'all' })).toHaveLength(2);
     expect(store.list({ search: 'flash' })[0]?.requestId).toBe('a');
   });
 
-  it('evicts oldest beyond maxEntries and clear removes memory + files', () => {
+  it('evicts oldest beyond maxEntries and clear removes memory + files', async () => {
     const logFilePath = tempLogPath();
     const store = createApiCallLogStore({ maxEntries: 2, logFilePath, maxFileBytes: 1024 * 1024 });
     store.record({ requestId: '1', method: 'GET', path: '/a', statusCode: 200, latencyMs: 1, routeFamily: 'openai', operation: 'models' });
     store.record({ requestId: '2', method: 'GET', path: '/b', statusCode: 200, latencyMs: 1, routeFamily: 'openai', operation: 'models' });
     store.record({ requestId: '3', method: 'GET', path: '/c', statusCode: 200, latencyMs: 1, routeFamily: 'openai', operation: 'models' });
     expect(store.list().map((e) => e.requestId)).toEqual(['3', '2']);
-    store.clear();
+    await store.clear();
     expect(store.list()).toEqual([]);
     expect(fs.existsSync(logFilePath)).toBe(false);
     expect(fs.existsSync(`${logFilePath}.1`)).toBe(false);
   });
 
-  it('rotates active file when maxFileBytes exceeded', () => {
+  it('rotates active file when maxFileBytes exceeded', async () => {
     const logFilePath = tempLogPath();
     const store = createApiCallLogStore({ maxEntries: 50, logFilePath, maxFileBytes: 200 });
     for (let i = 0; i < 20; i += 1) {
@@ -95,11 +98,12 @@ describe('createApiCallLogStore', () => {
         operation: 'chatCompletions',
       });
     }
+    await store.flush();
     expect(fs.existsSync(`${logFilePath}.1`)).toBe(true);
     expect(fs.existsSync(logFilePath)).toBe(true);
   });
 
-  it('ignores file errors when logFilePath parent cannot be written but still keeps memory', () => {
+  it('ignores file errors when logFilePath parent cannot be written but still keeps memory', async () => {
     const store = createApiCallLogStore({
       maxEntries: 5,
       logFilePath: path.join(path.sep, 'definitely-not-writable-vgl', 'api-calls.log'),
@@ -108,6 +112,7 @@ describe('createApiCallLogStore', () => {
       requestId: 'mem-only', method: 'GET', path: '/openai/v1/models', statusCode: 200,
       latencyMs: 1, routeFamily: 'openai', operation: 'models',
     });
+    await store.flush();
     expect(entry?.requestId).toBe('mem-only');
     expect(store.list()).toHaveLength(1);
   });

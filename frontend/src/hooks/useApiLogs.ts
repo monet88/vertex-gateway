@@ -44,8 +44,13 @@ export function useApiLogs(token: string, enabled: boolean, query: ApiLogsQuery 
 
   const clear = async () => {
     if (!window.confirm('Xóa toàn bộ log trong bộ nhớ và file log hiện tại?')) return;
-    await clearApiLogs({ token });
-    setEntries([]);
+    setError(null);
+    try {
+      await clearApiLogs({ token });
+      setEntries([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear logs');
+    }
   };
 
   return { entries, loading, error, refresh, autoRefresh, setAutoRefresh, clear };
