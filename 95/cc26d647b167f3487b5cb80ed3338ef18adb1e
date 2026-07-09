@@ -1,0 +1,29 @@
+frontend/src/components/console/DiagnosticsSettingsPanel.tsx
+  s_5fe0903cabaa8a::t_b14658e8d834f3 64-65
+test/admin-frontend-helpers.test.ts
+  s_dc99d2ddddbb95::t_a4e66776162169 207,214-216,226-245
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "95cc26d647b167f3487b5cb80ed3338ef18adb1e",
+  "prompts": {},
+  "sessions": {
+    "s_5fe0903cabaa8a": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "96abb899-9c74-4faf-81cf-194b762343f0",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
