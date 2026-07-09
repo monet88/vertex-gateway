@@ -1,0 +1,31 @@
+frontend/src/pages/AdminApp.tsx
+  s_dc99d2ddddbb95::t_c778b3a06e22c4 98
+src/admin/api-call-log-store.ts
+  s_5fe0903cabaa8a::t_45d05ed591c416 171-173,176-184
+test/api-call-log-store.test.ts
+  s_5fe0903cabaa8a::t_3f9cfa0190e8c1 89-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e4e84372aa0c11adf3f7be5285c8440031e99d1b",
+  "prompts": {},
+  "sessions": {
+    "s_5fe0903cabaa8a": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "96abb899-9c74-4faf-81cf-194b762343f0",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    },
+    "s_dc99d2ddddbb95": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "071c9b58-f7b3-4853-978d-aded226846fd",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
