@@ -40,7 +40,7 @@ export function Dashboard({ adminData }: DashboardProps) {
                 <VertexTargetDialog onCreate={(draft) => adminData.addTarget(draft)} />
               </>
             )}
-            <Button variant="secondary" onClick={() => adminData.reload()}>Reload Runtime</Button>
+            <Button variant="secondary" onClick={() => { void adminData.reload().catch(() => {}); }}>Reload Runtime</Button>
           </div>
         }
       />

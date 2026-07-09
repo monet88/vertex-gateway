@@ -206,7 +206,6 @@ export async function saveModelCatalog(options: AdminApiOptions, provider: strin
   return response.modelCatalog;
 }
 
-export async function reloadRuntime(options: AdminApiOptions): Promise<RuntimeHealthSummary> {
+export async function triggerRuntimeReload(options: AdminApiOptions): Promise<void> {
   await adminFetch<{ ok: true; runtime: unknown }>('/admin/api/runtime/reload', options, { method: 'POST' });
-  return fetchAdminHealth(options);
 }

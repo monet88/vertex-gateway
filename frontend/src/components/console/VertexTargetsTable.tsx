@@ -103,7 +103,7 @@ export function VertexTargetsTable(props: VertexTargetsTableProps) {
                     )}
                     {testResult && !isPending && (
                       <div
-                        className={testResult.status === 'success' ? 'mt-1 text-xs text-emerald-700' : 'mt-1 text-xs text-destructive'}
+                        className={testResult.status === 'success' ? 'mt-1 text-xs text-[var(--healthy-green)]' : 'mt-1 text-xs text-destructive'}
                         role="status"
                         aria-live="polite"
                       >

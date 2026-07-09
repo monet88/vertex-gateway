@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GatewayKeyRow, RuntimeHealthSummary, VertexTargetRow } from '@/types/admin';
 import { insertCreatedGatewayKey, mergeGatewayKeySecrets } from '@/hooks/gateway-key-secrets';
+import { getAdminTokenSessionSnapshot, type AdminTokenSessionSnapshot } from '@/lib/admin-token-session';
 import {
   createGatewayKey,
   createVertexTarget,
@@ -9,8 +10,8 @@ import {
   fetchGatewayKeys,
   fetchVertexTargets,
   importServiceAccountTarget,
-  reloadRuntime,
   revokeGatewayKey,
+  triggerRuntimeReload,
   type ServiceAccountTargetDraftPayload,
   type VertexTargetDraftPayload,
 } from '@/lib/admin-dashboard-api';
@@ -27,6 +28,9 @@ interface AdminDashboardState {
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback;
 
+const createStaleSessionError = (): Error =>
+  new Error('Admin session changed before action completed');
+
 export function useAdminDashboardData(token: string) {
   const [state, setState] = useState<AdminDashboardState>({
     gatewayKeys: [],
@@ -37,22 +41,30 @@ export function useAdminDashboardData(token: string) {
     mutable: false,
   });
   const refreshSequence = useRef(0);
-  const tokenRef = useRef(token);
-  const tokenVersionRef = useRef(0);
   const options = useMemo(() => ({ token }), [token]);
 
-  useLayoutEffect(() => {
-    tokenRef.current = token;
-    tokenVersionRef.current += 1;
+  useEffect(() => {
     refreshSequence.current += 1;
     return () => {
-      tokenVersionRef.current += 1;
       refreshSequence.current += 1;
     };
   }, [token]);
 
-  const isCurrentSession = useCallback((tokenAtStart: string, versionAtStart: number): boolean =>
-    tokenRef.current === tokenAtStart && tokenVersionRef.current === versionAtStart, []);
+  const isCurrentSession = useCallback((sessionAtStart: AdminTokenSessionSnapshot): boolean => {
+    const currentSession = getAdminTokenSessionSnapshot();
+    return currentSession.token === sessionAtStart.token && currentSession.version === sessionAtStart.version;
+  }, []);
+
+  const getSessionForRequest = useCallback((): AdminTokenSessionSnapshot | null => {
+    const currentSession = getAdminTokenSessionSnapshot();
+    return token && currentSession.token === token ? currentSession : null;
+  }, [token]);
+
+  const ensureCurrentSession = useCallback((sessionAtStart: AdminTokenSessionSnapshot): void => {
+    if (!isCurrentSession(sessionAtStart)) {
+      throw createStaleSessionError();
+    }
+  }, [isCurrentSession]);
 
   const refresh = useCallback(async () => {
     const sequence = refreshSequence.current + 1;
@@ -61,6 +73,8 @@ export function useAdminDashboardData(token: string) {
       setState((current) => ({ ...current, gatewayKeys: [], vertexTargets: [], health: null, loading: false, error: null, mutable: false }));
       return;
     }
+    const sessionAtStart = getSessionForRequest();
+    if (!sessionAtStart) return;
     setState((current) => ({ ...current, loading: true, error: null }));
     try {
       const [keysResponse, targets, health] = await Promise.all([
@@ -68,7 +82,7 @@ export function useAdminDashboardData(token: string) {
         fetchVertexTargets(options),
         fetchAdminHealth(options),
       ]);
-      if (refreshSequence.current !== sequence) return;
+      if (refreshSequence.current !== sequence || !isCurrentSession(sessionAtStart)) return;
       setState((current) => ({
         ...current,
         gatewayKeys: mergeGatewayKeySecrets(keysResponse.gatewayKeys, current.gatewayKeys),
@@ -78,88 +92,117 @@ export function useAdminDashboardData(token: string) {
         loading: false,
       }));
     } catch (error) {
-      if (refreshSequence.current !== sequence) return;
+      if (refreshSequence.current !== sequence || !isCurrentSession(sessionAtStart)) return;
       setState((current) => ({ ...current, loading: false, error: errorMessage(error, 'Admin API request failed') }));
     }
-  }, [options, token]);
+  }, [getSessionForRequest, isCurrentSession, options, token]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
   const createKey = useCallback(async (label: string) => {
-    const tokenAtStart = tokenRef.current;
-    const tokenVersionAtStart = tokenVersionRef.current;
+    const sessionAtStart = getSessionForRequest();
+    if (!sessionAtStart) {
+      throw new Error('Admin session changed before key creation started');
+    }
     try {
       const created = await createGatewayKey(options, label);
-      if (!isCurrentSession(tokenAtStart, tokenVersionAtStart)) {
-        throw new Error('Admin session changed before key creation completed');
-      }
+      ensureCurrentSession(sessionAtStart);
       setState((current) => ({
         ...current,
         gatewayKeys: insertCreatedGatewayKey(current.gatewayKeys, created.gatewayKey, created.secret),
       }));
-      void refresh();
+      await refresh();
+      ensureCurrentSession(sessionAtStart);
       return created.secret;
     } catch (error) {
-      if (isCurrentSession(tokenAtStart, tokenVersionAtStart)) {
+      if (isCurrentSession(sessionAtStart)) {
         setState((current) => ({ ...current, error: errorMessage(error, 'Failed to create key') }));
       }
       throw error;
     }
-  }, [isCurrentSession, options, refresh]);
+  }, [ensureCurrentSession, getSessionForRequest, isCurrentSession, options, refresh]);
 
   const revokeKey = useCallback(async (id: string) => {
+    const sessionAtStart = getSessionForRequest();
+    if (!sessionAtStart) throw createStaleSessionError();
     try {
       await revokeGatewayKey(options, id);
+      ensureCurrentSession(sessionAtStart);
       await refresh();
+      ensureCurrentSession(sessionAtStart);
     } catch (error) {
+      if (!isCurrentSession(sessionAtStart)) throw error;
       setState((current) => ({ ...current, error: errorMessage(error, 'Failed to revoke key') }));
+      throw error;
     }
-  }, [options, refresh]);
+  }, [ensureCurrentSession, getSessionForRequest, isCurrentSession, options, refresh]);
 
   const deleteKey = useCallback(async (id: string) => {
+    const sessionAtStart = getSessionForRequest();
+    if (!sessionAtStart) throw createStaleSessionError();
     try {
       await deleteGatewayKey(options, id);
+      ensureCurrentSession(sessionAtStart);
       await refresh();
+      ensureCurrentSession(sessionAtStart);
     } catch (error) {
+      if (!isCurrentSession(sessionAtStart)) throw error;
       setState((current) => ({ ...current, error: errorMessage(error, 'Failed to delete key') }));
+      throw error;
     }
-  }, [options, refresh]);
+  }, [ensureCurrentSession, getSessionForRequest, isCurrentSession, options, refresh]);
 
   const addTarget = useCallback(async (draft: VertexTargetDraftPayload) => {
+    const sessionAtStart = getSessionForRequest();
+    if (!sessionAtStart) throw createStaleSessionError();
     try {
       await createVertexTarget(options, draft);
+      ensureCurrentSession(sessionAtStart);
       await refresh();
+      ensureCurrentSession(sessionAtStart);
     } catch (error) {
+      if (!isCurrentSession(sessionAtStart)) throw error;
       setState((current) => ({ ...current, error: errorMessage(error, 'Failed to create target') }));
       throw error;
     }
-  }, [options, refresh]);
+  }, [ensureCurrentSession, getSessionForRequest, isCurrentSession, options, refresh]);
 
   const importTarget = useCallback(async (draft: ServiceAccountTargetDraftPayload) => {
+    const sessionAtStart = getSessionForRequest();
+    if (!sessionAtStart) throw createStaleSessionError();
     try {
       await importServiceAccountTarget(options, draft);
+      ensureCurrentSession(sessionAtStart);
       await refresh();
+      ensureCurrentSession(sessionAtStart);
     } catch (error) {
+      if (!isCurrentSession(sessionAtStart)) throw error;
       setState((current) => ({ ...current, error: errorMessage(error, 'Failed to import service account') }));
       throw error;
     }
-  }, [options, refresh]);
+  }, [ensureCurrentSession, getSessionForRequest, isCurrentSession, options, refresh]);
 
   const reload = useCallback(async () => {
     if (!token) return;
     const sequence = refreshSequence.current + 1;
-    const tokenAtStart = token;
+    const sessionAtStart = getSessionForRequest();
+    if (!sessionAtStart) throw createStaleSessionError();
     refreshSequence.current = sequence;
     try {
-      const health = await reloadRuntime(options);
-      if (refreshSequence.current !== sequence || tokenRef.current !== tokenAtStart) return;
+      await triggerRuntimeReload(options);
+      ensureCurrentSession(sessionAtStart);
+      const health = await fetchAdminHealth(options);
+      ensureCurrentSession(sessionAtStart);
+      if (refreshSequence.current !== sequence) return;
       setState((current) => ({ ...current, health }));
       await refresh();
+      ensureCurrentSession(sessionAtStart);
     } catch (error) {
-      if (refreshSequence.current !== sequence || tokenRef.current !== tokenAtStart) return;
+      if (refreshSequence.current !== sequence || !isCurrentSession(sessionAtStart)) throw error;
       setState((current) => ({ ...current, error: errorMessage(error, 'Failed to reload runtime') }));
+      throw error;
     }
-  }, [options, refresh, token]);
+  }, [ensureCurrentSession, getSessionForRequest, isCurrentSession, options, refresh, token]);
 
   return {
     ...state,

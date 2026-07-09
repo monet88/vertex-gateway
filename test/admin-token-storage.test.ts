@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  getAdminTokenSessionSnapshot,
+  setSharedAdminToken,
+} from '../frontend/src/lib/admin-token-session.js';
+import {
   persistAdminToken,
   readPersistedAdminToken,
 } from '../frontend/src/lib/admin-token-storage.js';
@@ -20,6 +24,7 @@ const createStorage = (): Storage => {
 
 describe('admin token browser storage', () => {
   afterEach(() => {
+    setSharedAdminToken('');
     vi.unstubAllGlobals();
   });
 
@@ -59,5 +64,19 @@ describe('admin token browser storage', () => {
 
     expect(() => persistAdminToken('admin-token')).not.toThrow();
     expect(() => persistAdminToken('')).not.toThrow();
+  });
+
+  it('updates the shared admin session snapshot synchronously when tokens change', () => {
+    const localStorage = createStorage();
+    vi.stubGlobal('window', { localStorage });
+    const before = getAdminTokenSessionSnapshot();
+
+    setSharedAdminToken('admin-token-a');
+    const firstSession = getAdminTokenSessionSnapshot();
+    setSharedAdminToken('admin-token-b');
+    const secondSession = getAdminTokenSessionSnapshot();
+
+    expect(firstSession).toEqual({ token: 'admin-token-a', version: before.version + 1 });
+    expect(secondSession).toEqual({ token: 'admin-token-b', version: firstSession.version + 1 });
   });
 });

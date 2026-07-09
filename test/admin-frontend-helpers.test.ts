@@ -185,6 +185,19 @@ describe('admin frontend helpers', () => {
     expect(loginScreenSource).not.toContain('bg-white');
   });
 
+  it('keeps dashboard token tracking in a non-blocking effect', () => {
+    const dashboardDataSource = readFileSync(new URL('../frontend/src/hooks/useAdminDashboardData.ts', import.meta.url), 'utf8');
+
+    expect(dashboardDataSource).not.toContain('useLayoutEffect');
+  });
+
+  it('uses the design-system success color for target test results', () => {
+    const targetsTableSource = readFileSync(new URL('../frontend/src/components/console/VertexTargetsTable.tsx', import.meta.url), 'utf8');
+
+    expect(targetsTableSource).toContain("'mt-1 text-xs text-[var(--healthy-green)]'");
+    expect(targetsTableSource).not.toContain('text-emerald-700');
+  });
+
   it('clears local auth before awaiting remote logout', async () => {
     const events: string[] = [];
     let resolveRemote: (() => void) | undefined;
