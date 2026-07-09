@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { URL } from 'node:url';
 import type { GatewayConfig } from './config/env.js';
 import { hydrateManagedGatewayKeyHashes } from './admin/gateway-key-store.js';
-import { extractGatewayKey, requireGatewayAuth } from './auth/gateway-auth.js';
+import { requireGatewayAuth } from './auth/gateway-auth.js';
 import { sendError, sendJson, GatewayError } from './http/error-response.js';
 import { createRequestContext } from './http/request-context.js';
 import { classifyRoute } from './http/request-classifier.js';
@@ -192,8 +192,7 @@ export const createApp = ({ config, genAiFactory = createGoogleGenAiClient, runt
 
       classified = classifyRoute(req.method ?? 'GET', url.pathname);
       errorFormat = errorFormatForFamily(classified.family);
-      requireGatewayAuth(req, activeConfig);
-      gatewayKey = extractGatewayKey(req);
+      gatewayKey = requireGatewayAuth(req, activeConfig);
       const expectsMultipartOpenAiEdit = classified.family === 'openai'
         && classified.operation === 'openaiImageEdits'
         && typeof req.headers['content-type'] === 'string'

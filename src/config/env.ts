@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { loadServiceAccountCredential } from "../auth/google-auth.js";
 import { loadAdminFileStoreSettings } from "./admin-settings-store.js";
@@ -67,6 +68,8 @@ export interface GatewayConfig {
   adminStoreMode: AdminStoreMode;
   adminFileStoreDir: string | null;
   managedGatewayKeyHashes: string[];
+  /** SHA-256 digests of static gatewayKeys; filled at load/hydrate. Not secrets in log form. */
+  gatewayKeyDigests: Buffer[];
 }
 
 const DEFAULTS = {
@@ -915,12 +918,17 @@ export const loadConfig = (): GatewayConfig => {
     adminStoreMode,
     adminFileStoreDir,
     managedGatewayKeyHashes: [],
+    gatewayKeyDigests: [],
   };
 
   config.resolvedVertexTargets = resolveVertexTargets(config);
+  config.gatewayKeyDigests = hashGatewayKeyDigests(config.gatewayKeys);
   validateConfig(config);
   return config;
 };
+
+export const hashGatewayKeyDigests = (keys: readonly string[]): Buffer[] =>
+  keys.map((key) => createHash("sha256").update(key).digest());
 
 export const createDerivedConfig = (
   config: GatewayConfig,
@@ -934,6 +942,8 @@ export const createDerivedConfig = (
       | "resolvedVertexTargets"
       | "managedGatewayKeyHashes"
       | "adminToken"
+      | "gatewayKeys"
+      | "gatewayKeyDigests"
     >
   >,
 ): GatewayConfig => {
@@ -963,11 +973,15 @@ export const createDerivedConfig = (
     ...(overrides.adminToken !== undefined
       ? { adminToken: overrides.adminToken }
       : {}),
+    ...(overrides.gatewayKeys ? { gatewayKeys: [...overrides.gatewayKeys] } : {}),
     resolvedVertexTargets: [],
   };
   nextConfig.resolvedVertexTargets = overrides.resolvedVertexTargets
     ? overrides.resolvedVertexTargets.map((entry) => ({ ...entry }))
     : resolveVertexTargets(nextConfig);
+  nextConfig.gatewayKeyDigests = overrides.gatewayKeyDigests
+    ? overrides.gatewayKeyDigests.map((digest) => Buffer.from(digest))
+    : hashGatewayKeyDigests(nextConfig.gatewayKeys);
   validateConfig(nextConfig);
   return nextConfig;
 };

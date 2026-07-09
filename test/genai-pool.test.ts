@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createGenAiPoolSnapshot, selectGenAiTarget } from '../src/lib/genai-pool.js';
 import { createGenAiRuntime } from '../src/lib/genai-runtime.js';
 import type { GenAiTargetClientFactory } from '../src/lib/google-genai-client.js';
 import { ImageWorkloads } from '../src/workloads/image-workloads.js';
@@ -1248,5 +1249,25 @@ describe('GenAI runtime pool', () => {
     })).rejects.toThrow('Upstream quota exhausted.');
 
     expect(calls).toEqual(['project-a']);
+  });
+
+  it('RR select uses candidate membership without changing order', () => {
+    const config = testConfig({
+      runtimeMode: 'pool',
+      vertexPoolSelection: 'round-robin',
+      vertexPools: [
+        { id: 'a', project: 'a', location: 'global', credentialsFile: null, apiKey: null, apiKeyMode: 'full', enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [] },
+        { id: 'b', project: 'b', location: 'global', credentialsFile: null, apiKey: null, apiKeyMode: 'full', enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [] },
+        { id: 'c', project: 'c', location: 'global', credentialsFile: null, apiKey: null, apiKeyMode: 'full', enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [] },
+      ],
+      resolvedVertexTargets: [
+        { id: 'a', project: 'a', location: 'global', credentialsFile: null, apiKey: null, apiKeyMode: 'full', enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [], source: 'pool' },
+        { id: 'b', project: 'b', location: 'global', credentialsFile: null, apiKey: null, apiKeyMode: 'full', enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [], source: 'pool' },
+        { id: 'c', project: 'c', location: 'global', credentialsFile: null, apiKey: null, apiKeyMode: 'full', enabled: true, weight: 1, modelAllowlist: [], modelExclusions: [], source: 'pool' },
+      ],
+    });
+    const snapshot = createGenAiPoolSnapshot(config, () => ({ models: { generateContent: async () => ({}) } }), 1);
+    snapshot.nextIndex = 0;
+    expect(Array.from({ length: 6 }, () => selectGenAiTarget(snapshot).id)).toEqual(['a', 'b', 'c', 'a', 'b', 'c']);
   });
 });

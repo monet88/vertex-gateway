@@ -213,10 +213,11 @@ const selectRoundRobinTarget = (
   snapshot: GenAiPoolSnapshot,
   candidates: readonly GenAiTarget[],
 ): GenAiTarget => {
+  const candidateIds = new Set(candidates.map((candidate) => candidate.id));
   for (let attempts = 0; attempts < snapshot.targets.length; attempts += 1) {
     const target = snapshot.targets[snapshot.nextIndex % snapshot.targets.length];
     snapshot.nextIndex = (snapshot.nextIndex + 1) % snapshot.targets.length;
-    if (candidates.some((candidate) => candidate.id === target.id)) {
+    if (candidateIds.has(target.id)) {
       return target;
     }
   }
@@ -386,13 +387,6 @@ export class GenAiPoolClient implements GenAiClient {
             throw error;
           }
           attempted.add(target.id);
-          console.info(JSON.stringify({
-            event: 'genai_pool.target_selected',
-            ...(metadata.requestId ? { requestId: metadata.requestId } : {}),
-            targetId: target.id,
-            routeFamily,
-            streaming: true,
-          }));
 
           const { cooldownMs, upstreamRetries, upstreamRetryDelayMs } = this.getRetryConfig();
           const startedAt = Date.now();
@@ -575,13 +569,6 @@ export class GenAiPoolClient implements GenAiClient {
         throw error;
       }
       attempted.add(target.id);
-      console.info(JSON.stringify({
-        event: 'genai_pool.target_selected',
-        ...(requestId ? { requestId } : {}),
-        targetId: target.id,
-        routeFamily,
-        streaming: false,
-      }));
 
       const { cooldownMs, upstreamRetries, upstreamRetryDelayMs } = this.getRetryConfig();
       const shouldRetryOnTarget = (error: unknown): boolean => {
