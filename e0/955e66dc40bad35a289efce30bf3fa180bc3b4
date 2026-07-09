@@ -1,0 +1,41 @@
+docs/superpowers/plans/2026-07-09-backend-hot-path-throughput.md
+  s_1af46096cb0b59::t_632e6b422c29fb 1-95
+docs/superpowers/specs/2026-07-09-backend-hot-path-throughput-design.md
+  s_1af46096cb0b59::t_509b0738f93f93 1-386
+src/admin/gateway-key-store.ts
+  s_1af46096cb0b59::t_91dbbc56a8e0e2 5,251-258,261-278,283-284
+src/app.ts
+  s_1af46096cb0b59::t_99bada1e041ca5 5,195
+src/auth/gateway-auth.ts
+  s_1af46096cb0b59::t_5121f7315b6fe5 7-14,24-25,28-35
+src/config/env.ts
+  s_1af46096cb0b59::t_f3dde7948e438c 1,71-72,921,925,930-932,945-946,976,982-984
+src/lib/genai-pool.ts
+  s_1af46096cb0b59::t_71b797bc347ed6 216,220
+test/auth.test.ts
+  s_1af46096cb0b59::t_e69e86947f20f6 15-16,20-21,32-34,37-42
+test/bench/hot-path-m1.test.ts
+  s_1af46096cb0b59::t_9281ec88e9c707 1-123
+test/bench/hot-path-m2.test.ts
+  s_1af46096cb0b59::t_79d4bf8f36502d 1-318
+test/genai-pool.test.ts
+  s_1af46096cb0b59::t_bc2d468242eb48 2,1253-1272
+test/test-config.ts
+  s_1af46096cb0b59::t_399ff5622dbb43 1,4-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e0955e66dc40bad35a289efce30bf3fa180bc3b4",
+  "prompts": {},
+  "sessions": {
+    "s_1af46096cb0b59": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "7e2c96e1-0a64-45de-9e05-f4fd665b0ad2",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
