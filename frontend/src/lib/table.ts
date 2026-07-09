@@ -3,6 +3,14 @@ import type { ApiCallStatusClass, ApiLogRow, RouteFamily } from '@/types/admin';
 export type LogStatus = ApiCallStatusClass;
 export type LogSortKey = 'time' | 'latencyMs' | 'status' | 'routeFamily' | 'model';
 export type SortDirection = 'asc' | 'desc';
+export type StatusBadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+
+/** Map API status class to badge tone: only 4xx/5xx are failures. */
+export function statusBadgeVariant(status: ApiCallStatusClass): StatusBadgeVariant {
+  if (status === '2xx') return 'default';
+  if (status === '4xx' || status === '5xx') return 'destructive';
+  return 'secondary';
+}
 
 export interface LogTableFilters {
   readonly routeFamily: RouteFamily | 'all' | string;

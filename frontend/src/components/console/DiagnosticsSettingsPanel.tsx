@@ -61,8 +61,8 @@ export function DiagnosticsSettingsPanel({ diagnostics, token }: DiagnosticsSett
   const debugMode = diagnostics.data?.debugMode === true;
   const logToFile = diagnostics.data?.logToFile === true;
   const gateEnabled = diagnostics.data?.gateEnabled === true;
-  const entryCount = diagnostics.data?.entryCount ?? 0;
-  const canClearRetained = writable && Boolean(token) && (entryCount > 0 || !gateEnabled);
+  // Clear must stay available after restart: entryCount is memory-only, while JSONL files persist.
+  const canClearRetained = writable && Boolean(token);
 
   const handleClearRetained = async () => {
     if (!window.confirm('Xóa toàn bộ log trong bộ nhớ và file log hiện tại?')) return;

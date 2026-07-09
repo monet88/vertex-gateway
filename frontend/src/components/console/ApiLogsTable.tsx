@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import type { ApiCallStatusClass, ApiLogRow, RouteFamily } from '@/types/admin';
 import { useLogTable } from '@/hooks/useLogTable';
+import { statusBadgeVariant } from '@/lib/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,10 +25,13 @@ export function ApiLogsTable({
   emptyMessage = 'Chưa có API call nào được ghi.',
 }: ApiLogsTableProps) {
   const { filters, setFilters, sort, setSort, visibleRows } = useLogTable(rows);
-  const showUpstreamTarget = rows.some((row) => {
-    const value = row.upstreamTarget?.trim();
-    return Boolean(value) && value !== '—';
-  });
+  const showUpstreamTarget = useMemo(
+    () => rows.some((row) => {
+      const value = row.upstreamTarget?.trim();
+      return Boolean(value) && value !== '—';
+    }),
+    [rows],
+  );
   const emptyColSpan = showUpstreamTarget ? 8 : 7;
 
   const nextDirection = sort.direction === 'asc' ? 'desc' : 'asc';
@@ -103,7 +108,7 @@ export function ApiLogsTable({
               <TableCell>{row.routeFamily}</TableCell>
               <TableCell className="font-mono tabular-nums">{row.model}</TableCell>
               <TableCell className="font-mono tabular-nums">{row.latencyMs}ms</TableCell>
-              <TableCell className="font-mono tabular-nums"><Badge variant={row.status === '2xx' ? 'default' : 'destructive'}>{row.status}</Badge></TableCell>
+              <TableCell className="font-mono tabular-nums"><Badge variant={statusBadgeVariant(row.status)}>{row.status}</Badge></TableCell>
               <TableCell>{row.operation}</TableCell>
               <TableCell className="font-mono tabular-nums">{row.gatewayKey}</TableCell>
               {showUpstreamTarget ? (
