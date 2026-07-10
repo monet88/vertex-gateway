@@ -13,7 +13,6 @@ export const testConfig = (overrides: Partial<GatewayConfig> = {}): GatewayConfi
   const gatewayKeys = overrideKeys ? [...overrideKeys] : ['test-key'];
   return {
     port: 0,
-    gatewayKeys,
     corsOrigins: ['http://localhost:3000'],
     allowWildcardCors: false,
     googleProject: 'test-project',
@@ -59,8 +58,8 @@ export const testConfig = (overrides: Partial<GatewayConfig> = {}): GatewayConfi
     adminStoreMode: 'static-config',
     adminFileStoreDir: null,
     managedGatewayKeyHashes: [],
-    gatewayKeyDigests: overrideDigests ?? digestKeys(gatewayKeys),
     ...rest,
+    // Keep keys/digests after ...rest so destructured overrides cannot be lost.
     gatewayKeys,
     gatewayKeyDigests: overrideDigests ?? digestKeys(gatewayKeys),
   };

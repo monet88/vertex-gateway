@@ -17,10 +17,20 @@ const percentile = (values: number[], p: number): number => {
   return sorted[idx];
 };
 
-const listen = async (server: Server): Promise<string> => new Promise((resolve) => {
+const listen = async (server: Server): Promise<string> => new Promise((resolve, reject) => {
+  const onError = (error: Error) => {
+    server.off('error', onError);
+    reject(error);
+  };
+  server.once('error', onError);
   server.listen(0, '127.0.0.1', () => {
+    server.off('error', onError);
     const address = server.address();
-    if (typeof address === 'object' && address) resolve(`http://127.0.0.1:${address.port}`);
+    if (typeof address === 'object' && address) {
+      resolve(`http://127.0.0.1:${address.port}`);
+      return;
+    }
+    reject(new Error('Server listen succeeded without an address'));
   });
 });
 
@@ -173,7 +183,13 @@ describe.skipIf(!RUN)('hot-path M2 HTTP integration (pool + mock upstream)', () 
   let server: Server | undefined;
 
   afterEach(async () => {
-    await new Promise<void>((resolve) => server?.close(() => resolve()));
+    await new Promise<void>((resolve) => {
+      if (!server) {
+        resolve();
+        return;
+      }
+      server.close(() => resolve());
+    });
     server = undefined;
     vi.restoreAllMocks();
   });

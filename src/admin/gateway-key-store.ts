@@ -2,7 +2,11 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { GatewayConfig } from '../config/env.js';
-import { createDerivedConfig, hashGatewayKeyDigests } from '../config/env.js';
+import {
+  createDerivedConfig,
+  hasAlignedGatewayKeyDigests,
+  hashGatewayKeyDigests,
+} from '../config/env.js';
 import { GatewayError } from '../http/error-response.js';
 import { readJsonIfExists, writeJsonAtomic } from '../lib/json-file-store.js';
 
@@ -249,18 +253,12 @@ export const createGatewayKeyStore = (
  * Called at startup to ensure active managed keys are recognized by auth.
  */
 const withGatewayKeyDigests = (config: GatewayConfig): GatewayConfig => {
-  if (
-    config.gatewayKeyDigests.length === config.gatewayKeys.length
-    && config.gatewayKeys.every((key, index) => {
-      const digest = config.gatewayKeyDigests[index];
-      return Buffer.isBuffer(digest) && digest.length === 32;
-    })
-  ) {
+  if (hasAlignedGatewayKeyDigests(config.gatewayKeys, config.gatewayKeyDigests)) {
     return config;
   }
   return {
     ...config,
-    gatewayKeyDigests: hashGatewayKeyDigests(config.gatewayKeys),
+    gatewayKeyDigests: hashGatewayKeyDigests(config.gatewayKeys ?? []),
   };
 };
 

@@ -3,6 +3,7 @@ import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { requireGatewayAuth } from '../src/auth/gateway-auth.js';
 import { hashGatewayKey } from '../src/admin/gateway-key-store.js';
+import { createDerivedConfig } from '../src/config/env.js';
 import { testConfig } from './test-config.js';
 
 const requestWithHeaders = (headers: Record<string, string>) => {
@@ -39,5 +40,22 @@ describe('gateway auth', () => {
     const config = testConfig({ gatewayKeys: ['alpha-key', 'beta-key', 'gamma-key'] });
     expect(config.gatewayKeyDigests).toHaveLength(3);
     expect(requireGatewayAuth(requestWithHeaders({ authorization: 'Bearer beta-key' }), config)).toBe('beta-key');
+  });
+
+  it('recomputes digests when createDerivedConfig receives a mis-shaped digest override', () => {
+    const base = testConfig({ gatewayKeys: ['real-key'] });
+    const derived = createDerivedConfig(base, {
+      // Wrong length: must not desync static auth from gatewayKeys.
+      gatewayKeyDigests: [Buffer.alloc(16, 7)],
+    });
+    expect(derived.gatewayKeyDigests).toHaveLength(1);
+    expect(derived.gatewayKeyDigests[0]).toHaveLength(32);
+    expect(requireGatewayAuth(requestWithHeaders({ authorization: 'Bearer real-key' }), derived)).toBe('real-key');
+  });
+
+  it('tolerates missing gatewayKeyDigests on partial configs', () => {
+    const config = testConfig({ gatewayKeys: ['partial-key'] });
+    const partial = { ...config, gatewayKeyDigests: undefined } as unknown as typeof config;
+    expect(requireGatewayAuth(requestWithHeaders({ authorization: 'Bearer partial-key' }), partial)).toBe('partial-key');
   });
 });

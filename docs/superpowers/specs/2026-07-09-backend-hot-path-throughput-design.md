@@ -77,10 +77,10 @@ These are **candidates**, not proven rankings. Baseline must confirm or demote t
 
 | Node | Evidence in code | Why potentially expensive |
 |------|------------------|---------------------------|
-| Gateway auth | `constantTimeEqual` hashes **both** strings every compare; `config.gatewayKeys.some(...)` | O(keys) SHA-256 per request |
-| Double key extract | `requireGatewayAuth` + later `extractGatewayKey` in `app.ts` | Duplicate header work |
-| Pool RR select | `candidates.some` inside RR loop in `genai-pool.ts` | O(targets × candidates) |
-| Success logging | `console.info(JSON.stringify(...))` on `request.complete` and `genai_pool.target_selected` | Sync stringify + console on every request |
+| Gateway auth | **Post-fix:** candidate SHA-256 once + timing-safe compare vs prehashed `gatewayKeyDigests` (was dual-hash × N) | O(keys) compare per request; hashing moved to load/hydrate |
+| Double key extract | **Post-fix:** `requireGatewayAuth` returns key (was second `extractGatewayKey` in `app.ts`) | Was duplicate header work |
+| Pool RR select | **Post-fix:** candidate id `Set` membership (was nested `candidates.some`) | Was O(targets × candidates) |
+| Success logging | `console.info(JSON.stringify(...))` on `request.complete` (`target_selected` removed by F7) | Sync stringify + console on every request |
 | Non-stream stream setup | AbortController + 4 listeners even when only streaming uses admission | Alloc/listener churn on S1/S3 |
 | Object copies | `{ ...classified }`, `{ ...body }` every request | Alloc when no mutation needed |
 | API call log | Early-return when diagnostics gate off | Should be ~free when off; verify |

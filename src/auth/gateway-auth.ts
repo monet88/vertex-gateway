@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { GatewayConfig } from '../config/env.js';
+import { resolveGatewayKeyDigests } from '../config/env.js';
 import { GatewayError } from '../http/error-response.js';
 import { verifyManagedGatewayKey } from '../admin/gateway-key-store.js';
 
@@ -26,11 +27,10 @@ export const requireGatewayAuth = (req: IncomingMessage, config: GatewayConfig):
   const candidate = extractGatewayKey(req);
   if (!candidate) throw new GatewayError(401, 'AUTH_INVALID', 'Gateway API key is required.');
   const candidateDigest = createHash('sha256').update(candidate).digest();
-  const digests = config.gatewayKeyDigests.length > 0
-    ? config.gatewayKeyDigests
-    : config.gatewayKeys.map((key) => createHash('sha256').update(key).digest());
+  const digests = resolveGatewayKeyDigests(config.gatewayKeys ?? [], config.gatewayKeyDigests);
   if (matchesStaticGatewayKey(candidateDigest, digests)) return candidate;
-  if (config.managedGatewayKeyHashes.length > 0 && verifyManagedGatewayKey(candidate, config.managedGatewayKeyHashes)) {
+  if ((config.managedGatewayKeyHashes?.length ?? 0) > 0
+    && verifyManagedGatewayKey(candidate, config.managedGatewayKeyHashes)) {
     return candidate;
   }
   throw new GatewayError(401, 'AUTH_INVALID', 'Gateway API key is invalid.');
