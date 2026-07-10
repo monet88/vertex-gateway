@@ -1,0 +1,31 @@
+docs/superpowers/specs/2026-07-09-backend-hot-path-throughput-design.md
+  s_1af46096cb0b59::t_d721f0de77b9fe 80-83
+src/admin/gateway-key-store.ts
+  s_1af46096cb0b59::t_c412ee2f9dfe81 5-9,256,261
+src/auth/gateway-auth.ts
+  s_1af46096cb0b59::t_778ef76a93fe2e 4,30,32-33
+src/config/env.ts
+  s_1af46096cb0b59::t_3f6084dc0458b0 933-955,1005-1010
+test/auth.test.ts
+  s_1af46096cb0b59::t_88927c76627d90 6,44-60
+test/bench/hot-path-m2.test.ts
+  s_1af46096cb0b59::t_4bb387069b7687 20-25,27,29-33,186-192
+test/test-config.ts
+  s_1af46096cb0b59::t_7e4a451282ea46 62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b828218e995273f6d946c45062cb56e86b6302f5",
+  "prompts": {},
+  "sessions": {
+    "s_1af46096cb0b59": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "7e2c96e1-0a64-45de-9e05-f4fd665b0ad2",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
