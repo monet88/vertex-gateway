@@ -1,14 +1,33 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { GatewayConfig } from '../config/env.js';
+import {
+  hasAlignedGatewayKeyDigests,
+  hashGatewayKeyDigests,
+} from '../config/env.js';
 import { GatewayError } from '../http/error-response.js';
 import { verifyManagedGatewayKey } from '../admin/gateway-key-store.js';
 
-const constantTimeEqual = (left: string, right: string): boolean => {
-  // Prevent timing attacks by ensuring consistent lengths via hashing
-  const leftHash = createHash('sha256').update(left).digest();
-  const rightHash = createHash('sha256').update(right).digest();
-  return timingSafeEqual(leftHash, rightHash);
+const matchesStaticGatewayKey = (candidateDigest: Buffer, digests: readonly Buffer[]): boolean => {
+  let matched = false;
+  for (const digest of digests) {
+    if (candidateDigest.length === digest.length && timingSafeEqual(candidateDigest, digest)) {
+      matched = true;
+    }
+  }
+  return matched;
+};
+
+/**
+ * Hot-path digests: reuse prehashed buffers when shape-aligned; recompute only on
+ * partial/mis-shaped configs. Never clone aligned digests per request.
+ */
+const digestsForAuth = (config: GatewayConfig): readonly Buffer[] => {
+  const keys = config.gatewayKeys ?? [];
+  if (hasAlignedGatewayKeyDigests(keys, config.gatewayKeyDigests)) {
+    return config.gatewayKeyDigests;
+  }
+  return hashGatewayKeyDigests(keys);
 };
 
 export const extractGatewayKey = (req: IncomingMessage): string | null => {
@@ -18,10 +37,16 @@ export const extractGatewayKey = (req: IncomingMessage): string | null => {
   return bearer || apiKey?.trim() || googApiKey?.trim() || null;
 };
 
-export const requireGatewayAuth = (req: IncomingMessage, config: GatewayConfig): void => {
+/** Validates gateway auth and returns the extracted key (single extract for hot path). */
+export const requireGatewayAuth = (req: IncomingMessage, config: GatewayConfig): string => {
   const candidate = extractGatewayKey(req);
   if (!candidate) throw new GatewayError(401, 'AUTH_INVALID', 'Gateway API key is required.');
-  if (config.gatewayKeys.some((key) => constantTimeEqual(candidate, key))) return;
-  if (config.managedGatewayKeyHashes.length > 0 && verifyManagedGatewayKey(candidate, config.managedGatewayKeyHashes)) return;
+  const candidateDigest = createHash('sha256').update(candidate).digest();
+  const digests = digestsForAuth(config);
+  if (matchesStaticGatewayKey(candidateDigest, digests)) return candidate;
+  if ((config.managedGatewayKeyHashes?.length ?? 0) > 0
+    && verifyManagedGatewayKey(candidate, config.managedGatewayKeyHashes)) {
+    return candidate;
+  }
   throw new GatewayError(401, 'AUTH_INVALID', 'Gateway API key is invalid.');
 };

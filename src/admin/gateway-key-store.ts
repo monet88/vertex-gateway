@@ -2,7 +2,11 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { GatewayConfig } from '../config/env.js';
-import { createDerivedConfig } from '../config/env.js';
+import {
+  createDerivedConfig,
+  hasAlignedGatewayKeyDigests,
+  hashGatewayKeyDigests,
+} from '../config/env.js';
 import { GatewayError } from '../http/error-response.js';
 import { readJsonIfExists, writeJsonAtomic } from '../lib/json-file-store.js';
 
@@ -248,15 +252,32 @@ export const createGatewayKeyStore = (
  * Hydrate managed gateway key hashes from the file store into the config.
  * Called at startup to ensure active managed keys are recognized by auth.
  */
-export const hydrateManagedGatewayKeyHashes = (config: GatewayConfig): GatewayConfig => {
-  if (config.adminStoreMode !== 'file-store' || !config.adminFileStoreDir) {
+const withGatewayKeyDigests = (config: GatewayConfig): GatewayConfig => {
+  if (hasAlignedGatewayKeyDigests(config.gatewayKeys, config.gatewayKeyDigests)) {
     return config;
   }
-  const storePath = path.join(config.adminFileStoreDir, STORE_FILE);
+  return {
+    ...config,
+    gatewayKeyDigests: hashGatewayKeyDigests(config.gatewayKeys ?? []),
+  };
+};
+
+/**
+ * Hydrate managed gateway key hashes from the file store (when present) and
+ * ensure static gatewayKeyDigests are populated for O(1)-hash auth compares.
+ * Avoid full createDerivedConfig when only digests are missing so partial test
+ * fixtures without pool apiKeyMode keep working.
+ */
+export const hydrateManagedGatewayKeyHashes = (config: GatewayConfig): GatewayConfig => {
+  const base = withGatewayKeyDigests(config);
+  if (base.adminStoreMode !== 'file-store' || !base.adminFileStoreDir) {
+    return base;
+  }
+  const storePath = path.join(base.adminFileStoreDir, STORE_FILE);
   const records = readJsonIfExists<AdminGatewayKeyRecord[]>(storePath) ?? [];
   const activeHashes = records
     .filter((r) => r.status === 'active')
     .map((r) => r.hash);
-  if (activeHashes.length === 0) return config;
-  return createDerivedConfig(config, { managedGatewayKeyHashes: activeHashes });
+  if (activeHashes.length === 0) return base;
+  return createDerivedConfig(base, { managedGatewayKeyHashes: activeHashes });
 };

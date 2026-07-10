@@ -3,6 +3,7 @@ import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { requireGatewayAuth } from '../src/auth/gateway-auth.js';
 import { hashGatewayKey } from '../src/admin/gateway-key-store.js';
+import { createDerivedConfig } from '../src/config/env.js';
 import { testConfig } from './test-config.js';
 
 const requestWithHeaders = (headers: Record<string, string>) => {
@@ -12,13 +13,13 @@ const requestWithHeaders = (headers: Record<string, string>) => {
 };
 
 describe('gateway auth', () => {
-  it('accepts bearer gateway keys', () => {
-    expect(() => requireGatewayAuth(requestWithHeaders({ authorization: 'Bearer test-key' }), testConfig())).not.toThrow();
+  it('accepts bearer gateway keys and returns the key', () => {
+    expect(requireGatewayAuth(requestWithHeaders({ authorization: 'Bearer test-key' }), testConfig())).toBe('test-key');
   });
 
   it('accepts x-api-key and x-goog-api-key gateway keys', () => {
-    expect(() => requireGatewayAuth(requestWithHeaders({ 'x-api-key': 'test-key' }), testConfig())).not.toThrow();
-    expect(() => requireGatewayAuth(requestWithHeaders({ 'x-goog-api-key': 'test-key' }), testConfig())).not.toThrow();
+    expect(requireGatewayAuth(requestWithHeaders({ 'x-api-key': 'test-key' }), testConfig())).toBe('test-key');
+    expect(requireGatewayAuth(requestWithHeaders({ 'x-goog-api-key': 'test-key' }), testConfig())).toBe('test-key');
   });
 
   it('rejects missing and invalid keys', () => {
@@ -29,9 +30,41 @@ describe('gateway auth', () => {
   it('accepts managed gateway keys by hash and rejects after removal', () => {
     const secret = 'vgw_managed-key-for-auth-test';
     const hash = hashGatewayKey(secret);
-    const config = testConfig({ managedGatewayKeyHashes: [hash] });
-    expect(() => requireGatewayAuth(requestWithHeaders({ authorization: `Bearer ${secret}` }), config)).not.toThrow();
-    const emptyConfig = testConfig({ managedGatewayKeyHashes: [] });
+    const config = testConfig({ managedGatewayKeyHashes: [hash], gatewayKeys: [] });
+    expect(requireGatewayAuth(requestWithHeaders({ authorization: `Bearer ${secret}` }), config)).toBe(secret);
+    const emptyConfig = testConfig({ managedGatewayKeyHashes: [], gatewayKeys: ['test-key'] });
     expect(() => requireGatewayAuth(requestWithHeaders({ authorization: `Bearer ${secret}` }), emptyConfig)).toThrow(/invalid/);
+  });
+
+  it('matches among multiple prehashed static keys without dual-hashing configured secrets per compare', () => {
+    const config = testConfig({ gatewayKeys: ['alpha-key', 'beta-key', 'gamma-key'] });
+    expect(config.gatewayKeyDigests).toHaveLength(3);
+    expect(requireGatewayAuth(requestWithHeaders({ authorization: 'Bearer beta-key' }), config)).toBe('beta-key');
+  });
+
+  it('recomputes digests when createDerivedConfig receives a mis-shaped digest override', () => {
+    const base = testConfig({ gatewayKeys: ['real-key'] });
+    const derived = createDerivedConfig(base, {
+      // Wrong length: must not desync static auth from gatewayKeys.
+      gatewayKeyDigests: [Buffer.alloc(16, 7)],
+    });
+    expect(derived.gatewayKeyDigests).toHaveLength(1);
+    expect(derived.gatewayKeyDigests[0]).toHaveLength(32);
+    expect(requireGatewayAuth(requestWithHeaders({ authorization: 'Bearer real-key' }), derived)).toBe('real-key');
+  });
+
+  it('tolerates missing gatewayKeyDigests on partial configs', () => {
+    const config = testConfig({ gatewayKeys: ['partial-key'] });
+    const partial = { ...config, gatewayKeyDigests: undefined } as unknown as typeof config;
+    expect(requireGatewayAuth(requestWithHeaders({ authorization: 'Bearer partial-key' }), partial)).toBe('partial-key');
+  });
+
+  it('reuses prehashed digests without cloning on the hot path when aligned', () => {
+    const config = testConfig({ gatewayKeys: ['hot-path-key'] });
+    const first = config.gatewayKeyDigests[0];
+    expect(first).toBeDefined();
+    // Mutating after load would be a config bug; assert auth still compares the same Buffer identity path.
+    expect(requireGatewayAuth(requestWithHeaders({ authorization: 'Bearer hot-path-key' }), config)).toBe('hot-path-key');
+    expect(config.gatewayKeyDigests[0]).toBe(first);
   });
 });

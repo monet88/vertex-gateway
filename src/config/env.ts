@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { loadServiceAccountCredential } from "../auth/google-auth.js";
 import { loadAdminFileStoreSettings } from "./admin-settings-store.js";
@@ -67,6 +68,8 @@ export interface GatewayConfig {
   adminStoreMode: AdminStoreMode;
   adminFileStoreDir: string | null;
   managedGatewayKeyHashes: string[];
+  /** SHA-256 digests of static gatewayKeys; filled at load/hydrate. Not secrets in log form. */
+  gatewayKeyDigests: Buffer[];
 }
 
 const DEFAULTS = {
@@ -915,11 +918,39 @@ export const loadConfig = (): GatewayConfig => {
     adminStoreMode,
     adminFileStoreDir,
     managedGatewayKeyHashes: [],
+    gatewayKeyDigests: [],
   };
 
   config.resolvedVertexTargets = resolveVertexTargets(config);
+  config.gatewayKeyDigests = hashGatewayKeyDigests(config.gatewayKeys);
   validateConfig(config);
   return config;
+};
+
+export const hashGatewayKeyDigests = (keys: readonly string[]): Buffer[] =>
+  keys.map((key) => createHash("sha256").update(key).digest());
+
+/** True when digests are SHA-256 buffers aligned 1:1 with keys (shape only). */
+export const hasAlignedGatewayKeyDigests = (
+  keys: readonly string[],
+  digests: readonly Buffer[] | null | undefined,
+): digests is readonly Buffer[] =>
+  Array.isArray(digests)
+  && digests.length === keys.length
+  && digests.every((digest) => Buffer.isBuffer(digest) && digest.length === 32);
+
+/**
+ * Prefer aligned digests when provided; otherwise recompute from plaintext keys.
+ * Never trust a non-empty but mis-shaped override (wrong length / non-buffer).
+ */
+export const resolveGatewayKeyDigests = (
+  keys: readonly string[],
+  digests?: readonly Buffer[] | null,
+): Buffer[] => {
+  if (hasAlignedGatewayKeyDigests(keys, digests)) {
+    return digests.map((digest) => Buffer.from(digest));
+  }
+  return hashGatewayKeyDigests(keys);
 };
 
 export const createDerivedConfig = (
@@ -934,6 +965,8 @@ export const createDerivedConfig = (
       | "resolvedVertexTargets"
       | "managedGatewayKeyHashes"
       | "adminToken"
+      | "gatewayKeys"
+      | "gatewayKeyDigests"
     >
   >,
 ): GatewayConfig => {
@@ -963,11 +996,18 @@ export const createDerivedConfig = (
     ...(overrides.adminToken !== undefined
       ? { adminToken: overrides.adminToken }
       : {}),
+    ...(overrides.gatewayKeys ? { gatewayKeys: [...overrides.gatewayKeys] } : {}),
     resolvedVertexTargets: [],
   };
   nextConfig.resolvedVertexTargets = overrides.resolvedVertexTargets
     ? overrides.resolvedVertexTargets.map((entry) => ({ ...entry }))
     : resolveVertexTargets(nextConfig);
+  // Always derive digests from the final key list. Accept override digests only
+  // when shape-aligned with keys; otherwise recompute so auth cannot be desynced.
+  nextConfig.gatewayKeyDigests = resolveGatewayKeyDigests(
+    nextConfig.gatewayKeys,
+    overrides.gatewayKeyDigests ?? nextConfig.gatewayKeyDigests,
+  );
   validateConfig(nextConfig);
   return nextConfig;
 };
