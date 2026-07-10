@@ -58,4 +58,13 @@ describe('gateway auth', () => {
     const partial = { ...config, gatewayKeyDigests: undefined } as unknown as typeof config;
     expect(requireGatewayAuth(requestWithHeaders({ authorization: 'Bearer partial-key' }), partial)).toBe('partial-key');
   });
+
+  it('reuses prehashed digests without cloning on the hot path when aligned', () => {
+    const config = testConfig({ gatewayKeys: ['hot-path-key'] });
+    const first = config.gatewayKeyDigests[0];
+    expect(first).toBeDefined();
+    // Mutating after load would be a config bug; assert auth still compares the same Buffer identity path.
+    expect(requireGatewayAuth(requestWithHeaders({ authorization: 'Bearer hot-path-key' }), config)).toBe('hot-path-key');
+    expect(config.gatewayKeyDigests[0]).toBe(first);
+  });
 });

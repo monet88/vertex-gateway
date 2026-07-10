@@ -1,7 +1,10 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { GatewayConfig } from '../config/env.js';
-import { resolveGatewayKeyDigests } from '../config/env.js';
+import {
+  hasAlignedGatewayKeyDigests,
+  hashGatewayKeyDigests,
+} from '../config/env.js';
 import { GatewayError } from '../http/error-response.js';
 import { verifyManagedGatewayKey } from '../admin/gateway-key-store.js';
 
@@ -13,6 +16,18 @@ const matchesStaticGatewayKey = (candidateDigest: Buffer, digests: readonly Buff
     }
   }
   return matched;
+};
+
+/**
+ * Hot-path digests: reuse prehashed buffers when shape-aligned; recompute only on
+ * partial/mis-shaped configs. Never clone aligned digests per request.
+ */
+const digestsForAuth = (config: GatewayConfig): readonly Buffer[] => {
+  const keys = config.gatewayKeys ?? [];
+  if (hasAlignedGatewayKeyDigests(keys, config.gatewayKeyDigests)) {
+    return config.gatewayKeyDigests;
+  }
+  return hashGatewayKeyDigests(keys);
 };
 
 export const extractGatewayKey = (req: IncomingMessage): string | null => {
@@ -27,7 +42,7 @@ export const requireGatewayAuth = (req: IncomingMessage, config: GatewayConfig):
   const candidate = extractGatewayKey(req);
   if (!candidate) throw new GatewayError(401, 'AUTH_INVALID', 'Gateway API key is required.');
   const candidateDigest = createHash('sha256').update(candidate).digest();
-  const digests = resolveGatewayKeyDigests(config.gatewayKeys ?? [], config.gatewayKeyDigests);
+  const digests = digestsForAuth(config);
   if (matchesStaticGatewayKey(candidateDigest, digests)) return candidate;
   if ((config.managedGatewayKeyHashes?.length ?? 0) > 0
     && verifyManagedGatewayKey(candidate, config.managedGatewayKeyHashes)) {
