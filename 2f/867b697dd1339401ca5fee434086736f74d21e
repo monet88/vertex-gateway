@@ -1,0 +1,21 @@
+src/auth/gateway-auth.ts
+  s_1af46096cb0b59::t_eb824b0932ad98 4-7,21-32,45
+test/auth.test.ts
+  s_1af46096cb0b59::t_e598931934169a 61-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2f867b697dd1339401ca5fee434086736f74d21e",
+  "prompts": {},
+  "sessions": {
+    "s_1af46096cb0b59": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "7e2c96e1-0a64-45de-9e05-f4fd665b0ad2",
+        "model": "unknown"
+      },
+      "human_author": "monet88 <minhthang421992@gmail.com>"
+    }
+  }
+}
