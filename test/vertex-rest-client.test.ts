@@ -53,6 +53,52 @@ describe('vertex REST client', () => {
     });
   });
 
+  it('overrides location to asia-southeast1 when model is chirp-3, chirp-3-hd, or chirp-3-instant-custom-voice', async () => {
+    const fetchFn = vi.fn(async () => createJsonResponse({ candidates: [] }));
+    const client = createVertexRestClient({
+      apiKey: 'AIza-fake-test-key',
+      project: 'test-project',
+      location: 'global',
+      apiVersion: 'v1',
+      timeoutMs: 1_000,
+      fetchFn,
+    });
+
+    await client.models.generateContent({
+      model: 'chirp-3-hd',
+      contents: [{ role: 'user', parts: [{ text: 'speech' }] }],
+    });
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const [url] = fetchFn.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      'https://asia-southeast1-aiplatform.googleapis.com/v1/projects/test-project/locations/asia-southeast1/publishers/google/models/chirp-3-hd:generateContent',
+    );
+  });
+
+  it('overrides location to us-central1 when model is veo-3.1-generate-001', async () => {
+    const fetchFn = vi.fn(async () => createJsonResponse({ candidates: [] }));
+    const client = createVertexRestClient({
+      apiKey: 'AIza-fake-test-key',
+      project: 'test-project',
+      location: 'global',
+      apiVersion: 'v1',
+      timeoutMs: 1_000,
+      fetchFn,
+    });
+
+    await client.models.generateContent({
+      model: 'veo-3.1-generate-001',
+      contents: [{ role: 'user', parts: [{ text: 'generate video' }] }],
+    });
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const [url] = fetchFn.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      'https://us-central1-aiplatform.googleapis.com/v1/projects/test-project/locations/us-central1/publishers/google/models/veo-3.1-generate-001:generateContent',
+    );
+  });
+
   it('translates SDK config into the Vertex REST request shape', async () => {
     const fetchFn = vi.fn(async () => createJsonResponse({ candidates: [] }));
     const client = createVertexRestClient({

@@ -3,7 +3,16 @@ import { GatewayError } from '../http/error-response.js';
 
 const BUILT_IN_PROVIDER_MODELS: Record<string, string[]> = {
   gemini: [
+    'gemini-3.6-flash',
     'gemini-3.5-flash',
+    'gemini-omni-flash-preview',
+    'veo-3.1-generate-001',
+    'veo-3.1-fast-generate-001',
+    'veo-3.1-lite-generate-001-preview',
+    'chirp-3',
+    'chirp-3-hd',
+    'chirp-3-instant-custom-voice',
+    'gemini-embedding-2',
     'gemini-3.1-pro-preview',
     'gemini-3.1-flash-lite',
     'gemini-2.5-flash',

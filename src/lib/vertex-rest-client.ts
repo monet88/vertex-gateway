@@ -70,12 +70,22 @@ const buildEndpointBase = (
   return `https://${location}-aiplatform.googleapis.com/${apiVersion}/projects/${project}/locations/${location}/publishers/google`;
 };
 
+const MODEL_LOCATION_OVERRIDES: Record<string, string> = {
+  'chirp-3': 'asia-southeast1',
+  'chirp-3-hd': 'asia-southeast1',
+  'chirp-3-instant-custom-voice': 'asia-southeast1',
+  'veo-3.1-generate-001': 'us-central1',
+  'veo-3.1-fast-generate-001': 'us-central1',
+  'veo-3.1-lite-generate-001-preview': 'us-central1',
+};
+
 const buildModelUrl = (
   options: VertexRestClientOptions,
   model: string,
   operation: 'generateContent' | 'streamGenerateContent',
 ): string => {
-  const base = buildEndpointBase(options.apiVersion, options.project, options.location);
+  const effectiveLocation = MODEL_LOCATION_OVERRIDES[model] ?? options.location;
+  const base = buildEndpointBase(options.apiVersion, options.project, effectiveLocation);
   const suffix = operation === 'streamGenerateContent' ? `:${operation}${SSE_ALT_QUERY}` : `:${operation}`;
   return `${base}/models/${encodeURIComponent(model)}${suffix}`;
 };

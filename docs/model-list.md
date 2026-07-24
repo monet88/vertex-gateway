@@ -8,14 +8,38 @@
 
 ## Text / Multimodal
 
-| Model ID                 | Status | Notes                   |
-| ------------------------ | ------ | ----------------------- |
-| `gemini-3.5-flash`       | ✅     | **Recommended default** |
+| Model ID                    | Status | Notes                   |
+| --------------------------- | ------ | ----------------------- |
+| `gemini-3.6-flash`          | ✅     | Latest Gemini 3.6 model |
+| `gemini-3.5-flash`          | ✅     | **Recommended default** |
+| `gemini-omni-flash-preview` | ✅     | Gemini Omni Flash       |
 | `gemini-3.1-pro-preview` | ✅     |                         |
 | `gemini-3.1-flash-lite`  | ✅     |                         |
 | `gemini-2.5-flash`       | ✅     |                         |
 | `gemini-2.5-flash-lite`  | ✅     |                         |
 | `gemini-2.5-pro`         | ✅     |                         |
+
+## Embeddings
+
+| Model ID             | Status | Notes                       |
+| -------------------- | ------ | --------------------------- |
+| `gemini-embedding-2` | ✅     | Gemini Embedding 2 model    |
+
+## Video Generation
+
+| Model ID                            | Status | Notes                                                  |
+| ----------------------------------- | ------ | ------------------------------------------------------ |
+| `veo-3.1-generate-001`              | ✅     | Veo 3.1 Video Gen. Hardcoded to `us-central1`          |
+| `veo-3.1-fast-generate-001`         | ✅     | Veo 3.1 Fast Video Gen. Hardcoded to `us-central1`     |
+| `veo-3.1-lite-generate-001-preview` | ✅     | Veo 3.1 Lite Video Gen. Hardcoded to `us-central1`     |
+
+## Audio / Speech
+
+| Model ID                       | Status | Notes                                                            |
+| ------------------------------ | ------ | ---------------------------------------------------------------- |
+| `chirp-3`                      | ✅     | Speech-to-Text Chirp 3. Hardcoded to `asia-southeast1`           |
+| `chirp-3-hd`                   | ✅     | Text-to-Speech Chirp 3 HD. Hardcoded to `asia-southeast1`        |
+| `chirp-3-instant-custom-voice` | ✅     | Instant Custom Voice Chirp 3. Hardcoded to `asia-southeast1`     |
 
 ## Image Generation
 
@@ -66,8 +90,8 @@ allow clients to use shorter names that resolve to actual model IDs.
 
 | Alias                    | Resolves To                      |
 | ------------------------ | -------------------------------- |
-| `gemini-3.1-pro`         | `gemini-3.1-pro-preview`         |
-| `gemini-3.1-flash-image` | `gemini-3.1-flash-image-preview` |
+| `gemini-3.1-pro`                 | `gemini-3.1-pro-preview`         |
+| `gemini-3.1-flash-image-preview` | `gemini-3.1-flash-image`         |
 
 ---
 

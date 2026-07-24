@@ -144,8 +144,7 @@ interaction work, **read and follow the root [`DESIGN.md`](DESIGN.md) first**.
 
 ## Models
 
-Recommended: `gemini-3.5-flash` (text), `gemini-3.1-flash-image-preview`
-(image). All require `location: "global"`.
+Recommended: `gemini-3.6-flash` or `gemini-3.5-flash` (text), `gemini-3.1-flash-image` (image). All require `location: "global"`.
 
 Full list, aliases, OpenAI image allowlist, 404s: [`docs/model-list.md`](docs/model-list.md).
 
